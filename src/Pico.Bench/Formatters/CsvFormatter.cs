@@ -155,6 +155,7 @@ public sealed class CsvFormatter : FormatterBase
         if (Options.IncludePercentiles)
         {
             values.AddRange(
+
                 [
                     FormatNumber(s.P90),
                     FormatNumber(s.P95),
@@ -174,6 +175,7 @@ public sealed class CsvFormatter : FormatterBase
         if (Options.IncludeGcInfo)
         {
             values.AddRange(
+
                 [
                     s.GcInfo.Gen0.ToString(CultureInfo.InvariantCulture),
                     s.GcInfo.Gen1.ToString(CultureInfo.InvariantCulture),
@@ -221,9 +223,15 @@ public sealed class CsvFormatter : FormatterBase
 
     private void AppendComparisonRow(StringBuilder sb, ComparisonResult c)
     {
-        // Output two rows: one for Pico.DI (candidate) and one for MS.DI (baseline)
-        AppendComparisonSingleRow(sb, c.Name, "Pico.DI", c.Candidate.Statistics, c.Speedup);
-        AppendComparisonSingleRow(sb, c.Name, "MS.DI", c.Baseline.Statistics, null);
+        // Output two rows: one for candidate and one for baseline
+        AppendComparisonSingleRow(
+            sb,
+            c.Name,
+            Options.CandidateLabel,
+            c.Candidate.Statistics,
+            c.Speedup
+        );
+        AppendComparisonSingleRow(sb, c.Name, Options.BaselineLabel, c.Baseline.Statistics, null);
     }
 
     private void AppendComparisonSingleRow(
@@ -257,6 +265,7 @@ public sealed class CsvFormatter : FormatterBase
         if (Options.IncludeGcInfo)
         {
             values.AddRange(
+
                 [
                     stats.GcInfo.Gen0.ToString(CultureInfo.InvariantCulture),
                     stats.GcInfo.Gen1.ToString(CultureInfo.InvariantCulture),

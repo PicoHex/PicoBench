@@ -443,8 +443,8 @@ footer {
             new List<(string TestCase, string Provider, Statistics Stats, double? Speedup)>();
         foreach (var c in comparisons)
         {
-            rows.Add((c.Name, "Pico.DI", c.Candidate.Statistics, c.Speedup));
-            rows.Add((c.Name, "MS.DI", c.Baseline.Statistics, null));
+            rows.Add((c.Name, Options.CandidateLabel, c.Candidate.Statistics, c.Speedup));
+            rows.Add((c.Name, Options.BaselineLabel, c.Baseline.Statistics, null));
         }
 
         sb.AppendLine("<table>");

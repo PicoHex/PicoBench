@@ -212,8 +212,15 @@ public sealed class ConsoleFormatter : FormatterBase
         foreach (var c in comparisons)
         {
             var indicator = GetSpeedupIndicator(c.Speedup);
-            rows.Add((c.Name, "Pico.DI", c.Candidate, $"{FormatSpeedup(c.Speedup)} {indicator}"));
-            rows.Add((c.Name, "MS.DI", c.Baseline, ""));
+            rows.Add(
+                (
+                    c.Name,
+                    Options.CandidateLabel,
+                    c.Candidate,
+                    $"{FormatSpeedup(c.Speedup)} {indicator}"
+                )
+            );
+            rows.Add((c.Name, Options.BaselineLabel, c.Baseline, ""));
         }
 
         // Calculate column widths based on content
@@ -431,8 +438,15 @@ public sealed class ConsoleFormatter : FormatterBase
         foreach (var c in comparisons)
         {
             var indicator = GetSpeedupIndicator(c.Speedup);
-            rows.Add((c.Name, "Pico.DI", c.Candidate, $"{FormatSpeedup(c.Speedup)} {indicator}"));
-            rows.Add((c.Name, "MS.DI", c.Baseline, ""));
+            rows.Add(
+                (
+                    c.Name,
+                    Options.CandidateLabel,
+                    c.Candidate,
+                    $"{FormatSpeedup(c.Speedup)} {indicator}"
+                )
+            );
+            rows.Add((c.Name, Options.BaselineLabel, c.Baseline, ""));
         }
 
         // Calculate column widths based on content

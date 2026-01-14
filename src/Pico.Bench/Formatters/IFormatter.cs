@@ -60,6 +60,12 @@ public sealed class FormatterOptions
     /// <summary>Number of decimal places for speedup values.</summary>
     public int SpeedupDecimalPlaces { get; init; } = 2;
 
+    /// <summary>Label for the baseline result in comparisons.</summary>
+    public string BaselineLabel { get; init; } = "Baseline";
+
+    /// <summary>Label for the candidate result in comparisons.</summary>
+    public string CandidateLabel { get; init; } = "Candidate";
+
     /// <summary>Default options.</summary>
     public static FormatterOptions Default { get; } = new();
 

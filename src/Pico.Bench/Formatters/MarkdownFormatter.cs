@@ -163,12 +163,12 @@ public sealed class MarkdownFormatter : FormatterBase
             rows.Add(
                 (
                     c.Name,
-                    "Pico.DI",
+                    Options.CandidateLabel,
                     c.Candidate.Statistics,
                     $"**{FormatSpeedup(c.Speedup)}** {indicator}"
                 )
             );
-            rows.Add((c.Name, "MS.DI", c.Baseline.Statistics, ""));
+            rows.Add((c.Name, Options.BaselineLabel, c.Baseline.Statistics, ""));
         }
 
         // Header

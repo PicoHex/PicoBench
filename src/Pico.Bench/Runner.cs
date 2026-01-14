@@ -7,6 +7,7 @@ namespace Pico.Bench;
 public static class Runner
 {
     private static bool _initialized;
+    private static int _linuxPerfFd = -1;
 
     /// <summary>
     /// Initialize the runner by setting process/thread priority and warming up timing APIs.
@@ -17,17 +18,21 @@ public static class Runner
         if (_initialized)
             return;
 
-        if (OperatingSystem.IsWindows())
+        try
         {
-            try
-            {
-                Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
-                Thread.CurrentThread.Priority = ThreadPriority.Highest;
-            }
-            catch
-            {
-                // Ignore if we can't set priority (e.g., insufficient permissions)
-            }
+            // Set high priority on all platforms (may require elevated permissions)
+            Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
+            Thread.CurrentThread.Priority = ThreadPriority.Highest;
+        }
+        catch
+        {
+            // Ignore if we can't set priority (e.g., insufficient permissions)
+        }
+
+        // Initialize Linux perf event for CPU cycle counting
+        if (OperatingSystem.IsLinux())
+        {
+            InitializeLinuxPerf();
         }
 
         // Warm-up: touch Stopwatch/GC/cycle APIs once.
@@ -152,17 +157,27 @@ public static class Runner
         };
     }
 
-    #region CPU Cycle Counter (Windows only)
+    #region CPU Cycle Counter (Cross-platform)
 
     private static ulong GetCpuCycles()
     {
-        if (!OperatingSystem.IsWindows())
-            return 0;
+        if (OperatingSystem.IsWindows())
+        {
+            ulong cycleCount = 0;
+            QueryThreadCycleTime(GetCurrentThread(), ref cycleCount);
+            return cycleCount;
+        }
 
-        ulong cycleCount = 0;
-        QueryThreadCycleTime(GetCurrentThread(), ref cycleCount);
-        return cycleCount;
+        if (OperatingSystem.IsLinux() && _linuxPerfFd >= 0)
+        {
+            return ReadLinuxPerfCounter();
+        }
+
+        // macOS and other platforms: not supported yet
+        return 0;
     }
+
+    #region Windows
 
     [DllImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -170,6 +185,104 @@ public static class Runner
 
     [DllImport("kernel32.dll")]
     private static extern IntPtr GetCurrentThread();
+
+    #endregion
+
+    #region Linux
+
+    // perf_event_open constants
+    private const int PERF_TYPE_HARDWARE = 0;
+    private const int PERF_COUNT_HW_CPU_CYCLES = 0;
+    private const int SYSCALL_PERF_EVENT_OPEN = 298; // x86_64
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PerfEventAttr
+    {
+        public uint Type;
+        public uint Size;
+        public ulong Config;
+        public ulong SamplePeriod;
+        public ulong SampleType;
+        public ulong ReadFormat;
+        public ulong Flags;
+        public uint WakeupEvents;
+        public uint BpType;
+        public ulong BpAddr;
+        public ulong BpLen;
+        public ulong BranchSampleType;
+        public ulong SampleRegsUser;
+        public ulong SampleStackUser;
+        public int ClockId;
+        public ulong SampleRegsIntr;
+        public uint AuxWatermark;
+        public ushort SampleMaxStack;
+        public ushort Reserved2;
+        public uint AuxSampleSize;
+        public uint Reserved3;
+    }
+
+    [DllImport("libc", EntryPoint = "syscall", SetLastError = true)]
+    private static extern int SyscallPerfEventOpen(
+        int syscallNumber,
+        ref PerfEventAttr attr,
+        int pid,
+        int cpu,
+        int groupFd,
+        ulong flags
+    );
+
+    [DllImport("libc", EntryPoint = "read", SetLastError = true)]
+    private static extern nint LinuxRead(int fd, out ulong buf, nint count);
+
+    [DllImport("libc", EntryPoint = "close", SetLastError = true)]
+    private static extern int LinuxClose(int fd);
+
+    private static void InitializeLinuxPerf()
+    {
+        try
+        {
+            var attr = new PerfEventAttr
+            {
+                Type = PERF_TYPE_HARDWARE,
+                Size = (uint)Marshal.SizeOf<PerfEventAttr>(),
+                Config = PERF_COUNT_HW_CPU_CYCLES,
+                Flags = 0 // disabled=0, inherit=0, exclude_kernel=0, exclude_hv=0
+            };
+
+            // pid=0 means current process, cpu=-1 means any CPU
+            _linuxPerfFd = SyscallPerfEventOpen(SYSCALL_PERF_EVENT_OPEN, ref attr, 0, -1, -1, 0);
+
+            if (_linuxPerfFd < 0)
+            {
+                // perf_event_open failed, likely due to permissions
+                // Try reading /proc/sys/kernel/perf_event_paranoid
+                // Value > 1 requires CAP_SYS_ADMIN or root
+                _linuxPerfFd = -1;
+            }
+        }
+        catch
+        {
+            _linuxPerfFd = -1;
+        }
+    }
+
+    private static ulong ReadLinuxPerfCounter()
+    {
+        if (_linuxPerfFd < 0)
+            return 0;
+
+        try
+        {
+            var bytesRead = LinuxRead(_linuxPerfFd, out var value, sizeof(ulong));
+            return bytesRead == sizeof(ulong) ? value : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    #endregion
 
     #endregion
 }
