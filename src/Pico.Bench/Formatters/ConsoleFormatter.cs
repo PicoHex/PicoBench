@@ -1,15 +1,10 @@
-using System.Text;
-
 namespace Pico.Bench.Formatters;
 
 /// <summary>
 /// Formats benchmark results for console output with ASCII tables.
 /// </summary>
-public sealed class ConsoleFormatter : FormatterBase
+public sealed class ConsoleFormatter(FormatterOptions? options = null) : FormatterBase(options)
 {
-    public ConsoleFormatter(FormatterOptions? options = null)
-        : base(options) { }
-
     public override string Format(BenchmarkResult result)
     {
         var sb = new StringBuilder();
@@ -73,7 +68,7 @@ public sealed class ConsoleFormatter : FormatterBase
         {
             sb.AppendLine();
             sb.AppendLine("═══ Results ═══");
-            AppendResultsTable(sb, suite.Results.ToList());
+            AppendResultsTable(sb, [.. suite.Results]);
         }
 
         // Comparisons
@@ -81,7 +76,7 @@ public sealed class ConsoleFormatter : FormatterBase
         {
             sb.AppendLine();
             sb.AppendLine("═══ Comparisons ═══");
-            AppendComparisonsTable(sb, suite.Comparisons.ToList());
+            AppendComparisonsTable(sb, [.. suite.Comparisons]);
         }
 
         return sb.ToString();
@@ -314,7 +309,7 @@ public sealed class ConsoleFormatter : FormatterBase
 
         if (!string.IsNullOrEmpty(description))
         {
-            sb.AppendLine($"║{CenterText(description, width - 2)}║");
+            sb.AppendLine($"║{CenterText(description ?? string.Empty, width - 2)}║");
         }
 
         sb.AppendLine($"╚{border}╝");
@@ -341,7 +336,7 @@ public sealed class ConsoleFormatter : FormatterBase
     )
     {
         // Add padding to widths
-        for (int i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
             var (header, width, getValue) = columns[i];
             columns[i] = (header, width + 2, getValue); // +2 for padding
@@ -349,7 +344,7 @@ public sealed class ConsoleFormatter : FormatterBase
 
         // Top border
         sb.Append('┌');
-        for (int i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
             sb.Append(new string('─', columns[i].Width));
             sb.Append(i < columns.Count - 1 ? '┬' : '┐');
@@ -358,7 +353,7 @@ public sealed class ConsoleFormatter : FormatterBase
 
         // Header row
         sb.Append('│');
-        for (int i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
             var (header, width, _) = columns[i];
             var text =
@@ -372,7 +367,7 @@ public sealed class ConsoleFormatter : FormatterBase
 
         // Header separator
         sb.Append('├');
-        for (int i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
             sb.Append(new string('─', columns[i].Width));
             sb.Append(i < columns.Count - 1 ? '┼' : '┤');
@@ -383,7 +378,7 @@ public sealed class ConsoleFormatter : FormatterBase
         foreach (var row in rows)
         {
             sb.Append('│');
-            for (int i = 0; i < columns.Count; i++)
+            for (var i = 0; i < columns.Count; i++)
             {
                 var (_, width, getValue) = columns[i];
                 var value = getValue(row);
@@ -399,7 +394,7 @@ public sealed class ConsoleFormatter : FormatterBase
 
         // Bottom border
         sb.Append('└');
-        for (int i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
             sb.Append(new string('─', columns[i].Width));
             sb.Append(i < columns.Count - 1 ? '┴' : '┘');
@@ -515,7 +510,7 @@ public sealed class ConsoleFormatter : FormatterBase
 
         // Header separator with column dividers
         sb.Append('├');
-        for (int i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
             sb.Append(new string('─', columns[i].Width));
             sb.Append(i < columns.Count - 1 ? '┬' : '┤');
@@ -524,7 +519,7 @@ public sealed class ConsoleFormatter : FormatterBase
 
         // Header row
         sb.Append('│');
-        for (int i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
             var (header, width) = columns[i];
             var text = i == 0 ? $" {header}".PadRight(width) : header.PadLeft(width - 1) + " ";
@@ -535,7 +530,7 @@ public sealed class ConsoleFormatter : FormatterBase
 
         // Header-data separator
         sb.Append('├');
-        for (int i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
             sb.Append(new string('─', columns[i].Width));
             sb.Append(i < columns.Count - 1 ? '┼' : '┤');
@@ -570,7 +565,7 @@ public sealed class ConsoleFormatter : FormatterBase
             }
 
             sb.Append('│');
-            for (int i = 0; i < columns.Count; i++)
+            for (var i = 0; i < columns.Count; i++)
             {
                 var width = columns[i].Width;
                 var text =
@@ -583,7 +578,7 @@ public sealed class ConsoleFormatter : FormatterBase
 
         // Bottom border
         sb.Append('└');
-        for (int i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
             sb.Append(new string('─', columns[i].Width));
             sb.Append(i < columns.Count - 1 ? '┴' : '┘');

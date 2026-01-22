@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace Pico.Bench.Formatters;
 
 /// <summary>
@@ -111,14 +109,13 @@ public static class SummaryFormatter
         AppendBoxLine(sb, options.BoxWidth, '╚', '═', '╝');
 
         // Detailed table
-        if (options.ShowDetailedTable)
-        {
-            sb.AppendLine();
-            sb.AppendLine("▶ Detailed Results:");
+        if (!options.ShowDetailedTable)
+            return sb.ToString();
+        sb.AppendLine();
+        sb.AppendLine("▶ Detailed Results:");
 
-            var formatter = new ConsoleFormatter(options.TableOptions ?? FormatterOptions.Default);
-            sb.Append(formatter.Format(list));
-        }
+        var formatter = new ConsoleFormatter(options.TableOptions ?? FormatterOptions.Default);
+        sb.Append(formatter.Format(list));
 
         return sb.ToString();
     }

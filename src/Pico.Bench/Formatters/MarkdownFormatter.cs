@@ -1,15 +1,10 @@
-using System.Text;
-
 namespace Pico.Bench.Formatters;
 
 /// <summary>
 /// Formats benchmark results as Markdown tables for documentation.
 /// </summary>
-public sealed class MarkdownFormatter : FormatterBase
+public sealed class MarkdownFormatter(FormatterOptions? options = null) : FormatterBase(options)
 {
-    public MarkdownFormatter(FormatterOptions? options = null)
-        : base(options) { }
-
     public override string Format(BenchmarkResult result)
     {
         return Format([result]);
@@ -85,27 +80,26 @@ public sealed class MarkdownFormatter : FormatterBase
         }
 
         // Comparisons
-        if (suite.Comparisons?.Count > 0)
-        {
-            sb.AppendLine("## Comparisons");
-            sb.AppendLine();
-            AppendComparisonsTable(sb, suite.Comparisons.ToList());
+        if (!(suite.Comparisons?.Count > 0))
+            return sb.ToString();
+        sb.AppendLine("## Comparisons");
+        sb.AppendLine();
+        AppendComparisonsTable(sb, suite.Comparisons.ToList());
 
-            // Summary
-            var wins = suite.Comparisons.Count(c => c.IsFaster);
-            var total = suite.Comparisons.Count;
-            var avgSpeedup = suite.Comparisons.Average(c => c.Speedup);
-            var maxSpeedup = suite.Comparisons.Max(c => c.Speedup);
+        // Summary
+        var wins = suite.Comparisons.Count(c => c.IsFaster);
+        var total = suite.Comparisons.Count;
+        var avgSpeedup = suite.Comparisons.Average(c => c.Speedup);
+        var maxSpeedup = suite.Comparisons.Max(c => c.Speedup);
 
-            sb.AppendLine();
-            sb.AppendLine("### Summary");
-            sb.AppendLine();
-            sb.AppendLine("```");
-            sb.AppendLine($"Candidate wins: {wins} / {total}");
-            sb.AppendLine($"Average speedup: {FormatSpeedup(avgSpeedup)}");
-            sb.AppendLine($"Maximum speedup: {FormatSpeedup(maxSpeedup)}");
-            sb.AppendLine("```");
-        }
+        sb.AppendLine();
+        sb.AppendLine("### Summary");
+        sb.AppendLine();
+        sb.AppendLine("```");
+        sb.AppendLine($"Candidate wins: {wins} / {total}");
+        sb.AppendLine($"Average speedup: {FormatSpeedup(avgSpeedup)}");
+        sb.AppendLine($"Maximum speedup: {FormatSpeedup(maxSpeedup)}");
+        sb.AppendLine("```");
 
         return sb.ToString();
     }

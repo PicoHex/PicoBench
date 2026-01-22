@@ -89,23 +89,18 @@ public sealed class FormatterOptions
     /// </summary>
     public string ResolvePath(string fileName)
     {
-        if (string.IsNullOrEmpty(OutputDirectory))
-            return fileName;
-        return Path.Combine(OutputDirectory, fileName);
+        return string.IsNullOrEmpty(OutputDirectory)
+            ? fileName
+            : Path.Combine(OutputDirectory, fileName);
     }
 }
 
 /// <summary>
 /// Base class for formatters with common helper methods.
 /// </summary>
-public abstract class FormatterBase : IFormatter
+public abstract class FormatterBase(FormatterOptions? options = null) : IFormatter
 {
-    protected FormatterOptions Options { get; }
-
-    protected FormatterBase(FormatterOptions? options = null)
-    {
-        Options = options ?? FormatterOptions.Default;
-    }
+    protected FormatterOptions Options { get; } = options ?? FormatterOptions.Default;
 
     public abstract string Format(BenchmarkResult result);
     public abstract string Format(IEnumerable<BenchmarkResult> results);
@@ -123,7 +118,7 @@ public abstract class FormatterBase : IFormatter
         return speedup.ToString($"F{Options.SpeedupDecimalPlaces}") + "x";
     }
 
-    protected string FormatGcInfo(GcInfo gc)
+    protected static string FormatGcInfo(GcInfo gc)
     {
         return $"{gc.Gen0}/{gc.Gen1}/{gc.Gen2}";
     }

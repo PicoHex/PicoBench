@@ -1,17 +1,11 @@
-using System.Globalization;
-using System.Text;
-
 namespace Pico.Bench.Formatters;
 
 /// <summary>
 /// Formats benchmark results as CSV for data analysis.
 /// </summary>
-public sealed class CsvFormatter : FormatterBase
+public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBase(options)
 {
     private const string Separator = ",";
-
-    public CsvFormatter(FormatterOptions? options = null)
-        : base(options) { }
 
     public override string Format(BenchmarkResult result)
     {
@@ -96,15 +90,14 @@ public sealed class CsvFormatter : FormatterBase
         }
 
         // Comparisons section
-        if (suite.Comparisons?.Count > 0)
+        if (!(suite.Comparisons?.Count > 0))
+            return sb.ToString();
+        sb.AppendLine();
+        sb.AppendLine("# Comparisons");
+        AppendComparisonsHeader(sb);
+        foreach (var comparison in suite.Comparisons)
         {
-            sb.AppendLine();
-            sb.AppendLine("# Comparisons");
-            AppendComparisonsHeader(sb);
-            foreach (var comparison in suite.Comparisons)
-            {
-                AppendComparisonRow(sb, comparison);
-            }
+            AppendComparisonRow(sb, comparison);
         }
 
         return sb.ToString();

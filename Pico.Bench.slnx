@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/samples/">
     <File Path="samples\README.md" />
+    <Project Path="samples/StringVsStringBuilder/StringVsStringBuilder.csproj" />
   </Folder>
   <Folder Name="/src/">
     <File Path="src\README.md" />

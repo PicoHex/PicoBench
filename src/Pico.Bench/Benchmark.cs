@@ -18,11 +18,11 @@ public sealed class BenchmarkConfig
     public bool RetainSamples { get; init; } = false;
 
     /// <summary>Default configuration suitable for most benchmarks.</summary>
-    public static BenchmarkConfig Default { get; } = new BenchmarkConfig();
+    public static BenchmarkConfig Default { get; } = new();
 
     /// <summary>Quick configuration for faster iteration during development.</summary>
     public static BenchmarkConfig Quick { get; } =
-        new BenchmarkConfig()
+        new()
         {
             WarmupIterations = 100,
             SampleCount = 10,
@@ -31,7 +31,7 @@ public sealed class BenchmarkConfig
 
     /// <summary>Precise configuration for final measurements.</summary>
     public static BenchmarkConfig Precise { get; } =
-        new BenchmarkConfig()
+        new()
         {
             WarmupIterations = 5000,
             SampleCount = 200,
@@ -51,11 +51,8 @@ public static class Benchmark
     /// <param name="action">The action to measure.</param>
     /// <param name="config">Optional configuration (uses <see cref="BenchmarkConfig.Default"/> if null).</param>
     /// <returns>A <see cref="BenchmarkResult"/> containing statistics.</returns>
-    public static BenchmarkResult Run(
-        string name,
-        Action action,
-        BenchmarkConfig? config = null
-    ) => Run(name, action, warmup: action, config);
+    public static BenchmarkResult Run(string name, Action action, BenchmarkConfig? config = null) =>
+        Run(name, action, warmup: action, config);
 
     /// <summary>
     /// Run a benchmark with separate warmup and measured actions.
@@ -75,7 +72,7 @@ public static class Benchmark
         // Warmup phase
         if (warmup != null && config.WarmupIterations > 0)
         {
-            for (int i = 0; i < config.WarmupIterations; i++)
+            for (var i = 0; i < config.WarmupIterations; i++)
                 warmup();
         }
 
@@ -128,7 +125,7 @@ public static class Benchmark
         }
         else if (config.WarmupIterations > 0)
         {
-            for (int i = 0; i < config.WarmupIterations; i++)
+            for (var i = 0; i < config.WarmupIterations; i++)
                 action(state);
         }
 
@@ -137,7 +134,7 @@ public static class Benchmark
         var perOpTimes = new double[config.SampleCount];
         var perOpCycles = new double[config.SampleCount];
 
-        for (int s = 0; s < config.SampleCount; s++)
+        for (var s = 0; s < config.SampleCount; s++)
         {
             var sample = Runner.Time(config.IterationsPerSample, state, action);
             samples[s] = sample;
@@ -177,7 +174,7 @@ public static class Benchmark
         if (config.WarmupIterations > 0)
         {
             using var warmupScope = scopeFactory();
-            for (int i = 0; i < config.WarmupIterations; i++)
+            for (var i = 0; i < config.WarmupIterations; i++)
                 action(warmupScope);
         }
 
@@ -260,7 +257,9 @@ public static class Benchmark
         Array.Sort(sorted);
 
         // Aggregate GC info
-        int gen0 = 0, gen1 = 0, gen2 = 0;
+        int gen0 = 0,
+            gen1 = 0,
+            gen2 = 0;
         foreach (var sample in samples)
         {
             gen0 += sample.GcInfo.Gen0;
@@ -283,7 +282,12 @@ public static class Benchmark
             Max = sorted[sorted.Length - 1],
             StdDev = stdDev,
             CpuCyclesPerOp = perOpCycles.Average(),
-            GcInfo = new GcInfo { Gen0 = gen0, Gen1 = gen1, Gen2 = gen2 }
+            GcInfo = new GcInfo
+            {
+                Gen0 = gen0,
+                Gen1 = gen1,
+                Gen2 = gen2
+            }
         };
     }
 
@@ -291,8 +295,10 @@ public static class Benchmark
     {
         var index = (int)Math.Ceiling(percentile / 100.0 * sortedData.Length) - 1;
         // Manual clamping for netstandard2.0 compatibility
-        if (index < 0) index = 0;
-        if (index >= sortedData.Length) index = sortedData.Length - 1;
+        if (index < 0)
+            index = 0;
+        if (index >= sortedData.Length)
+            index = sortedData.Length - 1;
         return sortedData[index];
     }
 

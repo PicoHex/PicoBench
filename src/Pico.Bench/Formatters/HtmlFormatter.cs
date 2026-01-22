@@ -1,16 +1,11 @@
-using System.Text;
-
 namespace Pico.Bench.Formatters;
 
 /// <summary>
 /// Formats benchmark results as HTML with embedded CSS styling.
 /// No external dependencies required.
 /// </summary>
-public sealed class HtmlFormatter : FormatterBase
+public sealed class HtmlFormatter(FormatterOptions? options = null) : FormatterBase(options)
 {
-    public HtmlFormatter(FormatterOptions? options = null)
-        : base(options) { }
-
     public override string Format(BenchmarkResult result)
     {
         return Format([result]);
