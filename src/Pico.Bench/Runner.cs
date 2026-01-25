@@ -76,14 +76,7 @@ public static partial class Runner
         if (action == null)
             throw new ArgumentNullException(nameof(action));
 
-        // Force GC and record baseline counts
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
-        GC.WaitForPendingFinalizers();
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
-
-        var gcCounts = new long[GC.MaxGeneration + 1];
-        for (int i = 0; i <= GC.MaxGeneration; i++)
-            gcCounts[i] = GC.CollectionCount(i);
+        var gcBaseline = GetGcBaselineCounts();
 
         // Run setup (not timed)
         setup?.Invoke();
@@ -107,17 +100,13 @@ public static partial class Runner
         var elapsedTicks = watch.ElapsedTicks;
         var elapsedNs = elapsedTicks * (1_000_000_000.0 / Stopwatch.Frequency);
 
-        var gen0 = (int)(GC.CollectionCount(0) - gcCounts[0]);
-        var gen1 = GC.MaxGeneration >= 1 ? (int)(GC.CollectionCount(1) - gcCounts[1]) : 0;
-        var gen2 = GC.MaxGeneration >= 2 ? (int)(GC.CollectionCount(2) - gcCounts[2]) : 0;
-
         return new TimingSample
         {
             ElapsedNanoseconds = elapsedNs,
             ElapsedMilliseconds = watch.Elapsed.TotalMilliseconds,
             ElapsedTicks = elapsedTicks,
             CpuCycles = cycleEnd - cycleStart,
-            GcInfo = new GcInfo { Gen0 = gen0, Gen1 = gen1, Gen2 = gen2 }
+            GcInfo = CalculateGcDelta(gcBaseline)
         };
     }
 
@@ -132,13 +121,7 @@ public static partial class Runner
         if (action == null)
             throw new ArgumentNullException(nameof(action));
 
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
-        GC.WaitForPendingFinalizers();
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
-
-        var gcCounts = new long[GC.MaxGeneration + 1];
-        for (int i = 0; i <= GC.MaxGeneration; i++)
-            gcCounts[i] = GC.CollectionCount(i);
+        var gcBaseline = GetGcBaselineCounts();
 
         var cycleStart = GetCpuCycles();
         var watch = Stopwatch.StartNew();
@@ -152,19 +135,42 @@ public static partial class Runner
         var elapsedTicks = watch.ElapsedTicks;
         var elapsedNs = elapsedTicks * (1_000_000_000.0 / Stopwatch.Frequency);
 
-        var gen0 = (int)(GC.CollectionCount(0) - gcCounts[0]);
-        var gen1 = GC.MaxGeneration >= 1 ? (int)(GC.CollectionCount(1) - gcCounts[1]) : 0;
-        var gen2 = GC.MaxGeneration >= 2 ? (int)(GC.CollectionCount(2) - gcCounts[2]) : 0;
-
         return new TimingSample
         {
             ElapsedNanoseconds = elapsedNs,
             ElapsedMilliseconds = watch.Elapsed.TotalMilliseconds,
             ElapsedTicks = elapsedTicks,
             CpuCycles = cycleEnd - cycleStart,
-            GcInfo = new GcInfo { Gen0 = gen0, Gen1 = gen1, Gen2 = gen2 }
+            GcInfo = CalculateGcDelta(gcBaseline)
         };
     }
+
+    #region GC Helpers
+
+    private static long[] GetGcBaselineCounts()
+    {
+        // Force GC and record baseline counts
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+
+        var gcCounts = new long[GC.MaxGeneration + 1];
+        for (int i = 0; i <= GC.MaxGeneration; i++)
+            gcCounts[i] = GC.CollectionCount(i);
+        
+        return gcCounts;
+    }
+
+    private static GcInfo CalculateGcDelta(long[] baselineCounts)
+    {
+        var gen0 = (int)(GC.CollectionCount(0) - baselineCounts[0]);
+        var gen1 = GC.MaxGeneration >= 1 ? (int)(GC.CollectionCount(1) - baselineCounts[1]) : 0;
+        var gen2 = GC.MaxGeneration >= 2 ? (int)(GC.CollectionCount(2) - baselineCounts[2]) : 0;
+        
+        return new GcInfo { Gen0 = gen0, Gen1 = gen1, Gen2 = gen2 };
+    }
+
+    #endregion
 
     #region CPU Cycle Counter (Cross-platform)
 

@@ -67,8 +67,15 @@ public static class Benchmark
     /// <param name="action">The action to measure.</param>
     /// <param name="config">Optional configuration (uses <see cref="BenchmarkConfig.Default"/> if null).</param>
     /// <returns>A <see cref="BenchmarkResult"/> containing statistics.</returns>
-    public static BenchmarkResult Run(string name, Action action, BenchmarkConfig? config = null) =>
-        Run(name, action, warmup: action, config);
+    public static BenchmarkResult Run(string name, Action action, BenchmarkConfig? config = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Benchmark name cannot be null or whitespace.", nameof(name));
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+            
+        return Run(name, action, warmup: action, config);
+    }
 
     /// <summary>
     /// Run a benchmark with separate warmup and measured actions.
@@ -80,6 +87,11 @@ public static class Benchmark
         BenchmarkConfig? config = null
     )
     {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Benchmark name cannot be null or whitespace.", nameof(name));
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+            
         config ??= BenchmarkConfig.Default;
 
         // Initialize runner if not already done
@@ -128,6 +140,11 @@ public static class Benchmark
         BenchmarkConfig? config = null
     )
     {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Benchmark name cannot be null or whitespace.", nameof(name));
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+            
         config ??= BenchmarkConfig.Default;
 
         Runner.Initialize();
@@ -180,6 +197,13 @@ public static class Benchmark
     )
         where TScope : IDisposable
     {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Benchmark name cannot be null or whitespace.", nameof(name));
+        if (scopeFactory == null)
+            throw new ArgumentNullException(nameof(scopeFactory));
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+            
         config ??= BenchmarkConfig.Default;
 
         Runner.Initialize();
@@ -226,6 +250,9 @@ public static class Benchmark
         BenchmarkResult candidate
     )
     {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Comparison name cannot be null or whitespace.", nameof(name));
+            
         return new ComparisonResult(
             name: name,
             baseline: baseline,
@@ -245,6 +272,17 @@ public static class Benchmark
         BenchmarkConfig? config = null
     )
     {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Comparison name cannot be null or whitespace.", nameof(name));
+        if (string.IsNullOrWhiteSpace(baselineName))
+            throw new ArgumentException("Baseline name cannot be null or whitespace.", nameof(baselineName));
+        if (baselineAction == null)
+            throw new ArgumentNullException(nameof(baselineAction));
+        if (string.IsNullOrWhiteSpace(candidateName))
+            throw new ArgumentException("Candidate name cannot be null or whitespace.", nameof(candidateName));
+        if (candidateAction == null)
+            throw new ArgumentNullException(nameof(candidateAction));
+            
         var baseline = Run(baselineName, baselineAction, config);
         var candidate = Run(candidateName, candidateAction, config);
 
@@ -278,12 +316,25 @@ public static class Benchmark
             gen2 += sample.GcInfo.Gen2;
         }
 
-        // Use more numerically stable variance calculation
-        var avg = perOpTimes.Average();
+        // Optimized statistics calculation
+        var sum = 0.0;
+        var min = double.MaxValue;
+        var max = double.MinValue;
+        
+        for (int i = 0; i < perOpTimes.Length; i++)
+        {
+            var value = perOpTimes[i];
+            sum += value;
+            if (value < min) min = value;
+            if (value > max) max = value;
+        }
+        
+        var avg = sum / perOpTimes.Length;
+        
+        // Welford's online algorithm for variance (more stable)
         var variance = 0.0;
         if (perOpTimes.Length > 1)
         {
-            // Welford's online algorithm for variance
             var m2 = 0.0;
             for (int i = 0; i < perOpTimes.Length; i++)
             {
@@ -294,6 +345,14 @@ public static class Benchmark
         }
         var stdDev = Math.Sqrt(variance);
 
+        // Calculate CPU cycles average
+        var cpuCyclesSum = 0.0;
+        for (int i = 0; i < perOpCycles.Length; i++)
+        {
+            cpuCyclesSum += perOpCycles[i];
+        }
+        var cpuCyclesAvg = cpuCyclesSum / perOpCycles.Length;
+        
         return new Statistics
         {
             Avg = avg,
@@ -301,10 +360,10 @@ public static class Benchmark
             P90 = GetPercentile(sorted, 90),
             P95 = GetPercentile(sorted, 95),
             P99 = GetPercentile(sorted, 99),
-            Min = sorted[0],
-            Max = sorted[sorted.Length - 1],
+            Min = min,
+            Max = max,
             StdDev = stdDev,
-            CpuCyclesPerOp = perOpCycles.Average(),
+            CpuCyclesPerOp = cpuCyclesAvg,
             GcInfo = new GcInfo
             {
                 Gen0 = gen0,
