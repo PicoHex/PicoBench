@@ -80,7 +80,7 @@ public sealed class HtmlFormatter(FormatterOptions? options = null) : FormatterB
 
         if (!string.IsNullOrEmpty(suite.Description))
         {
-            sb.AppendLine($"<p class=\"description\">{Escape(suite.Description)}</p>");
+            sb.AppendLine($"<p class=\"description\">{Escape(suite.Description!)}</p>");
         }
 
         // Environment info

@@ -66,7 +66,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         {
             sb.AppendLine($"# Suite: {Escape(suite.Name)}");
             if (!string.IsNullOrEmpty(suite.Description))
-                sb.AppendLine($"# Description: {Escape(suite.Description)}");
+                sb.AppendLine($"# Description: {Escape(suite.Description!)}");
             sb.AppendLine($"# Environment: {Escape(suite.Environment.ToString())}");
         }
 

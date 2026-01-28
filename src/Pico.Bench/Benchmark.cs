@@ -1,61 +1,6 @@
 namespace Pico.Bench;
 
 /// <summary>
-/// Configuration for benchmark execution.
-/// </summary>
-public sealed class BenchmarkConfig
-{
-    private int _warmupIterations = 1000;
-    private int _sampleCount = 100;
-    private int _iterationsPerSample = 10000;
-
-    /// <summary>Number of warmup iterations before measurement.</summary>
-    public int WarmupIterations
-    {
-        get => _warmupIterations;
-        init => _warmupIterations = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(WarmupIterations), "WarmupIterations must be non-negative.");
-    }
-
-    /// <summary>Number of samples to collect.</summary>
-    public int SampleCount
-    {
-        get => _sampleCount;
-        init => _sampleCount = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(SampleCount), "SampleCount must be positive.");
-    }
-
-    /// <summary>Number of iterations per sample.</summary>
-    public int IterationsPerSample
-    {
-        get => _iterationsPerSample;
-        init => _iterationsPerSample = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(IterationsPerSample), "IterationsPerSample must be positive.");
-    }
-
-    /// <summary>Whether to retain raw samples in the result.</summary>
-    public bool RetainSamples { get; init; } = false;
-
-    /// <summary>Default configuration suitable for most benchmarks.</summary>
-    public static BenchmarkConfig Default { get; } = new();
-
-    /// <summary>Quick configuration for faster iteration during development.</summary>
-    public static BenchmarkConfig Quick { get; } =
-        new()
-        {
-            WarmupIterations = 100,
-            SampleCount = 10,
-            IterationsPerSample = 1000
-        };
-
-    /// <summary>Precise configuration for final measurements.</summary>
-    public static BenchmarkConfig Precise { get; } =
-        new()
-        {
-            WarmupIterations = 5000,
-            SampleCount = 200,
-            IterationsPerSample = 50000
-        };
-}
-
-/// <summary>
 /// High-level benchmark orchestrator that runs measurements and computes statistics.
 /// </summary>
 public static class Benchmark
@@ -70,10 +15,13 @@ public static class Benchmark
     public static BenchmarkResult Run(string name, Action action, BenchmarkConfig? config = null)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Benchmark name cannot be null or whitespace.", nameof(name));
+            throw new ArgumentException(
+                "Benchmark name cannot be null or whitespace.",
+                nameof(name)
+            );
         if (action == null)
             throw new ArgumentNullException(nameof(action));
-            
+
         return Run(name, action, warmup: action, config);
     }
 
@@ -88,10 +36,13 @@ public static class Benchmark
     )
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Benchmark name cannot be null or whitespace.", nameof(name));
+            throw new ArgumentException(
+                "Benchmark name cannot be null or whitespace.",
+                nameof(name)
+            );
         if (action == null)
             throw new ArgumentNullException(nameof(action));
-            
+
         config ??= BenchmarkConfig.Default;
 
         // Initialize runner if not already done
@@ -118,7 +69,7 @@ public static class Benchmark
         }
 
         // Compute statistics
-        var stats = ComputeStatistics(perOpTimes, perOpCycles, samples);
+        var stats = StatisticsCalculator.Compute(perOpTimes, perOpCycles, samples);
 
         return new BenchmarkResult(
             name: name,
@@ -141,10 +92,13 @@ public static class Benchmark
     )
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Benchmark name cannot be null or whitespace.", nameof(name));
+            throw new ArgumentException(
+                "Benchmark name cannot be null or whitespace.",
+                nameof(name)
+            );
         if (action == null)
             throw new ArgumentNullException(nameof(action));
-            
+
         config ??= BenchmarkConfig.Default;
 
         Runner.Initialize();
@@ -174,7 +128,7 @@ public static class Benchmark
             perOpCycles[s] = (double)sample.CpuCycles / config.IterationsPerSample;
         }
 
-        var stats = ComputeStatistics(perOpTimes, perOpCycles, samples);
+        var stats = StatisticsCalculator.Compute(perOpTimes, perOpCycles, samples);
 
         return new BenchmarkResult(
             name: name,
@@ -198,12 +152,15 @@ public static class Benchmark
         where TScope : IDisposable
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Benchmark name cannot be null or whitespace.", nameof(name));
+            throw new ArgumentException(
+                "Benchmark name cannot be null or whitespace.",
+                nameof(name)
+            );
         if (scopeFactory == null)
             throw new ArgumentNullException(nameof(scopeFactory));
         if (action == null)
             throw new ArgumentNullException(nameof(action));
-            
+
         config ??= BenchmarkConfig.Default;
 
         Runner.Initialize();
@@ -230,7 +187,7 @@ public static class Benchmark
             perOpCycles[s] = (double)sample.CpuCycles / config.IterationsPerSample;
         }
 
-        var stats = ComputeStatistics(perOpTimes, perOpCycles, samples);
+        var stats = StatisticsCalculator.Compute(perOpTimes, perOpCycles, samples);
 
         return new BenchmarkResult(
             name: name,
@@ -251,13 +208,12 @@ public static class Benchmark
     )
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Comparison name cannot be null or whitespace.", nameof(name));
-            
-        return new ComparisonResult(
-            name: name,
-            baseline: baseline,
-            candidate: candidate
-        );
+            throw new ArgumentException(
+                "Comparison name cannot be null or whitespace.",
+                nameof(name)
+            );
+
+        return new ComparisonResult(name: name, baseline: baseline, candidate: candidate);
     }
 
     /// <summary>
@@ -273,116 +229,28 @@ public static class Benchmark
     )
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Comparison name cannot be null or whitespace.", nameof(name));
+            throw new ArgumentException(
+                "Comparison name cannot be null or whitespace.",
+                nameof(name)
+            );
         if (string.IsNullOrWhiteSpace(baselineName))
-            throw new ArgumentException("Baseline name cannot be null or whitespace.", nameof(baselineName));
+            throw new ArgumentException(
+                "Baseline name cannot be null or whitespace.",
+                nameof(baselineName)
+            );
         if (baselineAction == null)
             throw new ArgumentNullException(nameof(baselineAction));
         if (string.IsNullOrWhiteSpace(candidateName))
-            throw new ArgumentException("Candidate name cannot be null or whitespace.", nameof(candidateName));
+            throw new ArgumentException(
+                "Candidate name cannot be null or whitespace.",
+                nameof(candidateName)
+            );
         if (candidateAction == null)
             throw new ArgumentNullException(nameof(candidateAction));
-            
+
         var baseline = Run(baselineName, baselineAction, config);
         var candidate = Run(candidateName, candidateAction, config);
 
-        return new ComparisonResult(
-            name: name,
-            baseline: baseline,
-            candidate: candidate
-        );
+        return new ComparisonResult(name: name, baseline: baseline, candidate: candidate);
     }
-
-    #region Statistics Computation
-
-    private static Statistics ComputeStatistics(
-        double[] perOpTimes,
-        double[] perOpCycles,
-        TimingSample[] samples
-    )
-    {
-        // Sort for percentile calculation
-        var sorted = (double[])perOpTimes.Clone();
-        Array.Sort(sorted);
-
-        // Aggregate GC info
-        int gen0 = 0,
-            gen1 = 0,
-            gen2 = 0;
-        foreach (var sample in samples)
-        {
-            gen0 += sample.GcInfo.Gen0;
-            gen1 += sample.GcInfo.Gen1;
-            gen2 += sample.GcInfo.Gen2;
-        }
-
-        // Optimized statistics calculation
-        var sum = 0.0;
-        var min = double.MaxValue;
-        var max = double.MinValue;
-        
-        for (int i = 0; i < perOpTimes.Length; i++)
-        {
-            var value = perOpTimes[i];
-            sum += value;
-            if (value < min) min = value;
-            if (value > max) max = value;
-        }
-        
-        var avg = sum / perOpTimes.Length;
-        
-        // Welford's online algorithm for variance (more stable)
-        var variance = 0.0;
-        if (perOpTimes.Length > 1)
-        {
-            var m2 = 0.0;
-            for (int i = 0; i < perOpTimes.Length; i++)
-            {
-                var delta = perOpTimes[i] - avg;
-                m2 += delta * delta;
-            }
-            variance = m2 / perOpTimes.Length;
-        }
-        var stdDev = Math.Sqrt(variance);
-
-        // Calculate CPU cycles average
-        var cpuCyclesSum = 0.0;
-        for (int i = 0; i < perOpCycles.Length; i++)
-        {
-            cpuCyclesSum += perOpCycles[i];
-        }
-        var cpuCyclesAvg = cpuCyclesSum / perOpCycles.Length;
-        
-        return new Statistics
-        {
-            Avg = avg,
-            P50 = GetPercentile(sorted, 50),
-            P90 = GetPercentile(sorted, 90),
-            P95 = GetPercentile(sorted, 95),
-            P99 = GetPercentile(sorted, 99),
-            Min = min,
-            Max = max,
-            StdDev = stdDev,
-            CpuCyclesPerOp = cpuCyclesAvg,
-            GcInfo = new GcInfo
-            {
-                Gen0 = gen0,
-                Gen1 = gen1,
-                Gen2 = gen2
-            }
-        };
-    }
-
-    private static double GetPercentile(double[] sortedData, int percentile)
-    {
-        var index = (int)Math.Ceiling(percentile / 100.0 * sortedData.Length) - 1;
-        // Manual clamping for netstandard2.0 compatibility
-        if (index < 0)
-            index = 0;
-        if (index >= sortedData.Length)
-            index = sortedData.Length - 1;
-        return sortedData[index];
-    }
-
-    #endregion
 }

@@ -41,7 +41,7 @@ public sealed class TimingSample
     public ulong CpuCycles { get; init; }
 
     /// <summary>GC collection counts during this sample.</summary>
-    public GcInfo GcInfo { get; init; }
+    public GcInfo GcInfo { get; init; } = default!;
 }
 
 /// <summary>
@@ -77,7 +77,7 @@ public sealed class Statistics
     public double CpuCyclesPerOp { get; init; }
 
     /// <summary>Aggregated GC info across all samples.</summary>
-    public GcInfo GcInfo { get; init; }
+    public GcInfo GcInfo { get; init; } = default!;
 }
 
 /// <summary>
@@ -117,23 +117,30 @@ public sealed class BenchmarkResult
         string? category = null,
         IReadOnlyDictionary<string, string>? tags = null,
         IReadOnlyList<TimingSample>? samples = null,
-        DateTime? timestamp = null)
+        DateTime? timestamp = null
+    )
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
         Statistics = statistics ?? throw new ArgumentNullException(nameof(statistics));
-        
+
         if (iterationsPerSample <= 0)
-            throw new ArgumentOutOfRangeException(nameof(iterationsPerSample), "IterationsPerSample must be positive.");
+            throw new ArgumentOutOfRangeException(
+                nameof(iterationsPerSample),
+                "IterationsPerSample must be positive."
+            );
         IterationsPerSample = iterationsPerSample;
-        
+
         if (sampleCount <= 0)
-            throw new ArgumentOutOfRangeException(nameof(sampleCount), "SampleCount must be positive.");
+            throw new ArgumentOutOfRangeException(
+                nameof(sampleCount),
+                "SampleCount must be positive."
+            );
         SampleCount = sampleCount;
-        
+
         Category = category;
         Tags = tags;
         Samples = samples;
-        
+
         if (timestamp.HasValue)
             Timestamp = timestamp.Value;
     }
@@ -173,7 +180,8 @@ public sealed class ComparisonResult
         BenchmarkResult baseline,
         BenchmarkResult candidate,
         string? category = null,
-        IReadOnlyDictionary<string, string>? tags = null)
+        IReadOnlyDictionary<string, string>? tags = null
+    )
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
         Baseline = baseline ?? throw new ArgumentNullException(nameof(baseline));
@@ -189,16 +197,16 @@ public sealed class ComparisonResult
 public sealed class BenchmarkSuite
 {
     /// <summary>Name of the benchmark suite.</summary>
-    public string Name { get; init; }
+    public string Name { get; init; } = default!;
 
     /// <summary>Optional description.</summary>
     public string? Description { get; init; }
 
     /// <summary>Environment information.</summary>
-    public EnvironmentInfo Environment { get; init; }
+    public EnvironmentInfo Environment { get; init; } = default!;
 
     /// <summary>All benchmark results in this suite.</summary>
-    public IReadOnlyList<BenchmarkResult> Results { get; init; }
+    public IReadOnlyList<BenchmarkResult> Results { get; init; } = default!;
 
     /// <summary>All comparison results in this suite.</summary>
     public IReadOnlyList<ComparisonResult>? Comparisons { get; init; }
