@@ -1,4 +1,6 @@
-﻿# Pico.Bench
+# Pico.Bench
+
+[English](README.md) | [中文](README.zh-CN.md) | [中文 (Traditional)](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
 A lightweight, zero-dependency benchmarking library for .NET with **two complementary APIs**: an imperative fluent API and an attribute-based, source-generated API that is fully **AOT-compatible**.
 
@@ -22,8 +24,8 @@ A lightweight, zero-dependency benchmarking library for .NET with **two compleme
 
 Reference the **Pico.Bench** NuGet package. The source generator (`Pico.Bench.Generators`) is bundled automatically as an analyzer - no extra reference needed.
 
-```xml
-<PackageReference Include="Pico.Bench" Version="1.0.0" />
+```bash
+dotnet add package Pico.Bench
 ```
 
 ## Quick Start
@@ -303,8 +305,7 @@ src/
 |   +-- StatisticsCalculator.cs        # Percentile / stats computation
 |   +-- Models.cs                      # Result types
 |   +-- Formatters/
-|       +-- IFormatter.cs              # Formatter interface + FormatterOptions
-|       +-- FormatterBase.cs           # Template Method base class
+|       +-- IFormatter.cs              # IFormatter, FormatterOptions & FormatterBase
 |       +-- ConsoleFormatter.cs        # Box-drawing console tables
 |       +-- MarkdownFormatter.cs       # GitHub Markdown tables
 |       +-- HtmlFormatter.cs           # Styled HTML reports

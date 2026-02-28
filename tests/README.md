@@ -1,4 +1,6 @@
-﻿# Tests
+# Tests
+
+[English](README.md) | [中文](README.zh-CN.md) | [中文 (Traditional)](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
 Unit tests for **Pico.Bench** using the [TUnit](https://github.com/thomhurst/TUnit) testing framework.
 
@@ -7,7 +9,7 @@ Unit tests for **Pico.Bench** using the [TUnit](https://github.com/thomhurst/TUn
 ## Running
 
 ```bash
-dotnet run --project tests/Pico.Bench.TUnit.Tests.csproj -c Debug
+dotnet run --project tests/Pico.Bench.Tests/Pico.Bench.TUnit.Tests.csproj -c Debug
 ```
 
 ## Test Categories

@@ -1,4 +1,6 @@
-﻿# Source Projects
+# Source Projects
+
+[English](README.md) | [中文](README.zh-CN.md) | [中文 (Traditional)](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
 This directory contains the two library projects that make up Pico.Bench.
 
@@ -24,11 +26,14 @@ The main benchmarking library targeting **netstandard2.0** with zero external de
 
 The project bundles `Pico.Bench.Generators` as an analyzer so consumers get the source generator automatically:
 
-```xml
-<ProjectReference Include="..\Pico.Bench.Generators\Pico.Bench.Generators.csproj"
-                  PrivateAssets="all"
-                  ReferenceOutputAssembly="false"
-                  OutputItemType="Analyzer" />
+```bash
+# Add the project reference
+dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
+
+# Then manually add the following attributes to the <ProjectReference> element in your .csproj file:
+# PrivateAssets="all"
+# ReferenceOutputAssembly="false"  
+# OutputItemType="Analyzer"
 ```
 
 ## Pico.Bench.Generators
