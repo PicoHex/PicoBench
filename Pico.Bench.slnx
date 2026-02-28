@@ -12,5 +12,6 @@
   </Folder>
   <Folder Name="/tests/">
     <File Path="tests\README.md" />
+    <Project Path="tests/Pico.Bench.Tests/Pico.Bench.TUnit.Tests.csproj" />
   </Folder>
 </Solution>
