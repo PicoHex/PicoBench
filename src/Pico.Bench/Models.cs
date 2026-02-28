@@ -37,11 +37,14 @@ public sealed class TimingSample
     /// <summary>Elapsed Stopwatch ticks.</summary>
     public long ElapsedTicks { get; init; }
 
-    /// <summary>CPU cycles consumed (Windows only, 0 on other platforms).</summary>
+    /// <summary>
+    /// CPU cycles consumed (Windows/Linux). On macOS this is a monotonic timestamp
+    /// and should not be compared across platforms. 0 on unsupported platforms.
+    /// </summary>
     public ulong CpuCycles { get; init; }
 
     /// <summary>GC collection counts during this sample.</summary>
-    public GcInfo GcInfo { get; init; } = default!;
+    public GcInfo GcInfo { get; init; } = new GcInfo();
 }
 
 /// <summary>
@@ -77,7 +80,7 @@ public sealed class Statistics
     public double CpuCyclesPerOp { get; init; }
 
     /// <summary>Aggregated GC info across all samples.</summary>
-    public GcInfo GcInfo { get; init; } = default!;
+    public GcInfo GcInfo { get; init; } = new GcInfo();
 }
 
 /// <summary>
@@ -214,25 +217,46 @@ public sealed class ComparisonResult
 public sealed class BenchmarkSuite
 {
     /// <summary>Name of the benchmark suite.</summary>
-    public string Name { get; init; } = default!;
+    public string Name { get; }
 
     /// <summary>Optional description.</summary>
-    public string? Description { get; init; }
+    public string? Description { get; }
 
     /// <summary>Environment information.</summary>
-    public EnvironmentInfo Environment { get; init; } = default!;
+    public EnvironmentInfo Environment { get; }
 
     /// <summary>All benchmark results in this suite.</summary>
-    public IReadOnlyList<BenchmarkResult> Results { get; init; } = default!;
+    public IReadOnlyList<BenchmarkResult> Results { get; }
 
     /// <summary>All comparison results in this suite.</summary>
-    public IReadOnlyList<ComparisonResult>? Comparisons { get; init; }
+    public IReadOnlyList<ComparisonResult>? Comparisons { get; }
 
     /// <summary>When the suite was run.</summary>
-    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+    public DateTime Timestamp { get; } = DateTime.UtcNow;
 
     /// <summary>Total duration of the benchmark run.</summary>
-    public TimeSpan Duration { get; init; }
+    public TimeSpan Duration { get; }
+
+    public BenchmarkSuite(
+        string name,
+        EnvironmentInfo environment,
+        IReadOnlyList<BenchmarkResult> results,
+        TimeSpan duration,
+        string? description = null,
+        IReadOnlyList<ComparisonResult>? comparisons = null,
+        DateTime? timestamp = null
+    )
+    {
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Environment = environment ?? throw new ArgumentNullException(nameof(environment));
+        Results = results ?? throw new ArgumentNullException(nameof(results));
+        Duration = duration;
+        Description = description;
+        Comparisons = comparisons;
+
+        if (timestamp.HasValue)
+            Timestamp = timestamp.Value;
+    }
 }
 
 /// <summary>

@@ -28,11 +28,20 @@ public static class Benchmark
     /// <summary>
     /// Run a benchmark with separate warmup and measured actions.
     /// </summary>
+    /// <param name="name">Name of the benchmark.</param>
+    /// <param name="action">The action to measure.</param>
+    /// <param name="warmup">Optional warmup action. If null, no warmup is performed.</param>
+    /// <param name="config">Optional configuration (uses <see cref="BenchmarkConfig.Default"/> if null).</param>
+    /// <param name="setup">Optional per-sample setup action (not timed).</param>
+    /// <param name="teardown">Optional per-sample teardown action (not timed).</param>
+    /// <returns>A <see cref="BenchmarkResult"/> containing statistics.</returns>
     public static BenchmarkResult Run(
         string name,
         Action action,
         Action? warmup,
-        BenchmarkConfig? config = null
+        BenchmarkConfig? config = null,
+        Action? setup = null,
+        Action? teardown = null
     )
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -55,6 +64,12 @@ public static class Benchmark
                 warmup();
         }
 
+        // Force a single GC before the collection phase to establish a clean baseline.
+        // Individual samples no longer force GC (moved out of Runner.Time for accuracy).
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+
         // Collection phase
         var samples = new TimingSample[config.SampleCount];
         var perOpTimes = new double[config.SampleCount];
@@ -62,7 +77,7 @@ public static class Benchmark
 
         for (int s = 0; s < config.SampleCount; s++)
         {
-            var sample = Runner.Time(config.IterationsPerSample, action);
+            var sample = Runner.Time(config.IterationsPerSample, action, setup, teardown);
             samples[s] = sample;
             perOpTimes[s] = sample.ElapsedNanoseconds / config.IterationsPerSample;
             perOpCycles[s] = (double)sample.CpuCycles / config.IterationsPerSample;
@@ -114,6 +129,11 @@ public static class Benchmark
             for (var i = 0; i < config.WarmupIterations; i++)
                 action(state);
         }
+
+        // Force a single GC before the collection phase to establish a clean baseline.
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
 
         // Collection phase
         var samples = new TimingSample[config.SampleCount];
@@ -172,6 +192,11 @@ public static class Benchmark
             for (var i = 0; i < config.WarmupIterations; i++)
                 action(warmupScope);
         }
+
+        // Force a single GC before the collection phase to establish a clean baseline.
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
 
         // Collection phase - one scope per sample
         var samples = new TimingSample[config.SampleCount];

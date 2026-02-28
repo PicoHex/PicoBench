@@ -7,12 +7,12 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 {
     private const string Separator = ",";
 
-    public override string Format(BenchmarkResult result)
+    protected override string FormatCore(BenchmarkResult result)
     {
-        return Format([result]);
+        return FormatCore(new[] { result });
     }
 
-    public override string Format(IEnumerable<BenchmarkResult> results)
+    protected override string FormatCore(IEnumerable<BenchmarkResult> results)
     {
         var sb = new StringBuilder();
         var list = results.ToList();
@@ -32,12 +32,12 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         return sb.ToString();
     }
 
-    public override string Format(ComparisonResult comparison)
+    protected override string FormatCore(ComparisonResult comparison)
     {
-        return Format([comparison]);
+        return FormatCore(new[] { comparison });
     }
 
-    public override string Format(IEnumerable<ComparisonResult> comparisons)
+    protected override string FormatCore(IEnumerable<ComparisonResult> comparisons)
     {
         var sb = new StringBuilder();
         var list = comparisons.ToList();
@@ -57,7 +57,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         return sb.ToString();
     }
 
-    public override string Format(BenchmarkSuite suite)
+    protected override string FormatCore(BenchmarkSuite suite)
     {
         var sb = new StringBuilder();
 

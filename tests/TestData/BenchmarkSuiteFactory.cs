@@ -14,18 +14,18 @@ public static class BenchmarkSuiteFactory
         IReadOnlyList<BenchmarkResult>? results = null,
         IReadOnlyList<ComparisonResult>? comparisons = null,
         DateTime? timestamp = null,
-        TimeSpan? duration = null)
+        TimeSpan? duration = null
+    )
     {
-        return new BenchmarkSuite
-        {
-            Name = name,
-            Description = description,
-            Environment = environment ?? new EnvironmentInfo(),
-            Results = results ?? [.. BenchmarkResultFactory.CreateMultiple(3)],
-            Comparisons = comparisons ?? [.. ComparisonResultFactory.CreateMultiple(2)],
-            Timestamp = timestamp ?? DateTime.UtcNow,
-            Duration = duration ?? TimeSpan.FromSeconds(5.5)
-        };
+        return new BenchmarkSuite(
+            name: name,
+            environment: environment ?? new EnvironmentInfo(),
+            results: results ?? [.. BenchmarkResultFactory.CreateMultiple(3)],
+            duration: duration ?? TimeSpan.FromSeconds(5.5),
+            description: description,
+            comparisons: comparisons ?? [.. ComparisonResultFactory.CreateMultiple(2)],
+            timestamp: timestamp
+        );
     }
 
     /// <summary>
@@ -48,7 +48,7 @@ public static class BenchmarkSuiteFactory
         return Create(
             name: "NoComparisonsSuite",
             description: "Suite with results but no comparisons",
-            comparisons: null
+            comparisons: Array.Empty<ComparisonResult>()
         );
     }
 
@@ -83,10 +83,7 @@ public static class BenchmarkSuiteFactory
     /// </summary>
     public static BenchmarkSuite WithNullDescription()
     {
-        return Create(
-            name: "NoDescriptionSuite",
-            description: null
-        );
+        return Create(name: "NoDescriptionSuite", description: null);
     }
 
     /// <summary>
@@ -94,10 +91,7 @@ public static class BenchmarkSuiteFactory
     /// </summary>
     public static BenchmarkSuite WithEmptyDescription()
     {
-        return Create(
-            name: "EmptyDescriptionSuite",
-            description: ""
-        );
+        return Create(name: "EmptyDescriptionSuite", description: "");
     }
 
     /// <summary>
@@ -112,10 +106,7 @@ public static class BenchmarkSuiteFactory
             ["NETVersion"] = "10.0"
         };
 
-        var environment = new EnvironmentInfo
-        {
-            CustomTags = customTags
-        };
+        var environment = new EnvironmentInfo { CustomTags = customTags };
 
         return Create(
             name: "CustomEnvSuite",
@@ -159,43 +150,51 @@ public static class BenchmarkSuiteFactory
     {
         // Create results with varying statistics to test all columns
         var results = new List<BenchmarkResult>();
-        
+
         // Fast result
-        results.Add(BenchmarkResultFactory.Create(
-            "FastOperation",
-            statistics: StatisticsFactory.WithZeroTime()
-        ));
-        
+        results.Add(
+            BenchmarkResultFactory.Create(
+                "FastOperation",
+                statistics: StatisticsFactory.WithZeroTime()
+            )
+        );
+
         // Slow result
-        results.Add(BenchmarkResultFactory.Create(
-            "SlowOperation",
-            statistics: StatisticsFactory.WithExtremeTime()
-        ));
-        
+        results.Add(
+            BenchmarkResultFactory.Create(
+                "SlowOperation",
+                statistics: StatisticsFactory.WithExtremeTime()
+            )
+        );
+
         // Result with GC activity
-        results.Add(BenchmarkResultFactory.Create(
-            "GcHeavyOperation",
-            statistics: StatisticsFactory.Create(gcInfo: GcInfoFactory.Many())
-        ));
-        
+        results.Add(
+            BenchmarkResultFactory.Create(
+                "GcHeavyOperation",
+                statistics: StatisticsFactory.Create(gcInfo: GcInfoFactory.Many())
+            )
+        );
+
         // Result with CPU cycles
-        results.Add(BenchmarkResultFactory.Create(
-            "CpuIntensiveOperation",
-            statistics: StatisticsFactory.Create(cpuCyclesPerOp: 5000.0)
-        ));
-        
+        results.Add(
+            BenchmarkResultFactory.Create(
+                "CpuIntensiveOperation",
+                statistics: StatisticsFactory.Create(cpuCyclesPerOp: 5000.0)
+            )
+        );
+
         // Create comparisons with varying speedups
         var comparisons = new List<ComparisonResult>();
-        
+
         // High speedup comparison
         comparisons.Add(ComparisonResultFactory.WithHighSpeedup());
-        
+
         // Slow candidate comparison
         comparisons.Add(ComparisonResultFactory.WithSlowCandidate());
-        
+
         // Edge case comparison
         comparisons.Add(ComparisonResultFactory.WithNearZeroCandidateTime());
-        
+
         return Create(
             name: "FormatterTestSuite",
             description: "Suite specifically designed for formatter testing",

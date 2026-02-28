@@ -117,14 +117,14 @@ var joinComparison = new ComparisonResult(
 allComparisons.Add(joinComparison);
 
 // Create suite
-var suite = new BenchmarkSuite
-{
-    Name = "String vs StringBuilder Benchmark",
-    Description = "Comparing string concatenation performance between String and StringBuilder",
-    Environment = new EnvironmentInfo(),
-    Results = allResults,
-    Comparisons = allComparisons
-};
+var suite = new BenchmarkSuite(
+    name: "String vs StringBuilder Benchmark",
+    environment: new EnvironmentInfo(),
+    results: allResults,
+    duration: TimeSpan.Zero,
+    description: "Comparing string concatenation performance between String and StringBuilder",
+    comparisons: allComparisons
+);
 
 // Output results
 Console.WriteLine("\n");

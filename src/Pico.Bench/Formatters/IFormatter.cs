@@ -89,6 +89,8 @@ public sealed class FormatterOptions
     /// </summary>
     public string ResolvePath(string fileName)
     {
+        if (fileName == null)
+            throw new ArgumentNullException(nameof(fileName));
         return string.IsNullOrEmpty(OutputDirectory)
             ? fileName
             : Path.Combine(OutputDirectory, fileName);
@@ -97,16 +99,61 @@ public sealed class FormatterOptions
 
 /// <summary>
 /// Base class for formatters with common helper methods.
+/// Uses the Template Method pattern: public <see cref="Format"/> methods validate
+/// inputs and delegate to <c>FormatCore</c> overrides in derived classes.
 /// </summary>
 public abstract class FormatterBase(FormatterOptions? options = null) : IFormatter
 {
     protected FormatterOptions Options { get; } = options ?? FormatterOptions.Default;
 
-    public abstract string Format(BenchmarkResult result);
-    public abstract string Format(IEnumerable<BenchmarkResult> results);
-    public abstract string Format(ComparisonResult comparison);
-    public abstract string Format(IEnumerable<ComparisonResult> comparisons);
-    public abstract string Format(BenchmarkSuite suite);
+    #region IFormatter — public entry points with null validation
+
+    public string Format(BenchmarkResult result)
+    {
+        if (result == null)
+            throw new ArgumentNullException(nameof(result));
+        return FormatCore(result);
+    }
+
+    public string Format(IEnumerable<BenchmarkResult> results)
+    {
+        if (results == null)
+            throw new ArgumentNullException(nameof(results));
+        return FormatCore(results);
+    }
+
+    public string Format(ComparisonResult comparison)
+    {
+        if (comparison == null)
+            throw new ArgumentNullException(nameof(comparison));
+        return FormatCore(comparison);
+    }
+
+    public string Format(IEnumerable<ComparisonResult> comparisons)
+    {
+        if (comparisons == null)
+            throw new ArgumentNullException(nameof(comparisons));
+        return FormatCore(comparisons);
+    }
+
+    public string Format(BenchmarkSuite suite)
+    {
+        if (suite == null)
+            throw new ArgumentNullException(nameof(suite));
+        return FormatCore(suite);
+    }
+
+    #endregion
+
+    #region Protected abstract — override in derived classes
+
+    protected abstract string FormatCore(BenchmarkResult result);
+    protected abstract string FormatCore(IEnumerable<BenchmarkResult> results);
+    protected abstract string FormatCore(ComparisonResult comparison);
+    protected abstract string FormatCore(IEnumerable<ComparisonResult> comparisons);
+    protected abstract string FormatCore(BenchmarkSuite suite);
+
+    #endregion
 
     protected string FormatTime(double nanoseconds)
     {

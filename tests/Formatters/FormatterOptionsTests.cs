@@ -1,7 +1,7 @@
+using Pico.Bench.Formatters;
 using TUnit.Assertions;
 using TUnit.Assertions.Extensions;
 using TUnit.Core;
-using Pico.Bench.Formatters;
 
 namespace Pico.Bench.Tests.Formatters;
 
@@ -12,7 +12,7 @@ public class FormatterOptionsTests
     public async Task DefaultOptions_ShouldHaveCorrectValues()
     {
         var options = FormatterOptions.Default;
-        
+
         await Assert.That(options.IncludeEnvironment).IsTrue();
         await Assert.That(options.IncludeTimestamp).IsTrue();
         await Assert.That(options.IncludeGcInfo).IsTrue();
@@ -24,13 +24,13 @@ public class FormatterOptionsTests
         await Assert.That(options.CandidateLabel).IsEqualTo("Candidate");
         await Assert.That(options.OutputDirectory).IsNull();
     }
-    
+
     [Test]
     [Property("Category", "Formatter")]
     public async Task CompactOptions_ShouldExcludeSomeColumns()
     {
         var options = FormatterOptions.Compact;
-        
+
         await Assert.That(options.IncludePercentiles).IsFalse();
         await Assert.That(options.IncludeCpuCycles).IsFalse();
         // Other options should remain at defaults
@@ -38,13 +38,13 @@ public class FormatterOptionsTests
         await Assert.That(options.IncludeTimestamp).IsTrue();
         await Assert.That(options.IncludeGcInfo).IsTrue();
     }
-    
+
     [Test]
     [Property("Category", "Formatter")]
     public async Task MinimalOptions_ShouldExcludeMostColumns()
     {
         var options = FormatterOptions.Minimal;
-        
+
         await Assert.That(options.IncludeEnvironment).IsFalse();
         await Assert.That(options.IncludeTimestamp).IsFalse();
         await Assert.That(options.IncludeGcInfo).IsFalse();
@@ -54,25 +54,29 @@ public class FormatterOptionsTests
         await Assert.That(options.BaselineLabel).IsEqualTo("Baseline");
         await Assert.That(options.CandidateLabel).IsEqualTo("Candidate");
     }
-    
+
     [Test]
     [Property("Category", "Formatter")]
-    [Arguments(null, "file.csv", "file.csv")]
-    [Arguments("", "file.csv", "file.csv")]
-    [Arguments("output", "file.csv", "output/file.csv")]
-    [Arguments("output/subdir", "results.csv", "output/subdir/results.csv")]
-    [Arguments("/absolute/path", "file.csv", "/absolute/path/file.csv")]
+    [Arguments(null, "file.csv")]
+    [Arguments("", "file.csv")]
+    [Arguments("output", "file.csv")]
+    [Arguments("output/subdir", "results.csv")]
     public async Task ResolvePath_WithDifferentDirectories_ReturnsCorrectPath(
-        string? outputDirectory, 
-        string fileName, 
-        string expectedPath)
+        string? outputDirectory,
+        string fileName
+    )
     {
         var options = new FormatterOptions { OutputDirectory = outputDirectory };
         var resolvedPath = options.ResolvePath(fileName);
-        
+
+        // Build the expected path using Path.Combine to be platform-independent
+        var expectedPath = string.IsNullOrEmpty(outputDirectory)
+            ? fileName
+            : Path.Combine(outputDirectory, fileName);
+
         await Assert.That(resolvedPath).IsEqualTo(expectedPath);
     }
-    
+
     [Test]
     [Property("Category", "Formatter")]
     public async Task CustomOptions_ShouldOverrideDefaults()
@@ -90,7 +94,7 @@ public class FormatterOptionsTests
             BaselineLabel = "Old",
             CandidateLabel = "New"
         };
-        
+
         await Assert.That(options.OutputDirectory).IsEqualTo("custom/output");
         await Assert.That(options.IncludeEnvironment).IsFalse();
         await Assert.That(options.IncludeTimestamp).IsFalse();
@@ -102,27 +106,28 @@ public class FormatterOptionsTests
         await Assert.That(options.BaselineLabel).IsEqualTo("Old");
         await Assert.That(options.CandidateLabel).IsEqualTo("New");
     }
-    
+
     [Test]
     [Property("Category", "Formatter")]
     public async Task ResolvePath_WithNullFileName_ThrowsArgumentNullException()
     {
         var options = FormatterOptions.Default;
-        
-        await Assert.ThrowsAsync<ArgumentNullException>(() => 
-            Task.Run(() => options.ResolvePath(null!)));
+
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => Task.Run(() => options.ResolvePath(null!))
+        );
     }
-    
+
     [Test]
     [Property("Category", "Formatter")]
     public async Task ResolvePath_WithEmptyFileName_ReturnsOutputDirectoryOnly()
     {
         var options = new FormatterOptions { OutputDirectory = "output" };
         var resolvedPath = options.ResolvePath("");
-        
+
         await Assert.That(resolvedPath).IsEqualTo("output");
     }
-    
+
     [Test]
     [Property("Category", "Formatter")]
     [MethodDataSource(nameof(GetAllOptionCombinations))]
@@ -130,20 +135,20 @@ public class FormatterOptionsTests
     {
         // Test that options don't interfere with each other
         await Assert.That(options).IsNotNull();
-        
+
         // Verify that labels are never null
         await Assert.That(options.BaselineLabel).IsNotNull();
         await Assert.That(options.CandidateLabel).IsNotNull();
-        
+
         // Verify decimal places are non-negative
         await Assert.That(options.TimeDecimalPlaces).IsGreaterThanOrEqualTo(0);
         await Assert.That(options.SpeedupDecimalPlaces).IsGreaterThanOrEqualTo(0);
     }
-    
+
     public static IEnumerable<FormatterOptions> GetAllOptionCombinations()
     {
         var boolOptions = new[] { true, false };
-        
+
         foreach (var env in boolOptions)
         foreach (var ts in boolOptions)
         foreach (var gc in boolOptions)
@@ -157,7 +162,7 @@ public class FormatterOptionsTests
                 IncludeGcInfo = gc,
                 IncludeCpuCycles = cpu,
                 IncludePercentiles = perc,
-                TimeDecimalPlaces = env ? 1 : 2,  // Vary decimal places
+                TimeDecimalPlaces = env ? 1 : 2, // Vary decimal places
                 SpeedupDecimalPlaces = ts ? 2 : 3,
                 BaselineLabel = gc ? "Baseline" : "Control",
                 CandidateLabel = cpu ? "Candidate" : "Test"

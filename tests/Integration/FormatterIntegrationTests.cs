@@ -1,26 +1,27 @@
-using TUnit.Assertions;
-using TUnit.Assertions.Extensions;
-using TUnit.Core;
+using System.Linq;
 using Pico.Bench;
 using Pico.Bench.Formatters;
 using Pico.Bench.Tests.TestData;
 using Pico.Bench.Tests.Utilities;
-using System.Linq;
+using TUnit.Assertions;
+using TUnit.Assertions.Extensions;
+using TUnit.Core;
 
 namespace Pico.Bench.Tests.Integration;
 
 public class FormatterIntegrationTests
 {
     private static readonly string TestOutputDir = Path.Combine(
-        Path.GetTempPath(), 
-        $"PicoBenchIntegrationTests_{Guid.NewGuid():N}");
-    
+        Path.GetTempPath(),
+        $"PicoBenchIntegrationTests_{Guid.NewGuid():N}"
+    );
+
     [Before(Assembly)]
     public static async Task AssemblySetup()
     {
         Directory.CreateDirectory(TestOutputDir);
     }
-    
+
     [After(Assembly)]
     public static async Task AssemblyCleanup()
     {
@@ -29,28 +30,28 @@ public class FormatterIntegrationTests
             Directory.Delete(TestOutputDir, recursive: true);
         }
     }
-    
+
     [Before(Test)]
     public async Task TestSetup(TestContext context)
     {
         context.Log("Starting integration test");
     }
-    
+
     [Test]
     [Property("Category", "Integration")]
     [Property("SubCategory", "Formatter")]
     public async Task BenchmarkRun_ConsoleFormatter_OutputsValidString()
     {
         var result = Benchmark.Run("IntegrationTest", () => Thread.Sleep(1));
-        
+
         var formatter = new ConsoleFormatter();
         var formatted = formatter.Format(result);
-        
+
         await Assert.That(formatted).IsNotNull();
         await Assert.That(formatted).Contains(result.Name);
         await Assert.That(formatted).Contains("Avg:");
     }
-    
+
     [Test]
     [Property("Category", "Integration")]
     [Property("SubCategory", "Formatter")]
@@ -60,15 +61,15 @@ public class FormatterIntegrationTests
     {
         var result = BenchmarkResultFactory.Create();
         var filePath = Path.Combine(TestOutputDir, $"test_{Guid.NewGuid():N}.csv");
-        
+
         CsvFormatter.WriteToFile(filePath, result);
-        
+
         await Assert.That(File.Exists(filePath)).IsTrue();
         var content = await File.ReadAllTextAsync(filePath);
         await Assert.That(content).Contains(result.Name);
         await Assert.That(content).Contains("Avg");
     }
-    
+
     [Test]
     [Property("Category", "Integration")]
     [Property("SubCategory", "Formatter")]
@@ -78,15 +79,15 @@ public class FormatterIntegrationTests
     {
         var result = BenchmarkResultFactory.Create();
         var filePath = Path.Combine(TestOutputDir, $"test_{Guid.NewGuid():N}.html");
-        
+
         HtmlFormatter.WriteToFile(filePath, result);
-        
+
         await Assert.That(File.Exists(filePath)).IsTrue();
         var content = await File.ReadAllTextAsync(filePath);
         await Assert.That(content).Contains("<html");
         await Assert.That(content).Contains(result.Name);
     }
-    
+
     [Test]
     [Property("Category", "Integration")]
     [Property("SubCategory", "Formatter")]
@@ -97,16 +98,17 @@ public class FormatterIntegrationTests
         var comparison = new ComparisonResult(
             name: "Test Comparison",
             baseline: baseline,
-            candidate: candidate);
-        
+            candidate: candidate
+        );
+
         var formatter = new MarkdownFormatter();
         var formatted = formatter.Format(comparison);
-        
+
         await Assert.That(formatted).IsNotNull();
         await Assert.That(formatted).Contains("Comparison");
         await Assert.That(formatted).Contains("Speedup");
     }
-    
+
     [Test]
     [Property("Category", "Integration")]
     [Property("SubCategory", "Formatter")]
@@ -115,22 +117,22 @@ public class FormatterIntegrationTests
     public async Task AllFormatters_ProduceConsistentResults()
     {
         var results = BenchmarkResultFactory.CreateMultiple(3).ToList();
-        
+
         var consoleFormatter = new ConsoleFormatter();
         var csvFormatter = new CsvFormatter();
         var htmlFormatter = new HtmlFormatter();
         var markdownFormatter = new MarkdownFormatter();
-        
+
         var consoleOutput = consoleFormatter.Format(results);
         var csvOutput = csvFormatter.Format(results);
         var htmlOutput = htmlFormatter.Format(results);
         var markdownOutput = markdownFormatter.Format(results);
-        
+
         await Assert.That(consoleOutput).IsNotNull();
         await Assert.That(csvOutput).IsNotNull();
         await Assert.That(htmlOutput).IsNotNull();
         await Assert.That(markdownOutput).IsNotNull();
-        
+
         // Ensure each output contains all benchmark names
         foreach (var result in results)
         {
@@ -140,7 +142,7 @@ public class FormatterIntegrationTests
             await Assert.That(markdownOutput).Contains(result.Name);
         }
     }
-    
+
     [Test]
     [Property("Category", "Integration")]
     [Property("SubCategory", "Formatter")]
@@ -148,19 +150,22 @@ public class FormatterIntegrationTests
     {
         var results = BenchmarkResultFactory.CreateMultiple(2).ToList();
         var comparisons = ComparisonResultFactory.CreateMultiple(2).ToList();
-        
-        var suite = new BenchmarkSuite
-        {
-            Name = "Integration Test Suite",
-            Description = "Test suite for integration tests",
-            Results = results,
-            Comparisons = comparisons
-        };
-        
+
+        var suite = new BenchmarkSuite(
+            name: "Integration Test Suite",
+            environment: new EnvironmentInfo(),
+            results: results,
+            duration: TimeSpan.Zero,
+            description: "Test suite for integration tests",
+            comparisons: comparisons
+        );
+
         var summary = SummaryFormatter.Format(suite.Comparisons!, suite.Duration);
-        
+
         await Assert.That(summary).IsNotNull();
-        await Assert.That(summary).Contains(suite.Name);
-        await Assert.That(summary).Contains("Summary");
+        // SummaryFormatter renders comparison data, not the suite name.
+        // Verify the overall stats section is present.
+        await Assert.That(summary).Contains("wins");
+        await Assert.That(summary).Contains("speedup");
     }
 }

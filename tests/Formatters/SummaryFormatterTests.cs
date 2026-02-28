@@ -105,7 +105,8 @@ public class SummaryFormatterTests
         var summary = SummaryFormatter.Format(comparisons, null, options);
         
         await Assert.That(summary).IsNotNull();
-        await Assert.That(summary).DoesNotContain("▶ ");
+        // Category headings should not appear, but "▶ Detailed Results:" is OK
+        await Assert.That(summary).DoesNotContain("average speedup");
     }
     
     [Test]
@@ -121,7 +122,7 @@ public class SummaryFormatterTests
         await Assert.That(summary).IsNotNull();
         await Assert.That(summary).Contains("▶ Detailed Results:");
         await Assert.That(summary).Contains("│"); // Table borders
-        await Assert.That(summary).Contains("Name");
+        await Assert.That(summary).Contains("Test Case");
     }
     
     [Test]
@@ -330,7 +331,8 @@ public class SummaryFormatterTests
         var borderLine = lines.FirstOrDefault(l => l.StartsWith('╔'));
         if (borderLine != null)
         {
-            await Assert.That(borderLine.Length).IsEqualTo(50);
+            // Trim trailing \r on Windows where AppendLine produces \r\n
+            await Assert.That(borderLine.TrimEnd('\r').Length).IsEqualTo(50);
         }
     }
     

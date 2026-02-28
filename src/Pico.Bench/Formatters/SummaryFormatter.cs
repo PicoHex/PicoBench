@@ -35,18 +35,27 @@ public sealed class SummaryOptions
 
 /// <summary>
 /// Formats benchmark comparison summaries for console output.
+/// Accepts an optional <see cref="IFormatter"/> to render the detailed table,
+/// defaulting to <see cref="ConsoleFormatter"/> if none is provided.
 /// </summary>
 public static class SummaryFormatter
 {
     /// <summary>
     /// Format a summary of comparison results.
     /// </summary>
+    /// <param name="comparisons">Comparison results to summarize.</param>
+    /// <param name="duration">Optional total benchmark duration.</param>
+    /// <param name="options">Optional summary display options.</param>
+    /// <param name="detailFormatter">Optional formatter for the detailed table. Defaults to <see cref="ConsoleFormatter"/>.</param>
     public static string Format(
         IEnumerable<ComparisonResult> comparisons,
         TimeSpan? duration = null,
-        SummaryOptions? options = null
+        SummaryOptions? options = null,
+        IFormatter? detailFormatter = null
     )
     {
+        if (comparisons == null)
+            throw new ArgumentNullException(nameof(comparisons));
         options ??= SummaryOptions.Default;
         var list = comparisons.ToList();
         var sb = new StringBuilder();
@@ -114,7 +123,9 @@ public static class SummaryFormatter
         sb.AppendLine();
         sb.AppendLine("▶ Detailed Results:");
 
-        var formatter = new ConsoleFormatter(options.TableOptions ?? FormatterOptions.Default);
+        var formatter =
+            detailFormatter
+            ?? new ConsoleFormatter(options.TableOptions ?? FormatterOptions.Default);
         sb.Append(formatter.Format(list));
 
         return sb.ToString();
@@ -129,6 +140,8 @@ public static class SummaryFormatter
         SummaryOptions? options = null
     )
     {
+        if (comparisons == null)
+            throw new ArgumentNullException(nameof(comparisons));
         Console.Write(Format(comparisons, duration, options));
     }
 
@@ -137,6 +150,8 @@ public static class SummaryFormatter
     /// </summary>
     public static void Write(BenchmarkSuite suite, SummaryOptions? options = null)
     {
+        if (suite == null)
+            throw new ArgumentNullException(nameof(suite));
         if (suite.Comparisons == null || suite.Comparisons.Count == 0)
         {
             Console.WriteLine("No comparison results in suite.");

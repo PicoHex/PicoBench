@@ -46,7 +46,8 @@ internal static class StatisticsCalculator
 
         var avg = sum / perOpTimes.Length;
 
-        // Welford's online algorithm for variance (more stable)
+        // Two-pass variance calculation: compute mean first, then sum of squared deviations.
+        // Uses Bessel's correction (N-1) for unbiased sample variance.
         var variance = 0.0;
         if (perOpTimes.Length > 1)
         {
@@ -54,7 +55,6 @@ internal static class StatisticsCalculator
             foreach (var t in perOpTimes)
             {
                 var delta = t - avg;
-
                 m2 += delta * delta;
             }
             variance = m2 / (perOpTimes.Length - 1);

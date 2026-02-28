@@ -8,6 +8,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     // Thread-local StringBuilder pool to reduce allocations
     [ThreadStatic]
     private static StringBuilder? _cachedStringBuilder;
+
     private static StringBuilder GetStringBuilder()
     {
         var sb = _cachedStringBuilder;
@@ -28,7 +29,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
-    public override string Format(BenchmarkResult result)
+    protected override string FormatCore(BenchmarkResult result)
     {
         var sb = GetStringBuilder();
         try
@@ -42,7 +43,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
-    public override string Format(IEnumerable<BenchmarkResult> results)
+    protected override string FormatCore(IEnumerable<BenchmarkResult> results)
     {
         var sb = GetStringBuilder();
         try
@@ -61,7 +62,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
-    public override string Format(ComparisonResult comparison)
+    protected override string FormatCore(ComparisonResult comparison)
     {
         var sb = GetStringBuilder();
         try
@@ -75,7 +76,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
-    public override string Format(IEnumerable<ComparisonResult> comparisons)
+    protected override string FormatCore(IEnumerable<ComparisonResult> comparisons)
     {
         var sb = GetStringBuilder();
         try
@@ -94,7 +95,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
-    public override string Format(BenchmarkSuite suite)
+    protected override string FormatCore(BenchmarkSuite suite)
     {
         var sb = GetStringBuilder();
         try
@@ -102,34 +103,34 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             // Header
             AppendBoxHeader(sb, suite.Name, suite.Description);
 
-        // Environment info
-        if (Options.IncludeEnvironment)
-        {
-            sb.AppendLine();
-            sb.AppendLine($"Environment: {suite.Environment}");
-        }
+            // Environment info
+            if (Options.IncludeEnvironment)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"Environment: {suite.Environment}");
+            }
 
-        if (Options.IncludeTimestamp)
-        {
-            sb.AppendLine($"Timestamp: {suite.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
-            sb.AppendLine($"Duration: {suite.Duration.TotalSeconds:F2}s");
-        }
+            if (Options.IncludeTimestamp)
+            {
+                sb.AppendLine($"Timestamp: {suite.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
+                sb.AppendLine($"Duration: {suite.Duration.TotalSeconds:F2}s");
+            }
 
-        // Results
-        if (suite.Results.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("═══ Results ═══");
-            AppendResultsTable(sb, [.. suite.Results]);
-        }
+            // Results
+            if (suite.Results.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("═══ Results ═══");
+                AppendResultsTable(sb, [.. suite.Results]);
+            }
 
-        // Comparisons
-        if (suite.Comparisons?.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("═══ Comparisons ═══");
-            AppendComparisonsTable(sb, [.. suite.Comparisons]);
-        }
+            // Comparisons
+            if (suite.Comparisons?.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("═══ Comparisons ═══");
+                AppendComparisonsTable(sb, [.. suite.Comparisons]);
+            }
 
             return sb.ToString();
         }
@@ -279,18 +280,15 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         foreach (var c in comparisons)
         {
             var indicator = GetSpeedupIndicator(c.Speedup);
-            rows.Add(new ComparisonRow(
-                c.Name,
-                Options.CandidateLabel,
-                c.Candidate,
-                $"{FormatSpeedup(c.Speedup)} {indicator}"
-            ));
-            rows.Add(new ComparisonRow(
-                c.Name,
-                Options.BaselineLabel,
-                c.Baseline,
-                ""
-            ));
+            rows.Add(
+                new ComparisonRow(
+                    c.Name,
+                    Options.CandidateLabel,
+                    c.Candidate,
+                    $"{FormatSpeedup(c.Speedup)} {indicator}"
+                )
+            );
+            rows.Add(new ComparisonRow(c.Name, Options.BaselineLabel, c.Baseline, ""));
         }
 
         // Calculate column widths based on content
@@ -403,7 +401,12 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         public Func<T, string> GetValue { get; }
         public bool LeftAlign { get; }
 
-        public TableColumn(string header, int width, Func<T, string> getValue, bool leftAlign = false)
+        public TableColumn(
+            string header,
+            int width,
+            Func<T, string> getValue,
+            bool leftAlign = false
+        )
         {
             Header = header;
             Width = width;
@@ -412,14 +415,10 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
-    private static void AppendTable<T>(
-        StringBuilder sb,
-        List<TableColumn<T>> columns,
-        List<T> rows
-    )
+    private static void AppendTable<T>(StringBuilder sb, List<TableColumn<T>> columns, List<T> rows)
     {
         const int padding = 2;
-        
+
         // Add padding to widths
         foreach (var column in columns)
         {
@@ -429,13 +428,13 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         AppendTableBorder(sb, columns, '┌', '┬', '┐');
         AppendTableRow(sb, columns, columns.Select(c => c.Header).ToList());
         AppendTableBorder(sb, columns, '├', '┼', '┤');
-        
+
         foreach (var row in rows)
         {
             var values = columns.Select(c => c.GetValue(row)).ToList();
             AppendTableRow(sb, columns, values);
         }
-        
+
         AppendTableBorder(sb, columns, '└', '┴', '┘');
     }
 
@@ -444,7 +443,8 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         List<TableColumn<T>> columns,
         char left,
         char middle,
-        char right)
+        char right
+    )
     {
         sb.Append(left);
         for (var i = 0; i < columns.Count; i++)
@@ -458,14 +458,15 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     private static void AppendTableRow<T>(
         StringBuilder sb,
         List<TableColumn<T>> columns,
-        List<string> values)
+        List<string> values
+    )
     {
         sb.Append('│');
         for (var i = 0; i < columns.Count; i++)
         {
             var column = columns[i];
             var value = values[i];
-            var text = column.LeftAlign 
+            var text = column.LeftAlign
                 ? $" {value}".PadRight(column.Width)
                 : value.PadLeft(column.Width - 1) + " ";
             sb.Append(text);

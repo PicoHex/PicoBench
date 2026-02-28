@@ -6,25 +6,21 @@ namespace Pico.Bench;
 /// </summary>
 public static partial class Runner
 {
-    private static int _initialized;
+    private static readonly Lazy<bool> _initializer = new Lazy<bool>(InitializeCore, System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
     private static volatile int _linuxPerfFd = -1;
-
-    static Runner()
-    {
-        AppDomain.CurrentDomain.ProcessExit += (sender, args) => CleanupLinuxPerf();
-        AppDomain.CurrentDomain.DomainUnload += (sender, args) => CleanupLinuxPerf();
-    }
 
     /// <summary>
     /// Initialize the runner by setting process/thread priority and warming up timing APIs.
     /// Call this once at the start of your benchmark session.
+    /// Thread-safe: uses <see cref="Lazy{T}"/> to guarantee single initialization.
     /// </summary>
     public static void Initialize()
     {
-        // Use Interlocked.CompareExchange for thread-safe initialization
-        if (System.Threading.Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
-            return;
+        _ = _initializer.Value;
+    }
 
+    private static bool InitializeCore()
+    {
         try
         {
             // Set high priority on all platforms (may require elevated permissions)
@@ -44,6 +40,8 @@ public static partial class Runner
 
         // Warm-up: touch Stopwatch/GC/cycle APIs once.
         Time(1, static () => { });
+
+        return true;
     }
 
     /// <summary>
@@ -101,7 +99,7 @@ public static partial class Runner
         return new TimingSample
         {
             ElapsedNanoseconds = elapsedNs,
-            ElapsedMilliseconds = watch.Elapsed.TotalMilliseconds,
+            ElapsedMilliseconds = elapsedNs / 1_000_000.0,
             ElapsedTicks = elapsedTicks,
             CpuCycles = cycleEnd - cycleStart,
             GcInfo = CalculateGcDelta(gcBaseline)
@@ -139,7 +137,7 @@ public static partial class Runner
         return new TimingSample
         {
             ElapsedNanoseconds = elapsedNs,
-            ElapsedMilliseconds = watch.Elapsed.TotalMilliseconds,
+            ElapsedMilliseconds = elapsedNs / 1_000_000.0,
             ElapsedTicks = elapsedTicks,
             CpuCycles = cycleEnd - cycleStart,
             GcInfo = CalculateGcDelta(gcBaseline)
@@ -150,11 +148,10 @@ public static partial class Runner
 
     private static long[] GetGcBaselineCounts()
     {
-        // Force GC and record baseline counts
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
-        GC.WaitForPendingFinalizers();
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
-
+        // Record current GC counts without forcing a collection.
+        // Forced GC.Collect per sample introduces significant overhead and distorts
+        // the timing results. The caller (Benchmark) should perform a single forced
+        // GC before the entire collection loop if a clean baseline is desired.
         var gcCounts = new long[GC.MaxGeneration + 1];
         for (int i = 0; i <= GC.MaxGeneration; i++)
             gcCounts[i] = GC.CollectionCount(i);
@@ -217,7 +214,9 @@ public static partial class Runner
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            return GetMacOsCpuCycles();
+            // macOS: mach_absolute_time is a monotonic clock, not real CPU cycles.
+            // CpuCyclesPerOp will not be meaningful on this platform.
+            return GetMacOsMonotonicTime();
         }
 
         // Other platforms: not supported yet
@@ -318,6 +317,10 @@ public static partial class Runner
 
     private static void InitializeLinuxPerf()
     {
+        // Register cleanup handlers on demand (only when Linux perf is actually used)
+        AppDomain.CurrentDomain.ProcessExit += (sender, args) => CleanupLinuxPerf();
+        AppDomain.CurrentDomain.DomainUnload += (sender, args) => CleanupLinuxPerf();
+
         try
         {
             // Check perf_event_paranoid value first
@@ -424,11 +427,12 @@ public static partial class Runner
     }
 
     /// <summary>
-    /// Returns mach absolute time on macOS (not CPU cycles).
-    /// This provides high-resolution timing but not cycle-accurate measurements.
-    /// For CPU cycle counting on macOS, use platform-specific APIs.
+    /// Returns mach absolute time on macOS. Note: this is a monotonic wall-clock
+    /// timestamp, NOT actual CPU hardware cycle counts. The returned value is used
+    /// as a best-effort proxy for relative timing; the <c>CpuCyclesPerOp</c> metric
+    /// is therefore not meaningful on macOS and should be ignored.
     /// </summary>
-    private static ulong GetMacOsCpuCycles()
+    private static ulong GetMacOsMonotonicTime()
     {
         try
         {
