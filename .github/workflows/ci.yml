@@ -50,6 +50,10 @@ jobs:
       with:
         fetch-depth: 0
     
+    - name: Extract version from tag
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
@@ -59,13 +63,13 @@ jobs:
       run: dotnet restore
     
     - name: Build
-      run: dotnet build --configuration Release --no-restore
+      run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
     
     - name: Run tests
       run: dotnet test --project tests/Pico.Bench.Tests/Pico.Bench.TUnit.Tests.csproj --configuration Release --no-build --verbosity normal --timeout 120s --no-progress --no-ansi
 
     - name: Pack NuGet package
-      run: dotnet pack src/Pico.Bench/Pico.Bench.csproj --configuration Release --no-build --output ./nupkg --include-symbols
+      run: dotnet pack src/Pico.Bench/Pico.Bench.csproj --configuration Release --no-build --output ./nupkg --include-symbols -p:Version=${{ steps.version.outputs.VERSION }}
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4

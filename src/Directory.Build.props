@@ -1,10 +1,10 @@
 <Project>
   <PropertyGroup>
-    <!-- Version configuration -->
-    <Version>2026.1.0</Version>
-    <PackageVersion>2026.1.0</PackageVersion>
-    <AssemblyVersion>2026.1.0</AssemblyVersion>
-    <FileVersion>2026.1.0</FileVersion>
+    <!-- Version configuration: overridden by CI from git tag (e.g. v2026.1.0) -->
+    <Version>0.0.0-dev</Version>
+    <PackageVersion>$(Version)</PackageVersion>
+    <AssemblyVersion>$(Version.Split('-')[0])</AssemblyVersion>
+    <FileVersion>$(Version.Split('-')[0])</FileVersion>
     
     <!-- Repository information for SourceLink -->
     <RepositoryUrl>https://github.com/Mutuduxf/Pico.Bench.git</RepositoryUrl>
