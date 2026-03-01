@@ -23,8 +23,4 @@
         <InternalsVisibleTo Include="Pico.Bench.TUnit.Tests" />
     </ItemGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\Pico.Bench\Pico.Bench.csproj" />
-    </ItemGroup>
-
 </Project>
