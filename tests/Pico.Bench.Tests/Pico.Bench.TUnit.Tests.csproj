@@ -7,7 +7,6 @@
     <IsTestProject>true</IsTestProject>
     <EnableCodeCoverage>true</EnableCodeCoverage>
     <IncludeSource>true</IncludeSource>
-    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,9 +17,9 @@
     <ProjectReference Include="..\..\src\Pico.Bench.Generators\Pico.Bench.Generators.csproj" />
     
     <!-- TUnit testing framework -->
-    <PackageReference Include="TUnit" Version="*" />
+    <PackageReference Include="TUnit" Version="1.17.54" />
     
     <!-- File system helpers for test cleanup -->
-    <PackageReference Include="System.IO.Abstractions" Version="*" PrivateAssets="All" />
+    <PackageReference Include="System.IO.Abstractions" Version="22.1.0" PrivateAssets="All" />
   </ItemGroup>
 </Project>

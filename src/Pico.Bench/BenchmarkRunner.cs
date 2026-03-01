@@ -32,8 +32,8 @@ public static class BenchmarkRunner
     public static BenchmarkSuite Run<T>(T instance, BenchmarkConfig? config = null)
         where T : IBenchmarkClass
     {
-        if (instance == null)
-            throw new ArgumentNullException(nameof(instance));
-        return instance.RunBenchmarks(config);
+        return instance == null
+            ? throw new ArgumentNullException(nameof(instance))
+            : instance.RunBenchmarks(config);
     }
 }

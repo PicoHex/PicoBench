@@ -12,13 +12,10 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     private static StringBuilder GetStringBuilder()
     {
         var sb = _cachedStringBuilder;
-        if (sb != null)
-        {
-            _cachedStringBuilder = null;
-            sb.Clear();
-            return sb;
-        }
-        return new StringBuilder(1024); // Default capacity for typical output
+        if (sb is null) return new StringBuilder(1024); // Default capacity for typical output
+        _cachedStringBuilder = null;
+        sb.Clear();
+        return sb;
     }
 
     private static void ReturnStringBuilder(StringBuilder sb)
@@ -29,6 +26,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
+    /// <inheritdoc />
     protected override string FormatCore(BenchmarkResult result)
     {
         var sb = GetStringBuilder();
@@ -43,6 +41,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
+    /// <inheritdoc />
     protected override string FormatCore(IEnumerable<BenchmarkResult> results)
     {
         var sb = GetStringBuilder();
@@ -62,6 +61,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
+    /// <inheritdoc />
     protected override string FormatCore(ComparisonResult comparison)
     {
         var sb = GetStringBuilder();
@@ -76,6 +76,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
+    /// <inheritdoc />
     protected override string FormatCore(IEnumerable<ComparisonResult> comparisons)
     {
         var sb = GetStringBuilder();
@@ -95,6 +96,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
+    /// <inheritdoc />
     protected override string FormatCore(BenchmarkSuite suite)
     {
         var sb = GetStringBuilder();
@@ -125,12 +127,10 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             }
 
             // Comparisons
-            if (suite.Comparisons?.Count > 0)
-            {
-                sb.AppendLine();
-                sb.AppendLine("═══ Comparisons ═══");
-                AppendComparisonsTable(sb, [.. suite.Comparisons]);
-            }
+            if (!(suite.Comparisons?.Count > 0)) return sb.ToString();
+            sb.AppendLine();
+            sb.AppendLine("═══ Comparisons ═══");
+            AppendComparisonsTable(sb, [.. suite.Comparisons]);
 
             return sb.ToString();
         }
@@ -529,9 +529,12 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         var speedupWidth = Math.Max("Speedup".Length, rows.Max(r => r.Speedup.Length));
 
         // Build column definitions
-        var columns = new List<(string Header, int Width)> { ("Test Case", nameWidth + 2) };
-        columns.Add(("Avg (ns)", avgWidth + 2));
-        columns.Add(("Speedup", speedupWidth + 2));
+        var columns = new List<(string Header, int Width)>
+        {
+            ("Test Case", nameWidth + 2),
+            ("Avg (ns)", avgWidth + 2),
+            ("Speedup", speedupWidth + 2)
+        };
 
         if (Options.IncludePercentiles)
         {

@@ -6,7 +6,8 @@ namespace Pico.Bench;
 /// </summary>
 public static partial class Runner
 {
-    private static readonly Lazy<bool> _initializer = new Lazy<bool>(InitializeCore, System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+    private static readonly Lazy<bool> Initializer =
+        new(InitializeCore, LazyThreadSafetyMode.ExecutionAndPublication);
     private static volatile int _linuxPerfFd = -1;
 
     /// <summary>
@@ -16,7 +17,7 @@ public static partial class Runner
     /// </summary>
     public static void Initialize()
     {
-        _ = _initializer.Value;
+        _ = Initializer.Value;
     }
 
     private static bool InitializeCore()
@@ -237,8 +238,8 @@ public static partial class Runner
     #region Linux
 
     // perf_event_open constants
-    private const int PERF_TYPE_HARDWARE = 0;
-    private const int PERF_COUNT_HW_CPU_CYCLES = 0;
+    private const int PerfTypeHardware = 0;
+    private const int PerfCountHwCpuCycles = 0;
 
     // System call numbers for perf_event_open across architectures
     private static int GetPerfEventOpenSyscallNumber()
@@ -318,8 +319,8 @@ public static partial class Runner
     private static void InitializeLinuxPerf()
     {
         // Register cleanup handlers on demand (only when Linux perf is actually used)
-        AppDomain.CurrentDomain.ProcessExit += (sender, args) => CleanupLinuxPerf();
-        AppDomain.CurrentDomain.DomainUnload += (sender, args) => CleanupLinuxPerf();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => CleanupLinuxPerf();
+        AppDomain.CurrentDomain.DomainUnload += (_, _) => CleanupLinuxPerf();
 
         try
         {
@@ -338,9 +339,9 @@ public static partial class Runner
 
             var attr = new PerfEventAttr
             {
-                Type = PERF_TYPE_HARDWARE,
+                Type = PerfTypeHardware,
                 Size = (uint)Marshal.SizeOf<PerfEventAttr>(),
-                Config = PERF_COUNT_HW_CPU_CYCLES,
+                Config = PerfCountHwCpuCycles,
                 Flags = 0 // disabled=0, inherit=0, exclude_kernel=0, exclude_hv=0
             };
 

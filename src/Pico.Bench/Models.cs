@@ -20,6 +20,7 @@ public sealed class GcInfo
     /// <summary>Returns true if no GC occurred during the benchmark.</summary>
     public bool IsZero => Gen0 == 0 && Gen1 == 0 && Gen2 == 0;
 
+    /// <inheritdoc />
     public override string ToString() => $"{Gen0}/{Gen1}/{Gen2}";
 }
 
@@ -44,7 +45,7 @@ public sealed class TimingSample
     public ulong CpuCycles { get; init; }
 
     /// <summary>GC collection counts during this sample.</summary>
-    public GcInfo GcInfo { get; init; } = new GcInfo();
+    public GcInfo GcInfo { get; init; } = new();
 }
 
 /// <summary>
@@ -152,22 +153,30 @@ public sealed class BenchmarkResult
 /// <summary>
 /// Comparison result between two benchmark runs.
 /// </summary>
-public sealed class ComparisonResult
+public sealed class ComparisonResult(
+    string name,
+    BenchmarkResult baseline,
+    BenchmarkResult candidate,
+    string? category = null,
+    IReadOnlyDictionary<string, string>? tags = null
+)
 {
     /// <summary>Name of the comparison.</summary>
-    public string Name { get; }
+    public string Name { get; } = name ?? throw new ArgumentNullException(nameof(name));
 
     /// <summary>Optional category/group for organizing results.</summary>
-    public string? Category { get; }
+    public string? Category { get; } = category;
 
     /// <summary>Optional tags for filtering and grouping.</summary>
-    public IReadOnlyDictionary<string, string>? Tags { get; }
+    public IReadOnlyDictionary<string, string>? Tags { get; } = tags;
 
     /// <summary>Baseline benchmark result.</summary>
-    public BenchmarkResult Baseline { get; }
+    public BenchmarkResult Baseline { get; } =
+        baseline ?? throw new ArgumentNullException(nameof(baseline));
 
     /// <summary>Candidate benchmark result (the one being compared).</summary>
-    public BenchmarkResult Candidate { get; }
+    public BenchmarkResult Candidate { get; } =
+        candidate ?? throw new ArgumentNullException(nameof(candidate));
 
     /// <summary>Speedup ratio (Baseline.Avg / Candidate.Avg). >1 means candidate is faster.</summary>
     public double Speedup
@@ -194,21 +203,6 @@ public sealed class ComparisonResult
 
     /// <summary>Percentage improvement. Positive means candidate is faster.</summary>
     public double ImprovementPercent => (Speedup - 1) * 100;
-
-    public ComparisonResult(
-        string name,
-        BenchmarkResult baseline,
-        BenchmarkResult candidate,
-        string? category = null,
-        IReadOnlyDictionary<string, string>? tags = null
-    )
-    {
-        Name = name ?? throw new ArgumentNullException(nameof(name));
-        Baseline = baseline ?? throw new ArgumentNullException(nameof(baseline));
-        Candidate = candidate ?? throw new ArgumentNullException(nameof(candidate));
-        Category = category;
-        Tags = tags;
-    }
 }
 
 /// <summary>
@@ -290,6 +284,7 @@ public sealed class EnvironmentInfo
     /// <summary>Custom environment tags.</summary>
     public IReadOnlyDictionary<string, string>? CustomTags { get; init; }
 
+    /// <inheritdoc />
     public override string ToString() =>
         $"{RuntimeVersion} | {Os} | {Architecture} | {(IsNativeAot ? "AOT" : "JIT")} | {Configuration}";
 }

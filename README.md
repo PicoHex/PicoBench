@@ -2,6 +2,10 @@
 
 [English](README.md) | [中文](README.zh-CN.md) | [中文 (Traditional)](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
+![CI](https://github.com/Mutuduxf/Pico.Bench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/Pico.Bench.svg)](https://www.nuget.org/packages/Pico.Bench)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A lightweight, zero-dependency benchmarking library for .NET with **two complementary APIs**: an imperative fluent API and an attribute-based, source-generated API that is fully **AOT-compatible**.
 
 ## Features
@@ -366,6 +370,67 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
+
+## Building and Publishing
+
+### Local Development
+
+```bash
+# Build
+dotnet build --configuration Release
+
+# Run tests
+dotnet test --configuration Release
+
+# Create NuGet package
+dotnet pack src/Pico.Bench/Pico.Bench.csproj --configuration Release --include-symbols --output ./nupkg
+```
+
+### Using Release Scripts
+
+The repository includes release scripts for automated publishing:
+
+**PowerShell:**
+```powershell
+.\scripts\publish.ps1                 # Build and test
+.\scripts\publish.ps1 -Publish        # Build, test and publish (requires NUGET_API_KEY)
+```
+
+**Bash:**
+```bash
+./scripts/publish.sh                  # Build and test
+PUBLISH=true ./scripts/publish.sh     # Build, test and publish (requires NUGET_API_KEY)
+```
+
+### CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration and deployment:
+
+- **CI**: Runs on every push to `main` and pull requests
+- **CD**: Automatically publishes to [NuGet.org](https://www.nuget.org/packages/Pico.Bench) when a version tag is pushed (e.g., `v2026.1.0`)
+
+To create a new release:
+
+```bash
+# Tag the release
+git tag v2026.1.0
+git push origin v2026.1.0
+```
+
+The CI/CD pipeline will:
+1. Run all 313 tests
+2. Build the project in Release configuration
+3. Create NuGet package with symbols and SourceLink
+4. Publish to NuGet.org
+
+### Package Details
+
+- **Package ID**: `Pico.Bench`
+- **Version**: 2026.1.0 (year.month.minor)
+- **Target Framework**: netstandard2.0 (.NET Framework 4.6.1+, .NET Core 2.0+, .NET 5+)
+- **Symbols**: Included as .snupkg (SourceLink enabled)
+- **License**: MIT
+- **Repository**: https://github.com/Mutuduxf/Pico.Bench
 
 ## Contributing
 

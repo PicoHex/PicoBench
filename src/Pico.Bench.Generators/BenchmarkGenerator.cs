@@ -1,8 +1,3 @@
-using System.Collections.Immutable;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-
 namespace Pico.Bench.Generators;
 
 /// <summary>
@@ -96,61 +91,73 @@ public sealed class BenchmarkGenerator : IIncrementalGenerator
         {
             ct.ThrowIfCancellationRequested();
 
-            if (member is IMethodSymbol method)
+            switch (member)
             {
-                foreach (var attr in method.GetAttributes())
+                case IMethodSymbol method:
                 {
-                    var attrName = attr.AttributeClass?.ToDisplayString();
-                    switch (attrName)
+                    foreach (var attr in method.GetAttributes())
                     {
-                        case BenchmarkAttr:
+                        var attrName = attr.AttributeClass?.ToDisplayString();
+                        switch (attrName)
                         {
-                            var isBaseline = false;
-                            string? methodDesc = null;
-                            foreach (var named in attr.NamedArguments)
+                            case BenchmarkAttr:
                             {
-                                if (named.Key == "Baseline" && named.Value.Value is true)
-                                    isBaseline = true;
-                                if (named.Key == "Description" && named.Value.Value is string d)
-                                    methodDesc = d;
-                            }
-
-                            methods.Add(
-                                new BenchmarkMethodModel
+                                var isBaseline = false;
+                                string? methodDesc = null;
+                                foreach (var named in attr.NamedArguments)
                                 {
-                                    Name = method.Name,
-                                    IsBaseline = isBaseline,
-                                    Description = methodDesc
+                                    switch (named.Key)
+                                    {
+                                        case "Baseline" when named.Value.Value is true:
+                                            isBaseline = true;
+                                            break;
+                                        case "Description" when named.Value.Value is string d:
+                                            methodDesc = d;
+                                            break;
+                                    }
                                 }
-                            );
-                            break;
+
+                                methods.Add(
+                                    new BenchmarkMethodModel
+                                    {
+                                        Name = method.Name,
+                                        IsBaseline = isBaseline,
+                                        Description = methodDesc
+                                    }
+                                );
+                                break;
+                            }
+                            case GlobalSetupAttr:
+                                globalSetup = method.Name;
+                                break;
+                            case GlobalCleanupAttr:
+                                globalCleanup = method.Name;
+                                break;
+                            case IterationSetupAttr:
+                                iterSetup = method.Name;
+                                break;
+                            case IterationCleanupAttr:
+                                iterCleanup = method.Name;
+                                break;
                         }
-                        case GlobalSetupAttr:
-                            globalSetup = method.Name;
-                            break;
-                        case GlobalCleanupAttr:
-                            globalCleanup = method.Name;
-                            break;
-                        case IterationSetupAttr:
-                            iterSetup = method.Name;
-                            break;
-                        case IterationCleanupAttr:
-                            iterCleanup = method.Name;
-                            break;
                     }
+
+                    break;
                 }
-            }
-            else if (member is IPropertySymbol prop)
-            {
-                var paramAttr = FindAttribute(prop.GetAttributes(), ParamsAttr);
-                if (paramAttr != null)
-                    paramsProps.Add(BuildParamsModel(prop.Name, prop.Type, paramAttr));
-            }
-            else if (member is IFieldSymbol field)
-            {
-                var paramAttr = FindAttribute(field.GetAttributes(), ParamsAttr);
-                if (paramAttr != null)
-                    paramsProps.Add(BuildParamsModel(field.Name, field.Type, paramAttr));
+                case IPropertySymbol prop:
+                {
+                    var paramAttr = FindAttribute(prop.GetAttributes(), ParamsAttr);
+                    if (paramAttr != null)
+                        paramsProps.Add(BuildParamsModel(prop.Name, prop.Type, paramAttr));
+                    break;
+                }
+                case IFieldSymbol field:
+                {
+                    var paramAttr = FindAttribute(field.GetAttributes(), ParamsAttr);
+                    if (paramAttr != null)
+                        paramsProps.Add(BuildParamsModel(field.Name, field.Type, paramAttr));
+                    break;
+                }
             }
         }
 
@@ -177,12 +184,7 @@ public sealed class BenchmarkGenerator : IIncrementalGenerator
         string fullyQualifiedName
     )
     {
-        foreach (var attr in attrs)
-        {
-            if (attr.AttributeClass?.ToDisplayString() == fullyQualifiedName)
-                return attr;
-        }
-        return null;
+        return Enumerable.FirstOrDefault(attrs, attr => attr.AttributeClass?.ToDisplayString() == fullyQualifiedName);
     }
 
     private static ParamsPropertyModel BuildParamsModel(
@@ -194,15 +196,23 @@ public sealed class BenchmarkGenerator : IIncrementalGenerator
         var typeName = memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var values = ImmutableArray.CreateBuilder<string>();
 
-        if (attr.ConstructorArguments.Length > 0)
-        {
-            var arg = attr.ConstructorArguments[0];
-            if (arg.Kind == TypedConstantKind.Array)
+        if (attr.ConstructorArguments.Length <= 0)
+            return new ParamsPropertyModel
             {
-                foreach (var element in arg.Values)
-                    values.Add(FormatConstant(element));
-            }
-        }
+                Name = memberName,
+                TypeFullName = typeName,
+                FormattedValues = values.ToImmutable()
+            };
+        var arg = attr.ConstructorArguments[0];
+        if (arg.Kind != TypedConstantKind.Array)
+            return new ParamsPropertyModel
+            {
+                Name = memberName,
+                TypeFullName = typeName,
+                FormattedValues = values.ToImmutable()
+            };
+        foreach (var element in arg.Values)
+            values.Add(FormatConstant(element));
 
         return new ParamsPropertyModel
         {
@@ -215,7 +225,7 @@ public sealed class BenchmarkGenerator : IIncrementalGenerator
     /// <summary>
     /// Formats a <see cref="TypedConstant"/> as a C# literal string.
     /// </summary>
-    internal static string FormatConstant(TypedConstant constant)
+    private static string FormatConstant(TypedConstant constant)
     {
         if (constant.IsNull)
             return "null";
@@ -238,7 +248,7 @@ public sealed class BenchmarkGenerator : IIncrementalGenerator
 
     private static string FormatStringLiteral(string s)
     {
-        var sb = new System.Text.StringBuilder("\"");
+        var sb = new StringBuilder("\"");
         foreach (var c in s)
         {
             sb.Append(

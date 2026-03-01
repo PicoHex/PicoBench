@@ -93,7 +93,7 @@ public sealed class FormatterOptions
             throw new ArgumentNullException(nameof(fileName));
         return string.IsNullOrEmpty(OutputDirectory)
             ? fileName
-            : Path.Combine(OutputDirectory, fileName);
+            : Path.Combine(OutputDirectory!, fileName);
     }
 }
 
@@ -110,37 +110,27 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
 
     public string Format(BenchmarkResult result)
     {
-        if (result == null)
-            throw new ArgumentNullException(nameof(result));
-        return FormatCore(result);
+        return result == null ? throw new ArgumentNullException(nameof(result)) : FormatCore(result);
     }
 
     public string Format(IEnumerable<BenchmarkResult> results)
     {
-        if (results == null)
-            throw new ArgumentNullException(nameof(results));
-        return FormatCore(results);
+        return results == null ? throw new ArgumentNullException(nameof(results)) : FormatCore(results);
     }
 
     public string Format(ComparisonResult comparison)
     {
-        if (comparison == null)
-            throw new ArgumentNullException(nameof(comparison));
-        return FormatCore(comparison);
+        return comparison == null ? throw new ArgumentNullException(nameof(comparison)) : FormatCore(comparison);
     }
 
     public string Format(IEnumerable<ComparisonResult> comparisons)
     {
-        if (comparisons == null)
-            throw new ArgumentNullException(nameof(comparisons));
-        return FormatCore(comparisons);
+        return comparisons == null ? throw new ArgumentNullException(nameof(comparisons)) : FormatCore(comparisons);
     }
 
     public string Format(BenchmarkSuite suite)
     {
-        if (suite == null)
-            throw new ArgumentNullException(nameof(suite));
-        return FormatCore(suite);
+        return suite == null ? throw new ArgumentNullException(nameof(suite)) : FormatCore(suite);
     }
 
     #endregion

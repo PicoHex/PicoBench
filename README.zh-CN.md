@@ -2,6 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
+![CI](https://github.com/Mutuduxf/Pico.Bench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/Pico.Bench.svg)](https://www.nuget.org/packages/Pico.Bench)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 一个轻量级、零依赖的 .NET 基准测试库，提供 **两种互补的 API**：命令式流式 API 和基于属性、源生成的 API，完全 **AOT 兼容**。
 
 ## 特性

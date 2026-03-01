@@ -1,0 +1,35 @@
+<Project>
+  <PropertyGroup>
+    <!-- Version configuration -->
+    <Version>2026.1.0</Version>
+    <PackageVersion>2026.1.0</PackageVersion>
+    <AssemblyVersion>2026.1.0</AssemblyVersion>
+    <FileVersion>2026.1.0</FileVersion>
+    
+    <!-- Repository information for SourceLink -->
+    <RepositoryUrl>https://github.com/Mutuduxf/Pico.Bench.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    
+    <!-- Package configuration -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSource>true</IncludeSource>
+    
+    <!-- Common build properties -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    
+    <!-- Deterministic build -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- SourceLink package reference for GitHub -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+</Project>

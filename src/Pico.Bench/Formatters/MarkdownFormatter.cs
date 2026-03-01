@@ -5,11 +5,13 @@ namespace Pico.Bench.Formatters;
 /// </summary>
 public sealed class MarkdownFormatter(FormatterOptions? options = null) : FormatterBase(options)
 {
+    /// <inheritdoc />
     protected override string FormatCore(BenchmarkResult result)
     {
-        return FormatCore(new[] { result });
+        return FormatCore([result]);
     }
 
+    /// <inheritdoc />
     protected override string FormatCore(IEnumerable<BenchmarkResult> results)
     {
         var sb = new StringBuilder();
@@ -22,11 +24,13 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         return sb.ToString();
     }
 
+    /// <inheritdoc />
     protected override string FormatCore(ComparisonResult comparison)
     {
-        return FormatCore(new[] { comparison });
+        return FormatCore([comparison]);
     }
 
+    /// <inheritdoc />
     protected override string FormatCore(IEnumerable<ComparisonResult> comparisons)
     {
         var sb = new StringBuilder();
@@ -39,6 +43,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         return sb.ToString();
     }
 
+    /// <inheritdoc />
     protected override string FormatCore(BenchmarkSuite suite)
     {
         var sb = new StringBuilder();
