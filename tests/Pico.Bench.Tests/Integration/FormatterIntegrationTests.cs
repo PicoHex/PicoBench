@@ -42,7 +42,13 @@ public class FormatterIntegrationTests
     [Property("SubCategory", "Formatter")]
     public async Task BenchmarkRun_ConsoleFormatter_OutputsValidString()
     {
-        var result = Benchmark.Run("IntegrationTest", () => Thread.Sleep(1));
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 2,
+            SampleCount = 3,
+            IterationsPerSample = 5
+        };
+        var result = Benchmark.Run("IntegrationTest", () => Thread.Sleep(1), config);
 
         var formatter = new ConsoleFormatter();
         var formatted = formatter.Format(result);
