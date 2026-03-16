@@ -28,10 +28,22 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- Include the source generator DLL in the analyzers folder of the NuGet package -->
+        <!-- Include the source generator DLL in the buildTransitive folder to avoid file lock contention -->
         <None Include="..\Pico.Bench.Generators\$(OutputPath)Pico.Bench.Generators.dll"
               Pack="true"
-              PackagePath="analyzers/dotnet/cs"
+              PackagePath="buildTransitive/Pico.Bench.Generators/analyzers/dotnet/cs"
+              Visible="false" />
+
+        <!-- Include MSBuild props file for automatic analyzer loading -->
+        <None Include="..\Pico.Bench.Generators\buildTransitive\Pico.Bench.Generators.props"
+              Pack="true"
+              PackagePath="buildTransitive/Pico.Bench.Generators.props"
+              Visible="false" />
+
+        <!-- Include main package props file to satisfy NuGet warning -->
+        <None Include="..\buildTransitive\Pico.Bench.props"
+              Pack="true"
+              PackagePath="buildTransitive/Pico.Bench.props"
               Visible="false" />
 
         <!-- Include the root README in the NuGet package -->
