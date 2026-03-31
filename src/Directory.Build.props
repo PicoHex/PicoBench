@@ -14,13 +14,13 @@
     <UseProjectReferences Condition="'$(UseProjectReferences)' == ''">true</UseProjectReferences>
 
     <!-- Repository information for SourceLink -->
-    <RepositoryUrl>https://github.com/Mutuduxf/PicoBench.git</RepositoryUrl>
+    <RepositoryUrl>https://github.com/PicoHex/PicoBench</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     
     <!-- Common package metadata (applies to packed projects; harmless for others) -->
     <Authors>PicoHex</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/Mutuduxf/PicoBench</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/PicoHex/PicoBench</PackageProjectUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     
     <!-- Deterministic build & SourceLink -->
