@@ -1,6 +1,6 @@
 using System.Text;
-using Pico.Bench;
-using Pico.Bench.Formatters;
+using PicoBench;
+using PicoBench.Formatters;
 
 Console.WriteLine("=== String vs StringBuilder Benchmark ===\n");
 

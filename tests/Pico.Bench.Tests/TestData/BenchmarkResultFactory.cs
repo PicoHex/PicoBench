@@ -1,6 +1,4 @@
-using Pico.Bench;
-
-namespace Pico.Bench.Tests.TestData;
+namespace PicoBench.Tests.TestData;
 
 public static class BenchmarkResultFactory
 {
@@ -15,7 +13,8 @@ public static class BenchmarkResultFactory
         int iterationsPerSample = 1000,
         IReadOnlyDictionary<string, string>? tags = null,
         IReadOnlyList<TimingSample>? samples = null,
-        DateTime? timestamp = null)
+        DateTime? timestamp = null
+    )
     {
         return new BenchmarkResult(
             name: name,
@@ -112,14 +111,11 @@ public static class BenchmarkResultFactory
         yield return WithLargeSamples();
         yield return WithTags();
         yield return WithSpecificTimestamp();
-        
+
         // Combine with statistical edge cases
         foreach (var stats in StatisticsFactory.GetEdgeCases())
         {
-            yield return Create(
-                name: $"EdgeCase_{stats.Avg}",
-                statistics: stats
-            );
+            yield return Create(name: $"EdgeCase_{stats.Avg}", statistics: stats);
         }
     }
 

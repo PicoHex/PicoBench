@@ -1,9 +1,9 @@
-# Pico.Bench
+# PicoBench
 
 [English](README.md) | [中文](README.zh-CN.md) | [中文 (Traditional)](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-![CI](https://github.com/Mutuduxf/Pico.Bench/actions/workflows/ci.yml/badge.svg)
-[![NuGet](https://img.shields.io/nuget/v/Pico.Bench.svg)](https://www.nuget.org/packages/Pico.Bench)
+![CI](https://github.com/Mutuduxf/PicoBench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A lightweight, zero-dependency benchmarking library for .NET with **two complementary APIs**: an imperative fluent API and an attribute-based, source-generated API that is fully **AOT-compatible**.
@@ -26,10 +26,10 @@ A lightweight, zero-dependency benchmarking library for .NET with **two compleme
 
 ## Installation
 
-Reference the **Pico.Bench** NuGet package. The source generator (`Pico.Bench.Generators`) is bundled automatically as an analyzer - no extra reference needed.
+Reference the **PicoBench** NuGet package. The source generator (`PicoBench.Generators`) is bundled automatically as an analyzer - no extra reference needed.
 
 ```bash
-dotnet add package Pico.Bench
+dotnet add package PicoBench
 ```
 
 ## Quick Start
@@ -37,7 +37,7 @@ dotnet add package Pico.Bench
 ### Imperative API
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var result = Benchmark.Run("My Benchmark", () =>
 {
@@ -50,10 +50,10 @@ Console.WriteLine($"Average: {result.Statistics.Avg:F1} ns/op");
 ### Attribute-Based API (Source-Generated)
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var suite = BenchmarkRunner.Run<MyBenchmarks>();
-Console.WriteLine(new Pico.Bench.Formatters.ConsoleFormatter().Format(suite));
+Console.WriteLine(new PicoBench.Formatters.ConsoleFormatter().Format(suite));
 
 [BenchmarkClass]
 public partial class MyBenchmarks
@@ -75,8 +75,8 @@ public partial class MyBenchmarks
 ### Basic Benchmark
 
 ```csharp
-using Pico.Bench;
-using Pico.Bench.Formatters;
+using PicoBench;
+using PicoBench.Formatters;
 
 var result = Benchmark.Run("SpinWait", () => Thread.SpinWait(100));
 Console.WriteLine(new ConsoleFormatter().Format(result));
@@ -149,7 +149,7 @@ Decorate a **partial** class with `[BenchmarkClass]` and its methods/properties 
 ### Full Example
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 [BenchmarkClass(Description = "Comparing string concatenation strategies")]
 public partial class StringBenchmarks
@@ -227,7 +227,7 @@ var result = Benchmark.Run("Test", action, config);
 Five built-in formatters implement `IFormatter`:
 
 ```csharp
-using Pico.Bench.Formatters;
+using PicoBench.Formatters;
 
 var console  = new ConsoleFormatter();     // Box-drawing console tables
 var markdown = new MarkdownFormatter();    // GitHub-friendly Markdown
@@ -299,7 +299,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ```
 src/
-+-- Pico.Bench/                        # Main library (netstandard2.0)
++-- PicoBench/                        # Main library (netstandard2.0)
 |   +-- Benchmark.cs                   # Imperative API (Run, Compare, RunScoped)
 |   +-- BenchmarkRunner.cs             # Attribute-based entry point (Run<T>)
 |   +-- BenchmarkConfig.cs             # Configuration with presets
@@ -316,7 +316,7 @@ src/
 |       +-- CsvFormatter.cs            # CSV export
 |       +-- SummaryFormatter.cs        # Win/loss summary
 |
-+-- Pico.Bench.Generators/            # Source generator (netstandard2.0)
++-- PicoBench.Generators/            # Source generator (netstandard2.0)
     +-- BenchmarkGenerator.cs          # IIncrementalGenerator entry point
     +-- Emitter.cs                     # C# code emitter (AOT-safe)
     +-- Models.cs                      # Roslyn analysis models
@@ -353,7 +353,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## Comparison with BenchmarkDotNet
 
-| Feature | Pico.Bench | BenchmarkDotNet |
+| Feature | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
 | Dependencies | 0 | Many |
 | Package size | Tiny | Large |
@@ -376,10 +376,10 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ```bash
 dotnet build --configuration Release
 dotnet test --configuration Release
-dotnet pack src/Pico.Bench/Pico.Bench.csproj --configuration Release --include-symbols --output ./nupkg
+dotnet pack src/PicoBench/PicoBench.csproj --configuration Release --include-symbols --output ./nupkg
 ```
 
-Releases are **tag-driven** — push a version tag (e.g. `git tag v2026.2.0 && git push origin v2026.2.0`) and the GitHub Actions pipeline will test, pack, and publish to [NuGet.org](https://www.nuget.org/packages/Pico.Bench) automatically.
+Releases are **tag-driven** — push a version tag (e.g. `git tag v2026.2.0 && git push origin v2026.2.0`) and the GitHub Actions pipeline will test, pack, and publish to [NuGet.org](https://www.nuget.org/packages/PicoBench) automatically.
 
 ## Contributing
 

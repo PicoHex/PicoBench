@@ -1,11 +1,8 @@
-using Pico.Bench;
-using Pico.Bench.Formatters;
-
 // ═══════════════════════════════════════════════════════════════════════
 //  Collection Benchmarks — Source-Generator Showcase
 // ═══════════════════════════════════════════════════════════════════════
 //
-//  This sample demonstrates every attribute provided by Pico.Bench:
+//  This sample demonstrates every attribute provided by PicoBench:
 //
 //    [BenchmarkClass]     – marks the partial class for code generation
 //    [Params]             – parameterised benchmarks (automatic Cartesian product)

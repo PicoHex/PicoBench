@@ -2,14 +2,14 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-Tests unitaires pour **Pico.Bench** utilisant le framework de test [TUnit](https://github.com/thomhurst/TUnit).
+Tests unitaires pour **PicoBench** utilisant le framework de test [TUnit](https://github.com/thomhurst/TUnit).
 
 **Total : 313 tests**
 
 ## Exécution
 
 ```bash
-dotnet run --project tests/Pico.Bench.Tests/Pico.Bench.TUnit.Tests.csproj -c Debug
+dotnet run --project tests/PicoBench.Tests/PicoBench.TUnit.Tests.csproj -c Debug
 ```
 
 ## Catégories de Tests

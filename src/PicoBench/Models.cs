@@ -1,4 +1,4 @@
-namespace Pico.Bench;
+namespace PicoBench;
 
 /// <summary>
 /// GC generation counts captured during a benchmark run.

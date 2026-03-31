@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Build, test, pack and publish Pico.Bench NuGet package.
+Build, test, pack and publish PicoBench NuGet package.
 
 .DESCRIPTION
 This script performs the following steps:
@@ -120,7 +120,7 @@ function Invoke-Test {
 function Invoke-Pack {
     Write-Info "Creating NuGet package..."
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
-    dotnet pack src/Pico.Bench/Pico.Bench.csproj `
+    dotnet pack src/PicoBench/PicoBench.csproj `
         --configuration $Configuration `
         --no-build `
         --output $OutputDir `
@@ -170,7 +170,7 @@ function Invoke-Publish {
 
 # Main execution
 try {
-    Write-Info "Starting Pico.Bench release process..."
+    Write-Info "Starting PicoBench release process..."
     Write-Info "Configuration: $Configuration"
     Write-Info "Output directory: $OutputDir"
     Write-Info "Publish to NuGet.org: $Publish"

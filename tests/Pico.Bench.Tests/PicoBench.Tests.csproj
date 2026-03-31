@@ -11,10 +11,10 @@
 
   <ItemGroup>
     <!-- Main project reference -->
-    <ProjectReference Include="..\..\src\Pico.Bench\Pico.Bench.csproj" />
+    <ProjectReference Include="..\..\src\PicoBench\PicoBench.csproj" />
     
     <!-- Source generator project (as regular library, not analyzer) for testing internals -->
-    <ProjectReference Include="..\..\src\Pico.Bench.Generators\Pico.Bench.Generators.csproj" />
+    <ProjectReference Include="..\..\src\PicoBench.Generators\PicoBench.Generators.csproj" />
     
     <!-- TUnit testing framework -->
     <PackageReference Include="TUnit" Version="1.19.74" />

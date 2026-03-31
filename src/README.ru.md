@@ -2,9 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-Эта директория содержит два библиотечных проекта, составляющих Pico.Bench.
+Эта директория содержит два библиотечных проекта, составляющих PicoBench.
 
-## Pico.Bench
+## PicoBench
 
 Основная библиотека бенчмаркинга, нацеленная на **netstandard2.0** без внешних зависимостей.
 
@@ -24,11 +24,11 @@
 
 ### Упаковка
 
-Проект включает `Pico.Bench.Generators` как анализатор, поэтому потребители автоматически получают генератор исходного кода:
+Проект включает `PicoBench.Generators` как анализатор, поэтому потребители автоматически получают генератор исходного кода:
 
 ```bash
 # Добавить ссылку на проект
-dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
+dotnet add reference ../PicoBench.Generators/PicoBench.Generators.csproj
 
 # Затем вручную добавьте следующие атрибуты к элементу <ProjectReference> в вашем файле .csproj:
 # PrivateAssets="all"
@@ -36,7 +36,7 @@ dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
 # OutputItemType="Analyzer"
 ```
 
-## Pico.Bench.Generators
+## PicoBench.Generators
 
 **Инкрементальный генератор исходного кода** (`IIncrementalGenerator`), который превращает декорированные `[BenchmarkClass]` partial-классы в полные реализации `IBenchmarkClass` во время компиляции.
 

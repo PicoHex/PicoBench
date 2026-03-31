@@ -1,4 +1,4 @@
-namespace Pico.Bench;
+namespace PicoBench;
 
 /// <summary>
 /// Computes statistical metrics from timing samples.

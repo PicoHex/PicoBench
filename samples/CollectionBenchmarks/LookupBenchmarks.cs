@@ -1,5 +1,3 @@
-using Pico.Bench;
-
 // ═══════════════════════════════════════════════════════════════════════
 //  Benchmark class: List vs Dictionary vs HashSet lookup performance
 // ═══════════════════════════════════════════════════════════════════════
@@ -19,7 +17,7 @@ using Pico.Bench;
 [BenchmarkClass(
     Description = "Lookup performance: List.Contains vs Dictionary.ContainsKey vs HashSet.Contains"
 )]
-public partial class LookupBenchmarks
+public partial class LookupBenchmarks : IBenchmarkClass
 {
     // ── Parameterised size ──────────────────────────────────────────
     [Params(100, 1_000, 10_000)]

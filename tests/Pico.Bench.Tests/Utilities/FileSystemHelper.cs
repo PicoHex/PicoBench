@@ -1,6 +1,4 @@
-using System.IO.Abstractions;
-
-namespace Pico.Bench.Tests.Utilities;
+namespace PicoBench.Tests.Utilities;
 
 /// <summary>
 /// Helper class for file system operations during testing.
@@ -9,21 +7,18 @@ namespace Pico.Bench.Tests.Utilities;
 public static class FileSystemHelper
 {
     private static readonly IFileSystem FileSystem = new FileSystem();
-    
+
     /// <summary>
     /// Creates a unique temporary directory for test files.
     /// </summary>
     public static string CreateTestDirectory()
     {
-        var tempDir = Path.Combine(
-            Path.GetTempPath(),
-            $"PicoBenchTests_{Guid.NewGuid():N}"
-        );
-        
+        var tempDir = Path.Combine(Path.GetTempPath(), $"PicoBenchTests_{Guid.NewGuid():N}");
+
         FileSystem.Directory.CreateDirectory(tempDir);
         return tempDir;
     }
-    
+
     /// <summary>
     /// Deletes a test directory and all its contents.
     /// </summary>
@@ -41,7 +36,7 @@ public static class FileSystemHelper
             }
         }
     }
-    
+
     /// <summary>
     /// Creates a test file with the specified content.
     /// </summary>
@@ -51,7 +46,7 @@ public static class FileSystemHelper
         FileSystem.File.WriteAllText(filePath, content);
         return filePath;
     }
-    
+
     /// <summary>
     /// Reads the content of a test file.
     /// </summary>
@@ -59,7 +54,7 @@ public static class FileSystemHelper
     {
         return FileSystem.File.ReadAllText(filePath);
     }
-    
+
     /// <summary>
     /// Checks if a file exists and contains the expected content.
     /// </summary>
@@ -67,11 +62,11 @@ public static class FileSystemHelper
     {
         if (!FileSystem.File.Exists(filePath))
             return false;
-            
+
         var content = FileSystem.File.ReadAllText(filePath);
         return content.Contains(expectedContent, StringComparison.Ordinal);
     }
-    
+
     /// <summary>
     /// Gets the size of a file in bytes.
     /// </summary>
@@ -79,10 +74,10 @@ public static class FileSystemHelper
     {
         if (!FileSystem.File.Exists(filePath))
             return 0;
-            
+
         return FileSystem.FileInfo.New(filePath).Length;
     }
-    
+
     /// <summary>
     /// Counts the number of lines in a file.
     /// </summary>
@@ -90,11 +85,11 @@ public static class FileSystemHelper
     {
         if (!FileSystem.File.Exists(filePath))
             return 0;
-            
+
         var content = FileSystem.File.ReadAllText(filePath);
         return content.Split('\n').Length;
     }
-    
+
     /// <summary>
     /// Ensures a directory exists and is empty.
     /// </summary>
@@ -104,7 +99,7 @@ public static class FileSystemHelper
         {
             FileSystem.Directory.Delete(path, recursive: true);
         }
-        
+
         FileSystem.Directory.CreateDirectory(path);
         return path;
     }

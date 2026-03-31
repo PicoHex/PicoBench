@@ -2,9 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-Este directorio contiene los dos proyectos de biblioteca que componen Pico.Bench.
+Este directorio contiene los dos proyectos de biblioteca que componen PicoBench.
 
-## Pico.Bench
+## PicoBench
 
 La principal biblioteca de benchmarking con objetivo **netstandard2.0** y cero dependencias externas.
 
@@ -24,11 +24,11 @@ La principal biblioteca de benchmarking con objetivo **netstandard2.0** y cero d
 
 ### Empaquetado
 
-El proyecto incluye `Pico.Bench.Generators` como un analizador para que los consumidores obtengan el generador de código fuente automáticamente:
+El proyecto incluye `PicoBench.Generators` como un analizador para que los consumidores obtengan el generador de código fuente automáticamente:
 
 ```bash
 # Agregar la referencia del proyecto
-dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
+dotnet add reference ../PicoBench.Generators/PicoBench.Generators.csproj
 
 # Luego agregue manualmente los siguientes atributos al elemento <ProjectReference> en su archivo .csproj:
 # PrivateAssets="all"
@@ -36,7 +36,7 @@ dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
 # OutputItemType="Analyzer"
 ```
 
-## Pico.Bench.Generators
+## PicoBench.Generators
 
 Un **generador de código fuente incremental** (`IIncrementalGenerator`) que convierte clases partial decoradas con `[BenchmarkClass]` en implementaciones completas de `IBenchmarkClass` en tiempo de compilación.
 

@@ -1,9 +1,4 @@
-using Pico.Bench;
-using TUnit.Assertions;
-using TUnit.Assertions.Extensions;
-using TUnit.Core;
-
-namespace Pico.Bench.Tests.Attributes;
+namespace PicoBench.Tests.Attributes;
 
 public class AttributeTests
 {

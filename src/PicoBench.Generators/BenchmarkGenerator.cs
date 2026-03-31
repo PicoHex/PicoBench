@@ -1,4 +1,4 @@
-namespace Pico.Bench.Generators;
+namespace PicoBench.Generators;
 
 /// <summary>
 /// Incremental source generator that discovers [BenchmarkClass]-attributed types
@@ -8,13 +8,13 @@ namespace Pico.Bench.Generators;
 public sealed class BenchmarkGenerator : IIncrementalGenerator
 {
     // Fully-qualified attribute names used for matching (no assembly qualification).
-    private const string BenchmarkClassAttr = "Pico.Bench.BenchmarkClassAttribute";
-    private const string BenchmarkAttr = "Pico.Bench.BenchmarkAttribute";
-    private const string GlobalSetupAttr = "Pico.Bench.GlobalSetupAttribute";
-    private const string GlobalCleanupAttr = "Pico.Bench.GlobalCleanupAttribute";
-    private const string IterationSetupAttr = "Pico.Bench.IterationSetupAttribute";
-    private const string IterationCleanupAttr = "Pico.Bench.IterationCleanupAttribute";
-    private const string ParamsAttr = "Pico.Bench.ParamsAttribute";
+    private const string BenchmarkClassAttr = "PicoBench.BenchmarkClassAttribute";
+    private const string BenchmarkAttr = "PicoBench.BenchmarkAttribute";
+    private const string GlobalSetupAttr = "PicoBench.GlobalSetupAttribute";
+    private const string GlobalCleanupAttr = "PicoBench.GlobalCleanupAttribute";
+    private const string IterationSetupAttr = "PicoBench.IterationSetupAttribute";
+    private const string IterationCleanupAttr = "PicoBench.IterationCleanupAttribute";
+    private const string ParamsAttr = "PicoBench.ParamsAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -184,7 +184,10 @@ public sealed class BenchmarkGenerator : IIncrementalGenerator
         string fullyQualifiedName
     )
     {
-        return Enumerable.FirstOrDefault(attrs, attr => attr.AttributeClass?.ToDisplayString() == fullyQualifiedName);
+        return Enumerable.FirstOrDefault(
+            attrs,
+            attr => attr.AttributeClass?.ToDisplayString() == fullyQualifiedName
+        );
     }
 
     private static ParamsPropertyModel BuildParamsModel(

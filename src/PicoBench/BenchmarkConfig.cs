@@ -1,4 +1,4 @@
-namespace Pico.Bench;
+namespace PicoBench;
 
 /// <summary>
 /// Configuration for benchmark execution.
@@ -58,18 +58,20 @@ public sealed class BenchmarkConfig
     public static BenchmarkConfig Default => _default ??= new BenchmarkConfig();
 
     /// <summary>Quick configuration for faster iteration during development.</summary>
-    public static BenchmarkConfig Quick => _quick ??= new BenchmarkConfig
-    {
-        WarmupIterations = 100,
-        SampleCount = 10,
-        IterationsPerSample = 1000
-    };
+    public static BenchmarkConfig Quick =>
+        _quick ??= new BenchmarkConfig
+        {
+            WarmupIterations = 100,
+            SampleCount = 10,
+            IterationsPerSample = 1000
+        };
 
     /// <summary>Precise configuration for final measurements.</summary>
-    public static BenchmarkConfig Precise => _precise ??= new BenchmarkConfig
-    {
-        WarmupIterations = 5000,
-        SampleCount = 200,
-        IterationsPerSample = 50000
-    };
+    public static BenchmarkConfig Precise =>
+        _precise ??= new BenchmarkConfig
+        {
+            WarmupIterations = 5000,
+            SampleCount = 200,
+            IterationsPerSample = 50000
+        };
 }

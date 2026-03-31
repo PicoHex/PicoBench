@@ -46,7 +46,7 @@ jobs:
       run: dotnet build --configuration Release --no-restore -p:UseProjectReferences=true
     
     - name: Run tests
-      run: dotnet test --project tests/Pico.Bench.Tests/Pico.Bench.TUnit.Tests.csproj --configuration Release --no-build --verbosity normal --timeout 120s --no-progress --no-ansi -p:UseProjectReferences=true
+      run: dotnet test --project tests/PicoBench.Tests/PicoBench.TUnit.Tests.csproj --configuration Release --no-build --verbosity normal --timeout 120s --no-progress --no-ansi -p:UseProjectReferences=true
 
   pack:
     name: Pack
@@ -92,7 +92,7 @@ jobs:
         
         # Pack main library with embedded source generator
         # Using -p:UseProjectReferences=false to validate NuGet dependencies
-        dotnet pack src/Pico.Bench/Pico.Bench.csproj \
+        dotnet pack src/PicoBench/PicoBench.csproj \
           --configuration Release \
           --output ./nupkg \
           -p:Version=${{ steps.version.outputs.VERSION }} \

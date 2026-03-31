@@ -11,7 +11,7 @@
 
     <!-- NuGet package metadata -->
     <PropertyGroup>
-        <PackageId>Pico.Bench</PackageId>
+        <PackageId>PicoBench</PackageId>
         <Authors>PicoHex</Authors>
         <Description>A lightweight, zero-dependency, cross-platform benchmarking library for .NET with imperative and attribute-based APIs. Includes an AOT-compatible source generator. Supports Console, CSV, Markdown and HTML output formats.</Description>
         <PackageTags>benchmark;performance;testing;cross-platform;aot;source-generator</PackageTags>
@@ -22,35 +22,34 @@
 
     <ItemGroup>
         <!-- Bundle the source generator so consumers get it automatically -->
-        <ProjectReference Include="..\Pico.Bench.Generators\Pico.Bench.Generators.csproj"
-                          PrivateAssets="all"
-                          ReferenceOutputAssembly="false"
-                          OutputItemType="Analyzer" />
+        <ProjectReference Include="..\PicoBench.Generators\PicoBench.Generators.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
     </ItemGroup>
 
     <ItemGroup>
         <!-- Include the source generator DLL in the buildTransitive folder to avoid file lock contention -->
-        <None Include="..\Pico.Bench.Generators\$(OutputPath)Pico.Bench.Generators.dll"
+        <None Include="..\PicoBench.Generators\$(OutputPath)PicoBench.Generators.dll"
               Pack="true"
-              PackagePath="buildTransitive/Pico.Bench.Generators/analyzers/dotnet/cs"
+              PackagePath="buildTransitive/PicoBench.Generators/analyzers/dotnet/cs"
               Visible="false" />
 
         <!-- Include MSBuild props file for automatic analyzer loading -->
-        <None Include="..\Pico.Bench.Generators\buildTransitive\Pico.Bench.Generators.props"
-              Pack="true"
-              PackagePath="buildTransitive/Pico.Bench.Generators.props"
-              Visible="false" />
 
         <!-- Include main package props file to satisfy NuGet warning -->
-        <None Include="..\buildTransitive\Pico.Bench.props"
+        <None Include="..\buildTransitive\PicoBench.props"
               Pack="true"
-              PackagePath="buildTransitive/Pico.Bench.props"
+              PackagePath="buildTransitive/PicoBench.props"
               Visible="false" />
 
         <!-- Include the root README in the NuGet package -->
         <None Include="..\..\README.md"
               Pack="true"
               PackagePath="\" />
+        <None Include="..\PicoBench.Generators\buildTransitive\PicoBench.Generators.props">
+          <Pack>true</Pack>
+          <PackagePath>buildTransitive/PicoBench.Generators.props</PackagePath>
+          <Visible>false</Visible>
+          <Link>PicoBench.Generators.props</Link>
+        </None>
     </ItemGroup>
 
     <ItemGroup>

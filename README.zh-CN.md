@@ -1,9 +1,9 @@
-# Pico.Bench
+# PicoBench
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-![CI](https://github.com/Mutuduxf/Pico.Bench/actions/workflows/ci.yml/badge.svg)
-[![NuGet](https://img.shields.io/nuget/v/Pico.Bench.svg)](https://www.nuget.org/packages/Pico.Bench)
+![CI](https://github.com/Mutuduxf/PicoBench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 一个轻量级、零依赖的 .NET 基准测试库，提供 **两种互补的 API**：命令式流式 API 和基于属性、源生成的 API，完全 **AOT 兼容**。
@@ -26,10 +26,10 @@
 
 ## 安装
 
-引用 **Pico.Bench** NuGet 包。源生成器 (`Pico.Bench.Generators`) 作为分析器自动捆绑 - 无需额外引用。
+引用 **PicoBench** NuGet 包。源生成器 (`PicoBench.Generators`) 作为分析器自动捆绑 - 无需额外引用。
 
 ```bash
-dotnet add package Pico.Bench
+dotnet add package PicoBench
 ```
 
 ## 快速开始
@@ -37,7 +37,7 @@ dotnet add package Pico.Bench
 ### 命令式 API
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var result = Benchmark.Run("My Benchmark", () =>
 {
@@ -50,10 +50,10 @@ Console.WriteLine($"Average: {result.Statistics.Avg:F1} ns/op");
 ### 基于属性的 API（源生成）
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var suite = BenchmarkRunner.Run<MyBenchmarks>();
-Console.WriteLine(new Pico.Bench.Formatters.ConsoleFormatter().Format(suite));
+Console.WriteLine(new PicoBench.Formatters.ConsoleFormatter().Format(suite));
 
 [BenchmarkClass]
 public partial class MyBenchmarks
@@ -75,8 +75,8 @@ public partial class MyBenchmarks
 ### 基本基准测试
 
 ```csharp
-using Pico.Bench;
-using Pico.Bench.Formatters;
+using PicoBench;
+using PicoBench.Formatters;
 
 var result = Benchmark.Run("SpinWait", () => Thread.SpinWait(100));
 Console.WriteLine(new ConsoleFormatter().Format(result));
@@ -149,7 +149,7 @@ var result = Benchmark.Run(
 ### 完整示例
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 [BenchmarkClass(Description = "比较字符串连接策略")]
 public partial class StringBenchmarks
@@ -227,7 +227,7 @@ var result = Benchmark.Run("Test", action, config);
 五个内置格式化器实现 `IFormatter`：
 
 ```csharp
-using Pico.Bench.Formatters;
+using PicoBench.Formatters;
 
 var console  = new ConsoleFormatter();     // 盒绘制控制台表格
 var markdown = new MarkdownFormatter();    // GitHub 友好的 Markdown
@@ -299,7 +299,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ```
 src/
-+-- Pico.Bench/                        # 主库 (netstandard2.0)
++-- PicoBench/                        # 主库 (netstandard2.0)
 |   +-- Benchmark.cs                   # 命令式 API (Run, Compare, RunScoped)
 |   +-- BenchmarkRunner.cs             # 基于属性的入口点 (Run<T>)
 |   +-- BenchmarkConfig.cs             # 配置和预设
@@ -316,7 +316,7 @@ src/
 |       +-- CsvFormatter.cs            # CSV 导出
 |       +-- SummaryFormatter.cs        # 胜/负摘要
 |
-+-- Pico.Bench.Generators/            # 源生成器 (netstandard2.0)
++-- PicoBench.Generators/            # 源生成器 (netstandard2.0)
     +-- BenchmarkGenerator.cs          # IIncrementalGenerator 入口点
     +-- Emitter.cs                     # C# 代码发射器 (AOT 安全)
     +-- Models.cs                      # Roslyn 分析模型
@@ -353,7 +353,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## 与 BenchmarkDotNet 比较
 
-| 功能 | Pico.Bench | BenchmarkDotNet |
+| 功能 | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
 | 依赖 | 0 | 多 |
 | 包大小 | 小 | 大 |

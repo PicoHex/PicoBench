@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Pico.Bench\Pico.Bench.csproj" />
+        <ProjectReference Include="..\..\src\PicoBench\PicoBench.csproj" />
     </ItemGroup>
 
 </Project>

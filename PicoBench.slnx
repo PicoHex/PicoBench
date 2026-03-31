@@ -7,11 +7,11 @@
   </Folder>
   <Folder Name="/src/">
     <File Path="src\README.md" />
-    <Project Path="src/Pico.Bench/Pico.Bench.csproj" />
-    <Project Path="src/Pico.Bench.Generators/Pico.Bench.Generators.csproj" />
+    <Project Path="src/PicoBench.Generators/PicoBench.Generators.csproj" />
+    <Project Path="src/PicoBench/PicoBench.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <File Path="tests\README.md" />
-    <Project Path="tests/Pico.Bench.Tests/Pico.Bench.TUnit.Tests.csproj" />
+    <Project Path="tests/PicoBench.Tests/PicoBench.Tests.csproj" />
   </Folder>
 </Solution>

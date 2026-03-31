@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-Tres proyectos de ejemplo demuestran las dos API proporcionadas por Pico.Bench.
+Tres proyectos de ejemplo demuestran las dos API proporcionadas por PicoBench.
 
 ## StringVsStringBuilder (API Imperativa)
 

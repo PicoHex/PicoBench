@@ -1,6 +1,6 @@
 <Project>
   <ItemGroup>
     <!-- Automatically reference the source generator analyzer from this package -->
-    <Analyzer Include="$(MSBuildThisFileDirectory)Pico.Bench.Generators/analyzers/dotnet/cs/Pico.Bench.Generators.dll" />
+    <Analyzer Include="$(MSBuildThisFileDirectory)PicoBench.Generators/analyzers/dotnet/cs/PicoBench.Generators.dll" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-namespace Pico.Bench.Generators;
+namespace PicoBench.Generators;
 
 /// <summary>
 /// Describes a benchmark class discovered by the source generator.

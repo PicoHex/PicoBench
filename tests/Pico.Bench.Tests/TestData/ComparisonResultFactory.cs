@@ -1,6 +1,4 @@
-using Pico.Bench;
-
-namespace Pico.Bench.Tests.TestData;
+namespace PicoBench.Tests.TestData;
 
 public static class ComparisonResultFactory
 {
@@ -12,11 +10,12 @@ public static class ComparisonResultFactory
         string? category = "Test",
         BenchmarkResult? baseline = null,
         BenchmarkResult? candidate = null,
-        IReadOnlyDictionary<string, string>? tags = null)
+        IReadOnlyDictionary<string, string>? tags = null
+    )
     {
         baseline ??= BenchmarkResultFactory.Create("Baseline");
         candidate ??= BenchmarkResultFactory.Create("Candidate");
-        
+
         return new ComparisonResult(
             name: name,
             baseline: baseline,
@@ -35,12 +34,12 @@ public static class ComparisonResultFactory
             "Slow",
             statistics: StatisticsFactory.Create(avg: 1000.0)
         );
-        
+
         var candidate = BenchmarkResultFactory.Create(
             "Fast",
             statistics: StatisticsFactory.Create(avg: 100.0) // 10x faster
         );
-        
+
         return Create("HighSpeedup", baseline: baseline, candidate: candidate);
     }
 
@@ -53,12 +52,12 @@ public static class ComparisonResultFactory
             "Fast",
             statistics: StatisticsFactory.Create(avg: 100.0)
         );
-        
+
         var candidate = BenchmarkResultFactory.Create(
             "Slow",
             statistics: StatisticsFactory.Create(avg: 150.0) // 0.67x speedup
         );
-        
+
         return Create("SlowCandidate", baseline: baseline, candidate: candidate);
     }
 
@@ -71,12 +70,12 @@ public static class ComparisonResultFactory
             "Baseline",
             statistics: StatisticsFactory.Create(avg: 100.0)
         );
-        
+
         var candidate = BenchmarkResultFactory.Create(
             "NearZero",
             statistics: StatisticsFactory.WithZeroTime()
         );
-        
+
         return Create("NearZeroCandidate", baseline: baseline, candidate: candidate);
     }
 
@@ -89,12 +88,12 @@ public static class ComparisonResultFactory
             "Baseline",
             statistics: StatisticsFactory.WithZeroTime()
         );
-        
+
         var candidate = BenchmarkResultFactory.Create(
             "Candidate",
             statistics: StatisticsFactory.WithZeroTime()
         );
-        
+
         return Create("BothNearZero", baseline: baseline, candidate: candidate);
     }
 
@@ -107,12 +106,12 @@ public static class ComparisonResultFactory
             "Baseline",
             statistics: StatisticsFactory.WithSpecialNumericValues()
         );
-        
+
         var candidate = BenchmarkResultFactory.Create(
             "Candidate",
             statistics: StatisticsFactory.WithSpecialNumericValues()
         );
-        
+
         return Create("SpecialNumerics", baseline: baseline, candidate: candidate);
     }
 
@@ -151,7 +150,7 @@ public static class ComparisonResultFactory
             ["Priority"] = "Critical",
             ["Component"] = "Formatter"
         };
-        
+
         return Create(tags: tags);
     }
 
@@ -182,12 +181,12 @@ public static class ComparisonResultFactory
                 $"Baseline_{i + 1}",
                 statistics: StatisticsFactory.Create(avg: 200.0 + i * 100.0)
             );
-            
+
             var candidate = BenchmarkResultFactory.Create(
                 $"Candidate_{i + 1}",
                 statistics: StatisticsFactory.Create(avg: 100.0 + i * 50.0)
             );
-            
+
             yield return Create(
                 name: $"Comparison_{i + 1}",
                 category: i % 2 == 0 ? "CategoryA" : "CategoryB",

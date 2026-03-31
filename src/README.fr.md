@@ -2,9 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-Ce répertoire contient les deux projets de bibliothèque qui composent Pico.Bench.
+Ce répertoire contient les deux projets de bibliothèque qui composent PicoBench.
 
-## Pico.Bench
+## PicoBench
 
 La bibliothèque de benchmarking principale ciblant **netstandard2.0** sans dépendances externes.
 
@@ -24,11 +24,11 @@ La bibliothèque de benchmarking principale ciblant **netstandard2.0** sans dép
 
 ### Empaquetage
 
-Le projet inclut `Pico.Bench.Generators` comme un analyseur afin que les consommateurs obtiennent automatiquement le générateur de source :
+Le projet inclut `PicoBench.Generators` comme un analyseur afin que les consommateurs obtiennent automatiquement le générateur de source :
 
 ```bash
 # Ajouter la référence du projet
-dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
+dotnet add reference ../PicoBench.Generators/PicoBench.Generators.csproj
 
 # Puis ajoutez manuellement les attributs suivants à l'élément <ProjectReference> dans votre fichier .csproj :
 # PrivateAssets="all"
@@ -36,7 +36,7 @@ dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
 # OutputItemType="Analyzer"
 ```
 
-## Pico.Bench.Generators
+## PicoBench.Generators
 
 Un **générateur de source incrémental** (`IIncrementalGenerator`) qui transforme les classes partial décorées avec `[BenchmarkClass]` en implémentations complètes de `IBenchmarkClass` au moment de la compilation.
 

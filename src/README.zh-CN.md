@@ -2,9 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-此目录包含构成 Pico.Bench 的两个库项目。
+此目录包含构成 PicoBench 的两个库项目。
 
-## Pico.Bench
+## PicoBench
 
 主要的基准测试库，目标为 **netstandard2.0**，零外部依赖。
 
@@ -24,11 +24,11 @@
 
 ### 打包
 
-项目将 `Pico.Bench.Generators` 捆绑为分析器，因此使用者自动获取源生成器：
+项目将 `PicoBench.Generators` 捆绑为分析器，因此使用者自动获取源生成器：
 
 ```bash
 # 添加项目引用
-dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
+dotnet add reference ../PicoBench.Generators/PicoBench.Generators.csproj
 
 # 然后在你的 .csproj 文件中的 <ProjectReference> 元素内手动添加以下属性：
 # PrivateAssets="all"
@@ -36,7 +36,7 @@ dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
 # OutputItemType="Analyzer"
 ```
 
-## Pico.Bench.Generators
+## PicoBench.Generators
 
 一个**增量源生成器** (`IIncrementalGenerator`)，将用 `[BenchmarkClass]` 装饰的 partial 类在编译时转换为完整的 `IBenchmarkClass` 实现。
 

@@ -1,6 +1,4 @@
-using Pico.Bench;
-
-namespace Pico.Bench.Tests.TestData;
+namespace PicoBench.Tests.TestData;
 
 public static class StatisticsFactory
 {
@@ -17,7 +15,8 @@ public static class StatisticsFactory
         double max = 200.0,
         double stdDev = 20.0,
         double cpuCyclesPerOp = 300.0,
-        GcInfo? gcInfo = null)
+        GcInfo? gcInfo = null
+    )
     {
         return new Statistics
         {
@@ -118,14 +117,14 @@ public static class StatisticsFactory
         yield return WithExtremeTime();
         yield return WithZeroCpuCycles();
         yield return WithSpecialNumericValues();
-        
+
         // Variations with different GC patterns
         yield return Create(gcInfo: GcInfoFactory.Zero());
         yield return Create(gcInfo: GcInfoFactory.Many());
-        
+
         // Minimal standard deviation
         yield return Create(stdDev: 0.0);
-        
+
         // Equal percentiles (perfectly consistent)
         yield return Create(
             avg: 100.0,

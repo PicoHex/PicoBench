@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-三个示例项目展示了 Pico.Bench 提供的两种 API。
+三个示例项目展示了 PicoBench 提供的两种 API。
 
 ## StringVsStringBuilder（命令式 API）
 

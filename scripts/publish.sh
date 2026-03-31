@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Pico.Bench release script
-# Build, test, pack and publish Pico.Bench NuGet package.
+# PicoBench release script
+# Build, test, pack and publish PicoBench NuGet package.
 
 set -e
 
@@ -82,7 +82,7 @@ test() {
 pack() {
     log_info "Creating NuGet package..."
     mkdir -p "$OUTPUT_DIR"
-    dotnet pack src/Pico.Bench/Pico.Bench.csproj \
+    dotnet pack src/PicoBench/PicoBench.csproj \
         --configuration "$CONFIGURATION" \
         --no-build \
         --output "$OUTPUT_DIR" \
@@ -126,7 +126,7 @@ publish() {
 
 # Main execution
 main() {
-    log_info "Starting Pico.Bench release process..."
+    log_info "Starting PicoBench release process..."
     log_info "Configuration: $CONFIGURATION"
     log_info "Output directory: $OUTPUT_DIR"
     log_info "Publish to NuGet.org: $PUBLISH"

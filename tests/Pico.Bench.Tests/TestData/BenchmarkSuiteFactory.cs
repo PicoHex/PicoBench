@@ -1,6 +1,4 @@
-using Pico.Bench;
-
-namespace Pico.Bench.Tests.TestData;
+namespace PicoBench.Tests.TestData;
 
 public static class BenchmarkSuiteFactory
 {

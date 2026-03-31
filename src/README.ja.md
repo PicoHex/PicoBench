@@ -2,9 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-このディレクトリには、Pico.Benchを構成する2つのライブラリプロジェクトが含まれています。
+このディレクトリには、PicoBenchを構成する2つのライブラリプロジェクトが含まれています。
 
-## Pico.Bench
+## PicoBench
 
 **netstandard2.0**をターゲットとする主要なベンチマークライブラリで、外部依存関係ゼロです。
 
@@ -24,11 +24,11 @@
 
 ### パッケージング
 
-プロジェクトは`Pico.Bench.Generators`をアナライザーとしてバンドルするため、消費者は自動的にソースジェネレーターを取得します：
+プロジェクトは`PicoBench.Generators`をアナライザーとしてバンドルするため、消費者は自動的にソースジェネレーターを取得します：
 
 ```bash
 # プロジェクト参照を追加
-dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
+dotnet add reference ../PicoBench.Generators/PicoBench.Generators.csproj
 
 # その後、.csprojファイルの<ProjectReference>要素に以下の属性を手動で追加してください：
 # PrivateAssets="all"
@@ -36,7 +36,7 @@ dotnet add reference ../Pico.Bench.Generators/Pico.Bench.Generators.csproj
 # OutputItemType="Analyzer"
 ```
 
-## Pico.Bench.Generators
+## PicoBench.Generators
 
 `[BenchmarkClass]`で装飾されたpartialクラスを、コンパイル時に完全な`IBenchmarkClass`実装に変換する**インクリメンタルソースジェネレーター** (`IIncrementalGenerator`)です。
 

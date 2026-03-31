@@ -1,10 +1,4 @@
-using Pico.Bench;
-using Pico.Bench.Tests.TestData;
-using TUnit.Assertions;
-using TUnit.Assertions.Extensions;
-using TUnit.Core;
-
-namespace Pico.Bench.Tests;
+namespace PicoBench.Tests;
 
 public class BenchmarkRunnerTests
 {

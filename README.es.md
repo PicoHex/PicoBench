@@ -1,4 +1,4 @@
-# Pico.Bench
+# PicoBench
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
@@ -22,10 +22,10 @@ Una biblioteca de benchmarking ligera y sin dependencias para .NET con **dos API
 
 ## Instalación
 
-Referencia el paquete NuGet **Pico.Bench**. El generador de código fuente (`Pico.Bench.Generators`) se incluye automáticamente como un analizador - no se necesita referencia adicional.
+Referencia el paquete NuGet **PicoBench**. El generador de código fuente (`PicoBench.Generators`) se incluye automáticamente como un analizador - no se necesita referencia adicional.
 
 ```bash
-dotnet add package Pico.Bench
+dotnet add package PicoBench
 ```
 
 ## Inicio Rápido
@@ -33,7 +33,7 @@ dotnet add package Pico.Bench
 ### API Imperativa
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var result = Benchmark.Run("My Benchmark", () =>
 {
@@ -46,10 +46,10 @@ Console.WriteLine($"Average: {result.Statistics.Avg:F1} ns/op");
 ### API Basada en Atributos (Generada por Código Fuente)
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var suite = BenchmarkRunner.Run<MyBenchmarks>();
-Console.WriteLine(new Pico.Bench.Formatters.ConsoleFormatter().Format(suite));
+Console.WriteLine(new PicoBench.Formatters.ConsoleFormatter().Format(suite));
 
 [BenchmarkClass]
 public partial class MyBenchmarks
@@ -71,8 +71,8 @@ public partial class MyBenchmarks
 ### Benchmark Básico
 
 ```csharp
-using Pico.Bench;
-using Pico.Bench.Formatters;
+using PicoBench;
+using PicoBench.Formatters;
 
 var result = Benchmark.Run("SpinWait", () => Thread.SpinWait(100));
 Console.WriteLine(new ConsoleFormatter().Format(result));
@@ -145,7 +145,7 @@ Decora una clase **partial** con `[BenchmarkClass]` y sus métodos/propiedades c
 ### Ejemplo Completo
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 [BenchmarkClass(Description = "Comparando estrategias de concatenación de cadenas")]
 public partial class StringBenchmarks
@@ -223,7 +223,7 @@ var result = Benchmark.Run("Test", action, config);
 Cinco formateadores incorporados implementan `IFormatter`:
 
 ```csharp
-using Pico.Bench.Formatters;
+using PicoBench.Formatters;
 
 var console  = new ConsoleFormatter();     // Tablas de consola con dibujo de cajas
 var markdown = new MarkdownFormatter();    // Markdown amigable con GitHub
@@ -295,7 +295,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ```
 src/
-+-- Pico.Bench/                        # Biblioteca principal (netstandard2.0)
++-- PicoBench/                        # Biblioteca principal (netstandard2.0)
 |   +-- Benchmark.cs                   # API imperativa (Run, Compare, RunScoped)
 |   +-- BenchmarkRunner.cs             # Punto de entrada basado en atributos (Run<T>)
 |   +-- BenchmarkConfig.cs             # Configuración con preajustes
@@ -312,7 +312,7 @@ src/
 |       +-- CsvFormatter.cs            # Exportación CSV
 |       +-- SummaryFormatter.cs        # Resumen de ganancias/pérdidas
 |
-+-- Pico.Bench.Generators/            # Generador de código fuente (netstandard2.0)
++-- PicoBench.Generators/            # Generador de código fuente (netstandard2.0)
     +-- BenchmarkGenerator.cs          # Punto de entrada IIncrementalGenerator
     +-- Emitter.cs                     # Emisor de código C# (seguro para AOT)
     +-- Models.cs                      # Modelos de análisis Roslyn
@@ -349,7 +349,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## Comparación con BenchmarkDotNet
 
-| Característica | Pico.Bench | BenchmarkDotNet |
+| Característica | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
 | Dependencias | 0 | Muchas |
 | Tamaño del paquete | Pequeño | Grande |

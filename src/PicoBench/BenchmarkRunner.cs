@@ -1,4 +1,4 @@
-namespace Pico.Bench;
+namespace PicoBench;
 
 /// <summary>
 /// Static helper for running attribute-based benchmarks.

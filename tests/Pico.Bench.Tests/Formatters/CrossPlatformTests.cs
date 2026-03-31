@@ -1,15 +1,4 @@
-using System.Globalization;
-using System.IO;
-using System.Threading;
-using Pico.Bench;
-using Pico.Bench.Formatters;
-using Pico.Bench.Tests.TestData;
-using Pico.Bench.Tests.Utilities;
-using TUnit.Assertions;
-using TUnit.Assertions.Extensions;
-using TUnit.Core;
-
-namespace Pico.Bench.Tests.Formatters;
+namespace PicoBench.Tests.Formatters;
 
 public class CrossPlatformTests
 {

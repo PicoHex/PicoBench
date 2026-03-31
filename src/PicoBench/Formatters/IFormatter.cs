@@ -1,4 +1,4 @@
-namespace Pico.Bench.Formatters;
+namespace PicoBench.Formatters;
 
 /// <summary>
 /// Interface for formatting benchmark results to various output formats.

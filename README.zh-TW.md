@@ -1,4 +1,4 @@
-# Pico.Bench
+# PicoBench
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
@@ -22,10 +22,10 @@
 
 ## 安裝
 
-引用 **Pico.Bench** NuGet 套件。源生成器 (`Pico.Bench.Generators`) 作為分析器自動捆綁 - 無需額外引用。
+引用 **PicoBench** NuGet 套件。源生成器 (`PicoBench.Generators`) 作為分析器自動捆綁 - 無需額外引用。
 
 ```bash
-dotnet add package Pico.Bench
+dotnet add package PicoBench
 ```
 
 ## 快速開始
@@ -33,7 +33,7 @@ dotnet add package Pico.Bench
 ### 命令式 API
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var result = Benchmark.Run("My Benchmark", () =>
 {
@@ -46,10 +46,10 @@ Console.WriteLine($"Average: {result.Statistics.Avg:F1} ns/op");
 ### 基於屬性的 API（源生成）
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var suite = BenchmarkRunner.Run<MyBenchmarks>();
-Console.WriteLine(new Pico.Bench.Formatters.ConsoleFormatter().Format(suite));
+Console.WriteLine(new PicoBench.Formatters.ConsoleFormatter().Format(suite));
 
 [BenchmarkClass]
 public partial class MyBenchmarks
@@ -71,8 +71,8 @@ public partial class MyBenchmarks
 ### 基本基準測試
 
 ```csharp
-using Pico.Bench;
-using Pico.Bench.Formatters;
+using PicoBench;
+using PicoBench.Formatters;
 
 var result = Benchmark.Run("SpinWait", () => Thread.SpinWait(100));
 Console.WriteLine(new ConsoleFormatter().Format(result));
@@ -145,7 +145,7 @@ var result = Benchmark.Run(
 ### 完整示例
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 [BenchmarkClass(Description = "比較字符串連接策略")]
 public partial class StringBenchmarks
@@ -223,7 +223,7 @@ var result = Benchmark.Run("Test", action, config);
 五個內置格式化器實現 `IFormatter`：
 
 ```csharp
-using Pico.Bench.Formatters;
+using PicoBench.Formatters;
 
 var console  = new ConsoleFormatter();     // 盒繪製控制台表格
 var markdown = new MarkdownFormatter();    // GitHub 友好的 Markdown
@@ -295,7 +295,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ```
 src/
-+-- Pico.Bench/                        # 主庫 (netstandard2.0)
++-- PicoBench/                        # 主庫 (netstandard2.0)
 |   +-- Benchmark.cs                   # 命令式 API (Run, Compare, RunScoped)
 |   +-- BenchmarkRunner.cs             # 基於屬性的入口點 (Run<T>)
 |   +-- BenchmarkConfig.cs             # 配置和預設
@@ -312,7 +312,7 @@ src/
 |       +-- CsvFormatter.cs            # CSV 導出
 |       +-- SummaryFormatter.cs        # 勝/負摘要
 |
-+-- Pico.Bench.Generators/            # 源生成器 (netstandard2.0)
++-- PicoBench.Generators/            # 源生成器 (netstandard2.0)
     +-- BenchmarkGenerator.cs          # IIncrementalGenerator 入口點
     +-- Emitter.cs                     # C# 代碼發射器 (AOT 安全)
     +-- Models.cs                      # Roslyn 分析模型
@@ -349,7 +349,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## 與 BenchmarkDotNet 比較
 
-| 功能 | Pico.Bench | BenchmarkDotNet |
+| 功能 | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
 | 依賴 | 0 | 多 |
 | 套件大小 | 小 | 大 |

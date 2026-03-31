@@ -1,9 +1,4 @@
-using Pico.Bench.Formatters;
-using TUnit.Assertions;
-using TUnit.Assertions.Extensions;
-using TUnit.Core;
-
-namespace Pico.Bench.Tests.Formatters;
+namespace PicoBench.Tests.Formatters;
 
 public class FormatterOptionsTests
 {

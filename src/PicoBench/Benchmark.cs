@@ -1,4 +1,4 @@
-namespace Pico.Bench;
+namespace PicoBench;
 
 /// <summary>
 /// High-level benchmark orchestrator that runs measurements and computes statistics.

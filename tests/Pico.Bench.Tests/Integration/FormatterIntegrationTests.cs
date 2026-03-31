@@ -1,13 +1,4 @@
-using System.Linq;
-using Pico.Bench;
-using Pico.Bench.Formatters;
-using Pico.Bench.Tests.TestData;
-using Pico.Bench.Tests.Utilities;
-using TUnit.Assertions;
-using TUnit.Assertions.Extensions;
-using TUnit.Core;
-
-namespace Pico.Bench.Tests.Integration;
+namespace PicoBench.Tests.Integration;
 
 public class FormatterIntegrationTests
 {

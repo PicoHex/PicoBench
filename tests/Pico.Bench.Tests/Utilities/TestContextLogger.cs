@@ -1,6 +1,4 @@
-using TUnit.Core;
-
-namespace Pico.Bench.Tests.Utilities;
+namespace PicoBench.Tests.Utilities;
 
 /// <summary>
 /// Extension methods for TestContext to facilitate logging during tests.
@@ -14,7 +12,7 @@ public static class TestContextLogger
     {
         context.OutputWriter.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
     }
-    
+
     /// <summary>
     /// Logs the start of a test section.
     /// </summary>
@@ -23,7 +21,7 @@ public static class TestContextLogger
         context.OutputWriter.WriteLine();
         context.OutputWriter.WriteLine($"=== {sectionName} ===");
     }
-    
+
     /// <summary>
     /// Logs the end of a test section.
     /// </summary>
@@ -32,7 +30,7 @@ public static class TestContextLogger
         context.OutputWriter.WriteLine($"=== End {sectionName} ===");
         context.OutputWriter.WriteLine();
     }
-    
+
     /// <summary>
     /// Logs a formatted object for debugging purposes.
     /// </summary>
@@ -40,11 +38,15 @@ public static class TestContextLogger
     {
         context.OutputWriter.WriteLine($"{label}: {obj}");
     }
-    
+
     /// <summary>
     /// Logs a collection of items for debugging purposes.
     /// </summary>
-    public static void LogCollection<T>(this TestContext context, string label, IEnumerable<T> collection)
+    public static void LogCollection<T>(
+        this TestContext context,
+        string label,
+        IEnumerable<T> collection
+    )
     {
         context.OutputWriter.WriteLine($"{label}:");
         foreach (var item in collection)
@@ -52,7 +54,7 @@ public static class TestContextLogger
             context.OutputWriter.WriteLine($"  - {item}");
         }
     }
-    
+
     /// <summary>
     /// Logs file system operation details.
     /// </summary>
@@ -60,15 +62,17 @@ public static class TestContextLogger
     {
         context.OutputWriter.WriteLine($"[FileSystem] {operation}: {path}");
     }
-    
+
     /// <summary>
     /// Logs performance timing information.
     /// </summary>
     public static void LogPerformance(this TestContext context, string operation, TimeSpan elapsed)
     {
-        context.OutputWriter.WriteLine($"[Performance] {operation}: {elapsed.TotalMilliseconds:F2}ms");
+        context
+            .OutputWriter
+            .WriteLine($"[Performance] {operation}: {elapsed.TotalMilliseconds:F2}ms");
     }
-    
+
     /// <summary>
     /// Logs a warning message.
     /// </summary>
@@ -76,7 +80,7 @@ public static class TestContextLogger
     {
         context.OutputWriter.WriteLine($"[WARNING] {message}");
     }
-    
+
     /// <summary>
     /// Logs an error message.
     /// </summary>
@@ -84,7 +88,7 @@ public static class TestContextLogger
     {
         context.OutputWriter.WriteLine($"[ERROR] {message}");
     }
-    
+
     /// <summary>
     /// Logs a success message.
     /// </summary>

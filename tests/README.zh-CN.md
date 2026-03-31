@@ -2,14 +2,14 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-**Pico.Bench** 的单元测试，使用 [TUnit](https://github.com/thomhurst/TUnit) 测试框架。
+**PicoBench** 的单元测试，使用 [TUnit](https://github.com/thomhurst/TUnit) 测试框架。
 
 **总计：313 个测试**
 
 ## 运行
 
 ```bash
-dotnet run --project tests/Pico.Bench.Tests/Pico.Bench.TUnit.Tests.csproj -c Debug
+dotnet run --project tests/PicoBench.Tests/PicoBench.TUnit.Tests.csproj -c Debug
 ```
 
 ## 测试分类

@@ -1,9 +1,4 @@
-using Pico.Bench;
-using TUnit.Assertions;
-using TUnit.Assertions.Extensions;
-using TUnit.Core;
-
-namespace Pico.Bench.Tests;
+namespace PicoBench.Tests;
 
 /// <summary>
 /// Tests that verify statistics computation indirectly through the public

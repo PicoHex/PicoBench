@@ -1,4 +1,4 @@
-namespace Pico.Bench.Formatters;
+namespace PicoBench.Formatters;
 
 /// <summary>
 /// Formats benchmark results as CSV for data analysis.

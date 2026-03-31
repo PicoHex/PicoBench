@@ -1,4 +1,4 @@
-# Pico.Bench
+# PicoBench
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
@@ -22,10 +22,10 @@
 
 ## インストール
 
-**Pico.Bench** NuGetパッケージを参照してください。ソースジェネレーター (`Pico.Bench.Generators`) はアナライザーとして自動的にバンドルされます - 追加の参照は不要です。
+**PicoBench** NuGetパッケージを参照してください。ソースジェネレーター (`PicoBench.Generators`) はアナライザーとして自動的にバンドルされます - 追加の参照は不要です。
 
 ```bash
-dotnet add package Pico.Bench
+dotnet add package PicoBench
 ```
 
 ## クイックスタート
@@ -33,7 +33,7 @@ dotnet add package Pico.Bench
 ### 命令型API
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var result = Benchmark.Run("My Benchmark", () =>
 {
@@ -46,10 +46,10 @@ Console.WriteLine($"Average: {result.Statistics.Avg:F1} ns/op");
 ### 属性ベースAPI（ソース生成）
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 var suite = BenchmarkRunner.Run<MyBenchmarks>();
-Console.WriteLine(new Pico.Bench.Formatters.ConsoleFormatter().Format(suite));
+Console.WriteLine(new PicoBench.Formatters.ConsoleFormatter().Format(suite));
 
 [BenchmarkClass]
 public partial class MyBenchmarks
@@ -71,8 +71,8 @@ public partial class MyBenchmarks
 ### 基本ベンチマーク
 
 ```csharp
-using Pico.Bench;
-using Pico.Bench.Formatters;
+using PicoBench;
+using PicoBench.Formatters;
 
 var result = Benchmark.Run("SpinWait", () => Thread.SpinWait(100));
 Console.WriteLine(new ConsoleFormatter().Format(result));
@@ -145,7 +145,7 @@ var result = Benchmark.Run(
 ### 完全な例
 
 ```csharp
-using Pico.Bench;
+using PicoBench;
 
 [BenchmarkClass(Description = "文字列連結戦略の比較")]
 public partial class StringBenchmarks
@@ -223,7 +223,7 @@ var result = Benchmark.Run("Test", action, config);
 5つの組み込みフォーマッターが`IFormatter`を実装：
 
 ```csharp
-using Pico.Bench.Formatters;
+using PicoBench.Formatters;
 
 var console  = new ConsoleFormatter();     // ボックス描画コンソールテーブル
 var markdown = new MarkdownFormatter();    // GitHub対応Markdown
@@ -295,7 +295,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ```
 src/
-+-- Pico.Bench/                        # メインライブラリ (netstandard2.0)
++-- PicoBench/                        # メインライブラリ (netstandard2.0)
 |   +-- Benchmark.cs                   # 命令型API (Run, Compare, RunScoped)
 |   +-- BenchmarkRunner.cs             # 属性ベースエントリーポイント (Run<T>)
 |   +-- BenchmarkConfig.cs             # プリセット付き設定
@@ -312,7 +312,7 @@ src/
 |       +-- CsvFormatter.cs            # CSVエクスポート
 |       +-- SummaryFormatter.cs        # 勝敗要約
 |
-+-- Pico.Bench.Generators/            # ソースジェネレーター (netstandard2.0)
++-- PicoBench.Generators/            # ソースジェネレーター (netstandard2.0)
     +-- BenchmarkGenerator.cs          # IIncrementalGeneratorエントリーポイント
     +-- Emitter.cs                     # C#コードエミッター (AOT安全)
     +-- Models.cs                      # Roslyn分析モデル
@@ -349,7 +349,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## BenchmarkDotNetとの比較
 
-| 機能 | Pico.Bench | BenchmarkDotNet |
+| 機能 | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
 | 依存関係 | 0 | 多数 |
 | パッケージサイズ | 小 | 大 |

@@ -1,4 +1,4 @@
-namespace Pico.Bench;
+namespace PicoBench;
 
 /// <summary>
 /// Marks a class as containing benchmark methods. The class must be declared <c>partial</c>

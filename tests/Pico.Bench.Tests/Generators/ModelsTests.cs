@@ -1,10 +1,4 @@
-using System.Collections.Immutable;
-using Pico.Bench.Generators;
-using TUnit.Assertions;
-using TUnit.Assertions.Extensions;
-using TUnit.Core;
-
-namespace Pico.Bench.Tests.Generators;
+namespace PicoBench.Tests.Generators;
 
 public class ModelsTests
 {

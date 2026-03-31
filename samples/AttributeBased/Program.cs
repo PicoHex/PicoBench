@@ -1,7 +1,3 @@
-using System.Text;
-using Pico.Bench;
-using Pico.Bench.Formatters;
-
 // ─── Attribute-based benchmark (AOT-compatible, source-generated) ───
 // Just annotate a partial class with [BenchmarkClass] and methods with [Benchmark].
 // The source generator emits an IBenchmarkClass implementation — zero reflection.

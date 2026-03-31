@@ -1,4 +1,4 @@
-namespace Pico.Bench.Formatters;
+namespace PicoBench.Formatters;
 
 /// <summary>
 /// Configuration for summary output.
