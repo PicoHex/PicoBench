@@ -135,5 +135,17 @@ jobs:
           }
           '@ | Set-Content ./artifacts/aot-app/Program.cs
 
+      - name: Ensure package consumers load the bundled generator
+        shell: pwsh
+        run: |
+          $propsPath = "./artifacts/aot-app/Directory.Build.props"
+          @'
+          <Project>
+            <ItemGroup>
+              <Analyzer Include="$(NuGetPackageRoot)picobench/0.0.0-ci.${{ github.run_number }}/buildTransitive/PicoBench.Generators/analyzers/dotnet/cs/PicoBench.Generators.dll" />
+            </ItemGroup>
+          </Project>
+          '@ | Set-Content $propsPath
+
       - name: Publish AOT validation app
         run: dotnet publish ./artifacts/aot-app/aot-app.csproj --configuration Release --framework net10.0 --runtime ${{ matrix.rid }} --self-contained -p:PublishAot=true

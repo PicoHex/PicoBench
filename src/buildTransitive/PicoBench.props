@@ -1,3 +1,6 @@
 <Project>
-  <!-- Empty props file to satisfy NuGet warning NU5129 -->
+  <ItemGroup>
+    <!-- Automatically reference the bundled source generator analyzer for package consumers -->
+    <Analyzer Include="$(MSBuildThisFileDirectory)PicoBench.Generators/analyzers/dotnet/cs/PicoBench.Generators.dll" />
+  </ItemGroup>
 </Project>
