@@ -563,6 +563,29 @@ public class ModelsTests
 
     [Test]
     [Property("Category", "Models")]
+    public async Task EnvironmentInfo_DefaultCpuCycleFlags_AreConsistent()
+    {
+        var env = new EnvironmentInfo();
+
+        await Assert
+            .That(env.CpuCyclesAreMeaningful ? env.CpuCyclesAvailable : true)
+            .IsTrue();
+
+        if (env.CpuCycleMeasurement == CpuCycleMeasurementKind.Unsupported)
+        {
+            await Assert.That(env.CpuCyclesAvailable).IsFalse();
+            await Assert.That(env.CpuCyclesAreMeaningful).IsFalse();
+        }
+
+        if (env.CpuCycleMeasurement == CpuCycleMeasurementKind.MonotonicClockProxy)
+        {
+            await Assert.That(env.CpuCyclesAvailable).IsTrue();
+            await Assert.That(env.CpuCyclesAreMeaningful).IsFalse();
+        }
+    }
+
+    [Test]
+    [Property("Category", "Models")]
     public async Task EnvironmentInfo_ExecutionMode_ControlsToString()
     {
         var nativeAot = new EnvironmentInfo { ExecutionMode = RuntimeExecutionMode.NativeAot };
