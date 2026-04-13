@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-軽量で依存関係ゼロの.NETベンチマークライブラリで、**2つの補完的API**を提供します：命令型のfluent APIと、属性ベースでソース生成される、完全に**AOT互換**のAPIです。
+軽量で依存関係ゼロの.NETベンチマークライブラリで、**2つの補完的API**を提供します：命令型APIと、属性ベースでソース生成される、完全に**AOT互換**のAPIです。
 
 ## 特徴
 
@@ -10,11 +10,11 @@
 - **2つのAPI** - アドホックテスト用の命令型API (`Benchmark.Run`)；構造化されたスイート用の属性ベースAPI (`[Benchmark]` + ソースジェネレーター)
 - **AOT互換ソースジェネレーター** - インクリメンタルジェネレーターが実行時に直接メソッド呼び出しを生成、リフレクションゼロ
 - **クロスプラットフォーム** - Windows、Linux、macOSを完全サポート
-- **高精度タイミング** - ナノ秒レベルの精度で`Stopwatch`を使用
+- **高精度タイミング** - `Stopwatch` を使用し、1操作あたりの時間をナノ秒スケールで報告
 - **GC追跡** - ベンチマーク中のGen0/Gen1/Gen2コレクション回数を監視
-- **CPUサイクルカウント** - ハードウェアレベルのサイクルカウント（Windowsは`QueryThreadCycleTime`、Linuxは`perf_event`、macOSは`mach_absolute_time`）
-- **統計分析** - 平均、中央値、P90、P95、P99、最小値、最大値、標準偏差、標準誤差、相対分散
-- **複数出力形式** - コンソール、Markdown、HTML、CSV、プログラム要約
+- **CPUサイクルカウント** - Windows / Linux ではハードウェアサイクル、macOS では単調クロックのプロキシ値（`mach_absolute_time`）を使用
+- **統計分析** - 平均、中央値、P90、P95、P99、最小値、最大値、標準偏差、標準誤差、相対標準偏差
+- **複数出力形式** - 4 つの組み込み `IFormatter` フォーマッター（Console、Markdown、HTML、CSV）とプログラム要約出力
 - **パラメータ化ベンチマーク** - `[Params]`属性で自動デカルト積反復
 - **比較サポート** - ベースライン vs 候補、高速化計算付き
 - **設定可能** - Quick、Default、Preciseプリセット、自動キャリブレーション、または完全カスタム設定
@@ -243,7 +243,7 @@ var csv      = new CsvFormatter();         // データ分析用CSV
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console、Markdown、HTML、CSV の出力には、標準誤差、相対標準偏差、利用可能な場合の CPU カウンター注記など、精度指向のメタデータが含まれるようになりました。
+Console、Markdown、HTML、CSV の出力には、標準誤差、相対標準偏差、利用可能な場合の CPU カウンター注記など、精度指向のメタデータが含まれます。
 
 ### フォーマット対象
 
@@ -292,13 +292,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 | タイプ | 説明 |
 |------|-------------|
-| `BenchmarkResult` | 名前、統計、サンプル、サンプルあたり反復数、サンプル数、タグ、カテゴリ |
-| `ComparisonResult` | ベースライン、候補、高速化、高速かどうか、改善率 |
-| `BenchmarkSuite` | 名前、説明、結果、比較、環境、期間 |
+| `BenchmarkResult` | 名前、カテゴリ、タグ、統計、サンプル、サンプルあたり反復数、サンプル数、タイムスタンプ |
+| `ComparisonResult` | 名前、カテゴリ、タグ、ベースライン、候補、高速化、高速かどうか、改善率 |
+| `BenchmarkSuite` | 名前、説明、結果、比較、環境、期間、タイムスタンプ |
 | `Statistics` | 平均、P50、P90、P95、P99、最小、最大、標準偏差、StandardError、RelativeStdDevPercent、操作あたりCPUサイクル、GcInfo |
 | `TimingSample` | 経過ナノ秒、経過ミリ秒、経過ティック、CPUサイクル、GcInfo |
 | `GcInfo` | Gen0、Gen1、Gen2、合計、ゼロか |
-| `EnvironmentInfo` | OS、アーキテクチャ、ランタイムバージョン、プロセッサ数、設定、CPUカウンター種別/可用性 |
+| `EnvironmentInfo` | OS、アーキテクチャ、ランタイムバージョン、プロセッサ数、実行モード、設定、CPUカウンター種別 / 可用性 / 意味の有無、カスタムタグ |
 
 ---
 
@@ -312,7 +312,9 @@ src/
 |   +-- BenchmarkConfig.cs             # プリセット付き設定
 |   +-- Attributes.cs                  # 7つのベンチマーク属性
 |   +-- IBenchmarkClass.cs             # ジェネレーターが生成するインターフェース
-|   +-- Runner.cs                      # 低レベルタイミングエンジン
+|   +-- Runner.cs                      # 低レベルのタイミングフローとサンプル生成
+|   +-- Runner.Gc.cs                   # GC ベースラインと差分追跡
+|   +-- Runner.Cpu.cs                  # プラットフォーム固有の CPU カウンター実装
 |   +-- StatisticsCalculator.cs        # パーセンタイル / 統計計算
 |   +-- Models.cs                      # 結果タイプ
 |   +-- Formatters/
@@ -325,6 +327,9 @@ src/
 |
 +-- PicoBench.Generators/            # ソースジェネレーター (netstandard2.0)
     +-- BenchmarkGenerator.cs          # IIncrementalGeneratorエントリーポイント
+    +-- BenchmarkClassAnalyzer.cs      # Roslyn 解析と診断
+    +-- CSharpLiteralFormatter.cs      # 生成されるパラメーター用の C# リテラル整形
+    +-- DiagnosticDescriptors.cs       # ジェネレーター診断定義
     +-- Emitter.cs                     # C#コードエミッター (AOT安全)
     +-- Models.cs                      # Roslyn分析モデル
 ```
@@ -337,7 +342,7 @@ src/
 |---------|---------|-------|-------|
 | 高精度タイミング | Stopwatch | Stopwatch | Stopwatch |
 | GC追跡 (Gen0/1/2) | はい | はい | はい |
-| CPUサイクルカウント | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` |
+| CPUサイクルカウント | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time`（プロキシ） |
 | プロセス優先度ブースト | はい | はい | はい |
 
 macOS では、出力される CPU カウンターはアーキテクチャ上の実サイクルではなく、高分解能の単調クロックプロキシです。`EnvironmentInfo` と各フォーマッター出力はこの違いを明示します。

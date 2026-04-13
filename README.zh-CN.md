@@ -6,7 +6,7 @@
 [![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-一个轻量级、零依赖的 .NET 基准测试库，提供 **两种互补的 API**：命令式流式 API 和基于属性、源生成的 API，完全 **AOT 兼容**。
+一个轻量级、零依赖的 .NET 基准测试库，提供 **两种互补的 API**：命令式 API 和基于属性、源生成的 API，完全 **AOT 兼容**。
 
 ## 特性
 
@@ -14,11 +14,11 @@
 - **两种 API** - 命令式 (`Benchmark.Run`) 用于临时测试；基于属性 (`[Benchmark]` + 源生成器) 用于结构化测试套件
 - **AOT 兼容的源生成器** - 增量生成器在运行时生成直接方法调用，零反射
 - **跨平台** - 完全支持 Windows、Linux 和 macOS
-- **高精度计时** - 使用 `Stopwatch`，纳秒级精度
+- **高精度计时** - 使用 `Stopwatch` 并报告纳秒尺度的每操作耗时
 - **GC 跟踪** - 监控基准测试期间的 Gen0/Gen1/Gen2 回收计数
-- **CPU 周期计数** - 硬件级周期计数（Windows 通过 `QueryThreadCycleTime`，Linux 通过 `perf_event`，macOS 通过 `mach_absolute_time`）
-- **统计分析** - 均值、中位数、P90、P95、P99、最小值、最大值、标准差、标准误和相对波动
-- **多种输出格式** - 控制台、Markdown、HTML、CSV 和程序化摘要
+- **CPU 周期计数** - Windows / Linux 提供硬件周期计数，macOS 提供单调时钟代理值（`mach_absolute_time`）
+- **统计分析** - 均值、中位数、P90、P95、P99、最小值、最大值、标准差、标准误和相对标准差
+- **多种输出格式** - 4 个内置 `IFormatter` 格式化器（Console、Markdown、HTML、CSV）以及程序化摘要输出
 - **参数化基准测试** - `[Params]` 属性，支持自动笛卡尔积迭代
 - **比较支持** - 基准 vs 候选实现，带加速比计算
 - **可配置** - Quick、Default 和 Precise 预设、自动校准或完全自定义配置
@@ -233,7 +233,7 @@ var result = Benchmark.Run("Test", action, config);
 
 ## 输出格式化器
 
-五个内置格式化器实现 `IFormatter`：
+四个内置格式化器实现 `IFormatter`，`SummaryFormatter` 则提供单独的摘要辅助：
 
 ```csharp
 using PicoBench.Formatters;
@@ -247,7 +247,7 @@ var csv      = new CsvFormatter();         // CSV 用于数据分析
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-控制台、Markdown、HTML 和 CSV 输出现在会包含更偏精度分析的元数据，例如标准误、相对标准差，以及 CPU 计数器语义说明。
+控制台、Markdown、HTML 和 CSV 输出会包含更偏精度分析的元数据，例如标准误、相对标准差，以及 CPU 计数器语义说明。
 
 ### 格式化目标
 
@@ -296,13 +296,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 | 类型 | 描述 |
 |------|-------------|
-| `BenchmarkResult` | 名称、统计、样本、每次样本迭代数、样本数、标签、类别 |
-| `ComparisonResult` | 基准、候选、加速比、是否更快、改进百分比 |
-| `BenchmarkSuite` | 名称、描述、结果、比较、环境、持续时间 |
+| `BenchmarkResult` | 名称、类别、标签、统计、样本、每次样本迭代数、样本数、时间戳 |
+| `ComparisonResult` | 名称、类别、标签、基准、候选、加速比、是否更快、改进百分比 |
+| `BenchmarkSuite` | 名称、描述、结果、比较、环境、持续时间、时间戳 |
 | `Statistics` | 平均值、P50、P90、P95、P99、最小值、最大值、标准差、标准误、相对标准差百分比、每操作 CPU 周期、GC 信息 |
 | `TimingSample` | 纳秒耗时、毫秒耗时、计时器滴答数、CPU 周期、GC 信息 |
 | `GcInfo` | Gen0、Gen1、Gen2、总计、是否为零 |
-| `EnvironmentInfo` | 操作系统、架构、运行时版本、处理器数量、配置、CPU 计数器类型/可用性 |
+| `EnvironmentInfo` | 操作系统、架构、运行时版本、处理器数量、执行模式、配置、CPU 计数器类型 / 可用性 / 是否有意义、自定义标签 |
 
 ---
 
@@ -316,7 +316,9 @@ src/
 |   +-- BenchmarkConfig.cs             # 配置和预设
 |   +-- Attributes.cs                  # 7 个基准测试属性
 |   +-- IBenchmarkClass.cs             # 生成器实现的接口
-|   +-- Runner.cs                      # 底层计时引擎
+|   +-- Runner.cs                      # 底层计时流程与样本构造
+|   +-- Runner.Gc.cs                   # GC 基线与增量跟踪
+|   +-- Runner.Cpu.cs                  # 平台相关 CPU 计数器实现
 |   +-- StatisticsCalculator.cs        # 百分位数 / 统计计算
 |   +-- Models.cs                      # 结果类型
 |   +-- Formatters/
@@ -329,6 +331,9 @@ src/
 |
 +-- PicoBench.Generators/            # 源生成器 (netstandard2.0)
     +-- BenchmarkGenerator.cs          # IIncrementalGenerator 入口点
+    +-- BenchmarkClassAnalyzer.cs      # Roslyn 分析与诊断
+    +-- CSharpLiteralFormatter.cs      # 为生成代码格式化 C# 字面量
+    +-- DiagnosticDescriptors.cs       # 生成器诊断定义
     +-- Emitter.cs                     # C# 代码发射器 (AOT 安全)
     +-- Models.cs                      # Roslyn 分析模型
 ```
@@ -341,7 +346,7 @@ src/
 |---------|---------|-------|-------|
 | 高精度计时 | Stopwatch | Stopwatch | Stopwatch |
 | GC 跟踪 (Gen0/1/2) | 是 | 是 | 是 |
-| CPU 周期计数 | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` |
+| CPU 周期计数 | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time`（代理值） |
 | 进程优先级提升 | 是 | 是 | 是 |
 
 在 macOS 上，导出的 CPU 计数器是高精度单调时钟代理值，而不是真正的架构 CPU 周期。`EnvironmentInfo` 和格式化输出会明确区分这一点。

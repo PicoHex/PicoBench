@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-Eine leichte, abhängigkeitsfreie Benchmarking-Bibliothek für .NET mit **zwei komplementären APIs**: einer imperativen fluent API und einer attributbasierten, quellgenerierten API, die vollständig **AOT-kompatibel** ist.
+Eine leichte, abhängigkeitsfreie Benchmarking-Bibliothek für .NET mit **zwei komplementären APIs**: einer imperativen API und einer attributbasierten, quellgenerierten API, die vollständig **AOT-kompatibel** ist.
 
 ## Funktionen
 
@@ -10,11 +10,11 @@ Eine leichte, abhängigkeitsfreie Benchmarking-Bibliothek für .NET mit **zwei k
 - **Zwei APIs** - Imperativ (`Benchmark.Run`) für Ad-hoc-Tests; attributbasiert (`[Benchmark]` + Quellgenerator) für strukturierte Suiten
 - **AOT-kompatibler Quellgenerator** - Der inkrementelle Generator erzeugt direkte Methodenaufrufe ohne Reflection zur Laufzeit
 - **Plattformübergreifend** - Vollständige Unterstützung für Windows, Linux und macOS
-- **Hochpräzises Timing** - Verwendet `Stopwatch` mit Nanosekunden-Granularität
+- **Hochpräzises Timing** - Verwendet `Stopwatch` und berichtet pro Vorgang Zeiten im Nanosekundenbereich
 - **GC-Tracking** - Überwacht Gen0/Gen1/Gen2-Sammlungszählungen während Benchmarks
-- **CPU-Zykluszählung** - Hardware-Level-Zykluszählung (Windows über `QueryThreadCycleTime`, Linux über `perf_event`, macOS über `mach_absolute_time`)
-- **Statistische Analyse** - Mittelwert, Median, P90, P95, P99, Minimum, Maximum, Standardabweichung, Standardfehler und relative Varianz
-- **Mehrere Ausgabeformate** - Konsole, Markdown, HTML, CSV und programmatische Zusammenfassung
+- **CPU-Zykluszählung** - Hardware-Zykluszählung unter Windows/Linux plus ein monotonic Proxy unter macOS (`mach_absolute_time`)
+- **Statistische Analyse** - Mittelwert, Median, P90, P95, P99, Minimum, Maximum, Standardabweichung, Standardfehler und relative Standardabweichung
+- **Mehrere Ausgabeformate** - Vier integrierte `IFormatter`-Formatter (Console, Markdown, HTML, CSV) plus programmatische Zusammenfassung
 - **Parametrisierte Benchmarks** - `[Params]`-Attribut mit automatischer kartesischer Produktiteration
 - **Vergleichsunterstützung** - Baseline vs Kandidat mit Beschleunigungsberechnungen
 - **Konfigurierbar** - Quick-, Default- und Precise-Voreinstellungen, Auto-Kalibrierung oder vollständig benutzerdefinierte Konfiguration
@@ -243,7 +243,7 @@ var csv      = new CsvFormatter();         // CSV für Datenanalyse
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console-, Markdown-, HTML- und CSV-Ausgaben enthalten jetzt präzisionsorientierte Metadaten wie Standardfehler, relative Standardabweichung und Hinweise zum CPU-Zähler, sofern verfügbar.
+Console-, Markdown-, HTML- und CSV-Ausgaben enthalten präzisionsorientierte Metadaten wie Standardfehler, relative Standardabweichung und Hinweise zum CPU-Zähler, sofern verfügbar.
 
 ### Formatierungsziele
 
@@ -292,13 +292,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 | Typ | Beschreibung |
 |------|-------------|
-| `BenchmarkResult` | Name, Statistik, Samples, IterationenProSample, SampleAnzahl, Tags, Kategorie |
-| `ComparisonResult` | Baseline, Kandidat, Beschleunigung, IstSchneller, VerbesserungsProzent |
-| `BenchmarkSuite` | Name, Beschreibung, Ergebnisse, Vergleiche, Umgebung, Dauer |
+| `BenchmarkResult` | Name, Kategorie, Tags, Statistik, Samples, IterationenProSample, SampleAnzahl, Zeitstempel |
+| `ComparisonResult` | Name, Kategorie, Tags, Baseline, Kandidat, Beschleunigung, IstSchneller, VerbesserungsProzent |
+| `BenchmarkSuite` | Name, Beschreibung, Ergebnisse, Vergleiche, Umgebung, Dauer, Zeitstempel |
 | `Statistics` | Durchschnitt, P50, P90, P95, P99, Minimum, Maximum, Standardabweichung, StandardError, RelativeStdDevPercent, CpuZyklenProOp, GcInfo |
 | `TimingSample` | VerstricheneNanosekunden, VerstricheneMillisekunden, VerstricheneTicks, CpuZyklen, GcInfo |
 | `GcInfo` | Gen0, Gen1, Gen2, Gesamt, IstNull |
-| `EnvironmentInfo` | Betriebssystem, Architektur, Laufzeitversion, Prozessoranzahl, Konfiguration, CPU-Zählerart/-verfügbarkeit |
+| `EnvironmentInfo` | Betriebssystem, Architektur, Laufzeitversion, Prozessoranzahl, Ausführungsmodus, Konfiguration, CPU-Zählerart / -verfügbarkeit / Aussagekraft, benutzerdefinierte Tags |
 
 ---
 
@@ -312,7 +312,9 @@ src/
 |   +-- BenchmarkConfig.cs             # Konfiguration mit Voreinstellungen
 |   +-- Attributes.cs                  # 7 Benchmark-Attribute
 |   +-- IBenchmarkClass.cs             # Vom Generator erzeugtes Interface
-|   +-- Runner.cs                      # Low-Level-Timing-Engine
+|   +-- Runner.cs                      # Low-Level-Timing-Ablauf und Sample-Erzeugung
+|   +-- Runner.Gc.cs                   # GC-Basislinie und Delta-Berechnung
+|   +-- Runner.Cpu.cs                  # Plattformspezifische CPU-Zähler-Implementierung
 |   +-- StatisticsCalculator.cs        # Perzentil- / Statistikberechnung
 |   +-- Models.cs                      # Ergebnis-Typen
 |   +-- Formatters/
@@ -325,6 +327,9 @@ src/
 |
 +-- PicoBench.Generators/            # Quellgenerator (netstandard2.0)
     +-- BenchmarkGenerator.cs          # IIncrementalGenerator-Einstiegspunkt
+    +-- BenchmarkClassAnalyzer.cs      # Roslyn-Analyse und Diagnostik
+    +-- CSharpLiteralFormatter.cs      # C#-Literalformatierung für emittierte Parameter
+    +-- DiagnosticDescriptors.cs       # Definitionen der Generator-Diagnostik
     +-- Emitter.cs                     # C#-Code-Emitter (AOT-sicher)
     +-- Models.cs                      # Roslyn-Analysemodelle
 ```
@@ -337,7 +342,7 @@ src/
 |---------|---------|-------|-------|
 | Hochpräzises Timing | Stopwatch | Stopwatch | Stopwatch |
 | GC-Tracking (Gen0/1/2) | Ja | Ja | Ja |
-| CPU-Zykluszählung | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` |
+| CPU-Zykluszählung | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` (Proxy) |
 | Prozessprioritätserhöhung | Ja | Ja | Ja |
 
 Unter macOS ist der exportierte CPU-Zähler ein hochauflösender monotonic Proxy und keine architektonische Zykluszahl. `EnvironmentInfo` und die Formatter-Ausgabe machen diesen Unterschied explizit sichtbar.

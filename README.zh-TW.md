@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-一個輕量級、零依賴的 .NET 基準測試庫，提供 **兩種互補的 API**：命令式流式 API 和基於屬性、源生成的 API，完全 **AOT 相容**。
+一個輕量級、零依賴的 .NET 基準測試庫，提供 **兩種互補的 API**：命令式 API 和基於屬性、源生成的 API，完全 **AOT 相容**。
 
 ## 特性
 
@@ -10,11 +10,11 @@
 - **兩種 API** - 命令式 (`Benchmark.Run`) 用於臨時測試；基於屬性 (`[Benchmark]` + 源生成器) 用於結構化測試套件
 - **AOT 相容的源生成器** - 增量生成器在執行時生成直接方法呼叫，零反射
 - **跨平台** - 完全支援 Windows、Linux 和 macOS
-- **高精度計時** - 使用 `Stopwatch`，奈秒級精度
+- **高精度計時** - 使用 `Stopwatch` 並回報奈秒尺度的每操作耗時
 - **GC 追蹤** - 監控基準測試期間的 Gen0/Gen1/Gen2 回收計數
-- **CPU 週期計數** - 硬體級週期計數（Windows 通過 `QueryThreadCycleTime`，Linux 通過 `perf_event`，macOS 通過 `mach_absolute_time`）
-- **統計分析** - 均值、中位數、P90、P95、P99、最小值、最大值、標準差、標準誤和相對波動
-- **多種輸出格式** - 控制台、Markdown、HTML、CSV 和程式化摘要
+- **CPU 週期計數** - Windows / Linux 提供硬體週期計數，macOS 提供單調時鐘代理值（`mach_absolute_time`）
+- **統計分析** - 均值、中位數、P90、P95、P99、最小值、最大值、標準差、標準誤和相對標準差
+- **多種輸出格式** - 4 個內建 `IFormatter` 格式化器（Console、Markdown、HTML、CSV）以及程式化摘要輸出
 - **參數化基準測試** - `[Params]` 屬性，支援自動笛卡爾積迭代
 - **比較支援** - 基準 vs 候選實現，帶加速比計算
 - **可配置** - Quick、Default 和 Precise 預設、自動校準或完全自訂配置
@@ -243,7 +243,7 @@ var csv      = new CsvFormatter();         // CSV 用於數據分析
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-控制台、Markdown、HTML 和 CSV 輸出現在會包含更偏精度分析的元資料，例如標準誤、相對標準差，以及 CPU 計數器語義說明。
+控制台、Markdown、HTML 和 CSV 輸出會包含更偏精度分析的元資料，例如標準誤、相對標準差，以及 CPU 計數器語義說明。
 
 ### 格式化目標
 
@@ -292,13 +292,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 | 類型 | 描述 |
 |------|-------------|
-| `BenchmarkResult` | 名稱、統計、樣本、每次樣本迭代數、樣本數、標籤、類別 |
-| `ComparisonResult` | 基準、候選、加速比、是否更快、改進百分比 |
-| `BenchmarkSuite` | 名稱、描述、結果、比較、環境、持續時間 |
+| `BenchmarkResult` | 名稱、類別、標籤、統計、樣本、每次樣本迭代數、樣本數、時間戳 |
+| `ComparisonResult` | 名稱、類別、標籤、基準、候選、加速比、是否更快、改進百分比 |
+| `BenchmarkSuite` | 名稱、描述、結果、比較、環境、持續時間、時間戳 |
 | `Statistics` | 平均值、P50、P90、P95、P99、最小值、最大值、標準差、標準誤、相對標準差百分比、每操作 CPU 週期、GC 信息 |
 | `TimingSample` | 奈秒耗時、毫秒耗時、計時器滴答數、CPU 週期、GC 信息 |
 | `GcInfo` | Gen0、Gen1、Gen2、總計、是否為零 |
-| `EnvironmentInfo` | 操作系統、架構、執行時版本、處理器數量、配置、CPU 計數器類型/可用性 |
+| `EnvironmentInfo` | 操作系統、架構、執行時版本、處理器數量、執行模式、配置、CPU 計數器類型 / 可用性 / 是否有意義、自訂標籤 |
 
 ---
 
@@ -312,7 +312,9 @@ src/
 |   +-- BenchmarkConfig.cs             # 配置和預設
 |   +-- Attributes.cs                  # 7 個基準測試屬性
 |   +-- IBenchmarkClass.cs             # 生成器實現的接口
-|   +-- Runner.cs                      # 底層計時引擎
+|   +-- Runner.cs                      # 底層計時流程與樣本建立
+|   +-- Runner.Gc.cs                   # GC 基線與增量追蹤
+|   +-- Runner.Cpu.cs                  # 平台相關 CPU 計數器實作
 |   +-- StatisticsCalculator.cs        # 百分位數 / 統計計算
 |   +-- Models.cs                      # 結果類型
 |   +-- Formatters/
@@ -325,6 +327,9 @@ src/
 |
 +-- PicoBench.Generators/            # 源生成器 (netstandard2.0)
     +-- BenchmarkGenerator.cs          # IIncrementalGenerator 入口點
+    +-- BenchmarkClassAnalyzer.cs      # Roslyn 分析與診斷
+    +-- CSharpLiteralFormatter.cs      # 為生成代碼格式化 C# 字面量
+    +-- DiagnosticDescriptors.cs       # 生成器診斷定義
     +-- Emitter.cs                     # C# 代碼發射器 (AOT 安全)
     +-- Models.cs                      # Roslyn 分析模型
 ```
@@ -337,7 +342,7 @@ src/
 |---------|---------|-------|-------|
 | 高精度計時 | Stopwatch | Stopwatch | Stopwatch |
 | GC 追蹤 (Gen0/1/2) | 是 | 是 | 是 |
-| CPU 週期計數 | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` |
+| CPU 週期計數 | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time`（代理值） |
 | 進程優先級提升 | 是 | 是 | 是 |
 
 在 macOS 上，導出的 CPU 計數器是高精度單調時鐘代理值，而不是真正的架構 CPU 週期。`EnvironmentInfo` 和格式化輸出會明確區分這一點。

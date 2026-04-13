@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-Une bibliothèque de benchmarking légère et sans dépendances pour .NET avec **deux API complémentaires** : une API impérative fluide et une API basée sur des attributs, générée à partir du code source, entièrement **compatible AOT**.
+Une bibliothèque de benchmarking légère et sans dépendances pour .NET avec **deux API complémentaires** : une API impérative et une API basée sur des attributs, générée à partir du code source, entièrement **compatible AOT**.
 
 ## Caractéristiques
 
@@ -10,11 +10,11 @@ Une bibliothèque de benchmarking légère et sans dépendances pour .NET avec *
 - **Deux API** - Impérative (`Benchmark.Run`) pour les tests ad hoc ; basée sur les attributs (`[Benchmark]` + générateur de source) pour les suites structurées
 - **Générateur de Source Compatible AOT** - Le générateur incrémental émet des appels de méthode directs sans réflexion à l'exécution
 - **Multiplateforme** - Support complet pour Windows, Linux et macOS
-- **Chronométrage Haute Précision** - Utilise `Stopwatch` avec une granularité au niveau nanoseconde
+- **Chronométrage Haute Précision** - Utilise `Stopwatch` et rapporte des temps par opération à l'échelle de la nanoseconde
 - **Suivi GC** - Surveille les comptes de collection Gen0/Gen1/Gen2 pendant les benchmarks
-- **Comptage de Cycles CPU** - Comptage de cycles au niveau matériel (Windows via `QueryThreadCycleTime`, Linux via `perf_event`, macOS via `mach_absolute_time`)
-- **Analyse Statistique** - Moyenne, Médiane, P90, P95, P99, Minimum, Maximum, Écart Type, erreur standard et variance relative
-- **Formats de Sortie Multiples** - Console, Markdown, HTML, CSV et résumé programmatique
+- **Comptage de Cycles CPU** - Comptage matériel sous Windows/Linux, plus un proxy monotone sous macOS (`mach_absolute_time`)
+- **Analyse Statistique** - Moyenne, Médiane, P90, P95, P99, Minimum, Maximum, Écart Type, erreur standard et écart-type relatif
+- **Formats de Sortie Multiples** - Quatre formateurs intégrés (`IFormatter`) (Console, Markdown, HTML, CSV) plus une sortie de résumé programmatique
 - **Benchmarks Paramétrés** - Attribut `[Params]` avec itération automatique du produit cartésien
 - **Support de Comparaison** - Base vs candidat avec calculs d'accélération
 - **Configurable** - Préconfigurations Quick, Default et Precise, auto-calibrage ou configuration entièrement personnalisée
@@ -243,7 +243,7 @@ var csv      = new CsvFormatter();         // CSV pour l'analyse de données
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Les sorties Console, Markdown, HTML et CSV incluent désormais des métadonnées orientées précision comme l'erreur standard, l'écart-type relatif et des notes sur le compteur CPU lorsqu'elles sont disponibles.
+Les sorties Console, Markdown, HTML et CSV incluent des métadonnées orientées précision comme l'erreur standard, l'écart-type relatif et des notes sur le compteur CPU lorsqu'elles sont disponibles.
 
 ### Cibles de Formatage
 
@@ -292,13 +292,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 | Type | Description |
 |------|-------------|
-| `BenchmarkResult` | Nom, Statistiques, Échantillons, ItérationsParÉchantillon, NombreDÉchantillons, Étiquettes, Catégorie |
-| `ComparisonResult` | Base, Candidat, Accélération, EstPlusRapide, PourcentageAmélioration |
-| `BenchmarkSuite` | Nom, Description, Résultats, Comparaisons, Environnement, Durée |
+| `BenchmarkResult` | Nom, Catégorie, Étiquettes, Statistiques, Échantillons, ItérationsParÉchantillon, NombreDÉchantillons, Horodatage |
+| `ComparisonResult` | Nom, Catégorie, Étiquettes, Base, Candidat, Accélération, EstPlusRapide, PourcentageAmélioration |
+| `BenchmarkSuite` | Nom, Description, Résultats, Comparaisons, Environnement, Durée, Horodatage |
 | `Statistics` | Moyenne, P50, P90, P95, P99, Minimum, Maximum, ÉcartType, StandardError, RelativeStdDevPercent, CyclesCpuParOp, GcInfo |
 | `TimingSample` | NanosecondesÉcoulées, MillisecondesÉcoulées, TicksÉcoulés, CyclesCpu, GcInfo |
 | `GcInfo` | Gen0, Gen1, Gen2, Total, EstZéro |
-| `EnvironmentInfo` | OS, Architecture, VersionRuntime, NombreProcesseurs, Configuration, type/disponibilité du compteur CPU |
+| `EnvironmentInfo` | OS, Architecture, VersionRuntime, NombreProcesseurs, Mode d'exécution, Configuration, type / disponibilité / signification du compteur CPU, étiquettes personnalisées |
 
 ---
 
@@ -312,7 +312,9 @@ src/
 |   +-- BenchmarkConfig.cs             # Configuration avec préconfigurations
 |   +-- Attributes.cs                  # 7 attributs de benchmark
 |   +-- IBenchmarkClass.cs             # Interface émise par le générateur
-|   +-- Runner.cs                      # Moteur de chronométrage bas niveau
+|   +-- Runner.cs                      # Flux de chronométrage bas niveau et création d'échantillons
+|   +-- Runner.Gc.cs                   # Ligne de base GC et calcul des deltas
+|   +-- Runner.Cpu.cs                  # Implémentation du compteur CPU spécifique à la plateforme
 |   +-- StatisticsCalculator.cs        # Calcul des percentiles / statistiques
 |   +-- Models.cs                      # Types de résultats
 |   +-- Formatters/
@@ -325,6 +327,9 @@ src/
 |
 +-- PicoBench.Generators/            # Générateur de source (netstandard2.0)
     +-- BenchmarkGenerator.cs          # Point d'entrée IIncrementalGenerator
+    +-- BenchmarkClassAnalyzer.cs      # Analyse et diagnostics Roslyn
+    +-- CSharpLiteralFormatter.cs      # Formatage des littéraux C# pour les paramètres émis
+    +-- DiagnosticDescriptors.cs       # Définitions des diagnostics du générateur
     +-- Emitter.cs                     # Émetteur de code C# (sécurisé AOT)
     +-- Models.cs                      # Modèles d'analyse Roslyn
 ```
@@ -337,7 +342,7 @@ src/
 |---------|---------|-------|-------|
 | Chronométrage haute précision | Stopwatch | Stopwatch | Stopwatch |
 | Suivi GC (Gen0/1/2) | Oui | Oui | Oui |
-| Comptage de cycles CPU | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` |
+| Comptage de cycles CPU | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` (proxy) |
 | Augmentation de priorité de processus | Oui | Oui | Oui |
 
 Sous macOS, le compteur CPU exporté est un proxy monotone haute résolution et non un vrai compteur de cycles architecturaux. `EnvironmentInfo` et la sortie des formatteurs exposent explicitement cette différence.
