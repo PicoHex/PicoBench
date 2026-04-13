@@ -6,7 +6,7 @@
 [![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A lightweight, zero-dependency benchmarking library for .NET with **two complementary APIs**: an imperative fluent API and an attribute-based, source-generated API that is fully **AOT-compatible**.
+A lightweight, zero-dependency benchmarking library for .NET with **two complementary APIs**: an imperative API and an attribute-based, source-generated API that is fully **AOT-compatible**.
 
 ## Features
 
@@ -14,11 +14,11 @@ A lightweight, zero-dependency benchmarking library for .NET with **two compleme
 - **Two APIs** - Imperative (`Benchmark.Run`) for ad-hoc tests; attribute-based (`[Benchmark]` + source generator) for structured suites
 - **AOT-Compatible Source Generator** - The incremental generator emits direct method calls with zero reflection at runtime
 - **Cross-Platform** - Full support for Windows, Linux, and macOS
-- **High-Precision Timing** - Uses `Stopwatch` with nanosecond-level granularity
+- **High-Precision Timing** - Uses `Stopwatch` and reports nanosecond-scale per-operation timings
 - **GC Tracking** - Monitors Gen0/Gen1/Gen2 collection counts during benchmarks
-- **CPU Cycle Counting** - Hardware-level cycle counting (Windows via `QueryThreadCycleTime`, Linux via `perf_event`, macOS via `mach_absolute_time`)
-- **Statistical Analysis** - Mean, Median, P90, P95, P99, Min, Max, StdDev, StdErr, and relative variance
-- **Multiple Output Formats** - Console, Markdown, HTML, CSV and programmatic summary
+- **CPU Cycle Counting** - Hardware cycle counts on Windows/Linux, plus a monotonic proxy on macOS (`mach_absolute_time`)
+- **Statistical Analysis** - Mean, Median, P90, P95, P99, Min, Max, StdDev, StdErr, and relative standard deviation
+- **Multiple Output Formats** - Four built-in formatters (Console, Markdown, HTML, CSV) plus programmatic summary output
 - **Parameterised Benchmarks** - `[Params]` attribute with automatic Cartesian product iteration
 - **Comparison Support** - Baseline vs candidate with speedup calculations
 - **Configurable** - Quick, Default, and Precise presets, auto-calibration, or fully custom configuration
@@ -233,7 +233,7 @@ When auto-calibration is enabled, PicoBench increases `IterationsPerSample` unti
 
 ## Output Formatters
 
-Five built-in formatters implement `IFormatter`:
+Four built-in formatters implement `IFormatter`, and `SummaryFormatter` provides a separate summary helper:
 
 ```csharp
 using PicoBench.Formatters;
@@ -247,7 +247,7 @@ var csv      = new CsvFormatter();         // CSV for data analysis
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console, Markdown, HTML, and CSV outputs now include precision-oriented metadata such as standard error, relative standard deviation, and CPU counter notes when available.
+Console, Markdown, HTML, and CSV outputs include precision-oriented metadata such as standard error, relative standard deviation, and CPU counter notes when available.
 
 ### Formatting Targets
 
@@ -296,13 +296,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 | Type | Description |
 |------|-------------|
-| `BenchmarkResult` | Name, Statistics, Samples, IterationsPerSample, SampleCount, Tags, Category |
-| `ComparisonResult` | Baseline, Candidate, Speedup, IsFaster, ImprovementPercent |
-| `BenchmarkSuite` | Name, Description, Results, Comparisons, Environment, Duration |
+| `BenchmarkResult` | Name, Category, Tags, Statistics, Samples, IterationsPerSample, SampleCount, Timestamp |
+| `ComparisonResult` | Name, Category, Tags, Baseline, Candidate, Speedup, IsFaster, ImprovementPercent |
+| `BenchmarkSuite` | Name, Description, Results, Comparisons, Environment, Duration, Timestamp |
 | `Statistics` | Avg, P50, P90, P95, P99, Min, Max, StdDev, StandardError, RelativeStdDevPercent, CpuCyclesPerOp, GcInfo |
 | `TimingSample` | ElapsedNanoseconds, ElapsedMilliseconds, ElapsedTicks, CpuCycles, GcInfo |
 | `GcInfo` | Gen0, Gen1, Gen2, Total, IsZero |
-| `EnvironmentInfo` | Os, Architecture, RuntimeVersion, ProcessorCount, Configuration, CPU counter kind / availability |
+| `EnvironmentInfo` | Os, Architecture, RuntimeVersion, ProcessorCount, ExecutionMode, Configuration, CPU counter kind / availability / meaning, CustomTags |
 
 ---
 
@@ -316,7 +316,9 @@ src/
 |   +-- BenchmarkConfig.cs             # Configuration with presets
 |   +-- Attributes.cs                  # 7 benchmark attributes
 |   +-- IBenchmarkClass.cs             # Interface emitted by the generator
-|   +-- Runner.cs                      # Low-level timing engine
+|   +-- Runner.cs                      # Low-level timing flow and sample creation
+|   +-- Runner.Gc.cs                   # GC baseline and delta tracking
+|   +-- Runner.Cpu.cs                  # Platform-specific CPU counter implementation
 |   +-- StatisticsCalculator.cs        # Percentile / stats computation
 |   +-- Models.cs                      # Result types
 |   +-- Formatters/
@@ -329,6 +331,9 @@ src/
 |
 +-- PicoBench.Generators/            # Source generator (netstandard2.0)
     +-- BenchmarkGenerator.cs          # IIncrementalGenerator entry point
+    +-- BenchmarkClassAnalyzer.cs      # Roslyn analysis and diagnostics
+    +-- CSharpLiteralFormatter.cs      # C# literal formatting for emitted params
+    +-- DiagnosticDescriptors.cs       # Generator diagnostic definitions
     +-- Emitter.cs                     # C# code emitter (AOT-safe)
     +-- Models.cs                      # Roslyn analysis models
 ```
@@ -341,7 +346,7 @@ src/
 |---------|---------|-------|-------|
 | High-precision timing | Stopwatch | Stopwatch | Stopwatch |
 | GC tracking (Gen0/1/2) | Yes | Yes | Yes |
-| CPU cycle counting | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` |
+| CPU cycle counting | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` (proxy) |
 | Process priority boost | Yes | Yes | Yes |
 
 On macOS the exported CPU counter is a high-resolution monotonic proxy rather than architectural cycle counts. `EnvironmentInfo` and formatter output expose this distinction explicitly.
