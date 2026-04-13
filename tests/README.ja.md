@@ -4,7 +4,7 @@
 
 [TUnit](https://github.com/thomhurst/TUnit) テストフレームワークを使用した **PicoBench** の単体テストです。
 
-**合計：454テスト**
+**合計：479テスト**
 
 ## 実行
 
@@ -16,7 +16,7 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 
 ### Formatters/ (224テスト)
 
-5つの出力フォーマッターすべてとそのサポートインフラのテスト。
+4 つの `IFormatter` ベースの出力フォーマッター、`SummaryFormatter`、およびその周辺インフラのテスト。
 
 | ファイル | テスト数 | 説明 |
 |------|-------|-------------|

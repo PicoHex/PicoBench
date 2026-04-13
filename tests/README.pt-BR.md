@@ -4,7 +4,7 @@
 
 Testes unitários para **PicoBench** usando o framework de testes [TUnit](https://github.com/thomhurst/TUnit).
 
-**Total: 454 testes**
+**Total: 479 testes**
 
 ## Executando
 
@@ -16,7 +16,7 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 
 ### Formatters/ (224 testes)
 
-Testes para todos os cinco formatadores de saída e sua infraestrutura de suporte.
+Testes para os quatro formatadores de saída baseados em `IFormatter`, `SummaryFormatter` e sua infraestrutura de suporte.
 
 | Arquivo | Testes | Descrição |
 |------|-------|-------------|

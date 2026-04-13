@@ -4,7 +4,7 @@
 
 **PicoBench** 的单元测试，使用 [TUnit](https://github.com/thomhurst/TUnit) 测试框架。
 
-**总计：454 个测试**
+**总计：479 个测试**
 
 ## 运行
 
@@ -16,7 +16,7 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 
 ### Formatters/ (224 个测试)
 
-所有五个输出格式化器及其支持基础设施的测试。
+四个基于 `IFormatter` 的输出格式化器、`SummaryFormatter` 及其支持基础设施的测试。
 
 | 文件 | 测试数 | 描述 |
 |------|-------|-------------|
