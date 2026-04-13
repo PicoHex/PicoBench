@@ -101,6 +101,6 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## Sortie
 
-Tous les exemples enregistrent les résultats dans un sous-répertoire `results/` sous le dossier de sortie aux formats Markdown, HTML et CSV.
+`StringVsStringBuilder` et `CollectionBenchmarks` enregistrent les résultats dans un sous-répertoire `results/` sous le dossier de sortie aux formats Markdown, HTML et CSV. `AttributeBased` n'enregistre actuellement qu'une sortie Markdown.
 
 Ces rapports incluent désormais aussi des métadonnées orientées précision, comme l'erreur standard, l'écart-type relatif et des notes sur le compteur CPU lorsqu'elles sont disponibles.

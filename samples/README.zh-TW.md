@@ -101,6 +101,6 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## 輸出
 
-所有示例都將結果保存到輸出文件夾下的 `results/` 子目錄中，格式為 Markdown、HTML 和 CSV。
+`StringVsStringBuilder` 和 `CollectionBenchmarks` 會將結果保存到輸出文件夾下的 `results/` 子目錄中，格式為 Markdown、HTML 和 CSV。`AttributeBased` 目前僅保存 Markdown 輸出。
 
 這些報告現在還會包含更偏精度分析的元資料，例如標準誤、相對標準差，以及在可用時顯示 CPU 計數器說明。

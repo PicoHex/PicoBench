@@ -101,6 +101,6 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## Вывод
 
-Все примеры сохраняют результаты в поддиректорию `results/` внутри выходной папки в форматах Markdown, HTML и CSV.
+`StringVsStringBuilder` и `CollectionBenchmarks` сохраняют результаты в поддиректорию `results/` внутри выходной папки в форматах Markdown, HTML и CSV. `AttributeBased` сейчас сохраняет только Markdown-вывод.
 
 Эти отчеты теперь также включают метаданные, ориентированные на точность: стандартную ошибку, относительное стандартное отклонение и пояснения по счетчику CPU, если они доступны.
