@@ -63,6 +63,7 @@ public class BenchmarkGeneratorDiagnosticsTests
         );
 
         await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN003")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN002")).IsFalse();
         await Assert.That(result.GeneratedSources.Length).IsEqualTo(0);
     }
 
@@ -156,6 +157,7 @@ public class BenchmarkGeneratorDiagnosticsTests
         );
 
         await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN003")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN002")).IsFalse();
     }
 
     [Test]
@@ -176,6 +178,7 @@ public class BenchmarkGeneratorDiagnosticsTests
         );
 
         await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN003")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN002")).IsFalse();
     }
 
     [Test]
@@ -309,6 +312,83 @@ public class BenchmarkGeneratorDiagnosticsTests
         await Assert.That(result.GeneratedSources[0]).Contains("partial class GoodBench");
     }
 
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task StringParamsValue_GeneratesEscapedStringLiteral()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class GoodBench
+            {
+                [Params("line\n\"quoted\"")]
+                public string Text { get; set; } = string.Empty;
+
+                [Benchmark]
+                public void Work() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.GeneratedSources[0]).Contains("\"line\\n\\\"quoted\\\"\"");
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task CharParamsValue_GeneratesEscapedCharLiteral()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class GoodBench
+            {
+                [Params('\n', '\\')]
+                public char Marker { get; set; }
+
+                [Benchmark]
+                public void Work() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.GeneratedSources[0]).Contains("'\\n'");
+        await Assert.That(result.GeneratedSources[0]).Contains("'\\\\'");
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task FloatAndDoubleParamsValues_GenerateTypedLiterals()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class GoodBench
+            {
+                [Params(1.5f)]
+                public float Ratio { get; set; }
+
+                [Params(2.5d)]
+                public double Weight { get; set; }
+
+                [Benchmark]
+                public void Work() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.GeneratedSources[0]).Contains("new float[] { 1.5F }");
+        await Assert.That(result.GeneratedSources[0]).Contains("new double[] { 2.5D }");
+    }
+
     private static GeneratorRunResultData RunGenerator(string source)
     {
         var compilation = CSharpCompilation.Create(
@@ -318,7 +398,7 @@ public class BenchmarkGeneratorDiagnosticsTests
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
 
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new BenchmarkGenerator());
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new BenchmarkGenerator().AsSourceGenerator());
         driver = driver.RunGenerators(compilation);
 
         var runResult = driver.GetRunResult();
