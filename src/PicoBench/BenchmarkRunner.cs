@@ -2,7 +2,7 @@ namespace PicoBench;
 
 /// <summary>
 /// Static helper for running attribute-based benchmarks.
-/// Provides a generic <c>Run&lt;T&gt;</c> entry point that is fully AOT-compatible
+/// Provides a generic <c>Run{T}</c> entry point that is fully AOT-compatible
 /// because the source generator implements <see cref="IBenchmarkClass"/> on the benchmark type.
 /// </summary>
 public static class BenchmarkRunner
@@ -22,7 +22,7 @@ public static class BenchmarkRunner
     public static BenchmarkSuite Run<T>(BenchmarkConfig? config = null)
         where T : IBenchmarkClass, new()
     {
-        return new T().RunBenchmarks(config);
+        return new T().RunBenchmarksAsync(config).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -34,6 +34,6 @@ public static class BenchmarkRunner
     {
         return instance == null
             ? throw new ArgumentNullException(nameof(instance))
-            : instance.RunBenchmarks(config);
+            : instance.RunBenchmarksAsync(config).GetAwaiter().GetResult();
     }
 }

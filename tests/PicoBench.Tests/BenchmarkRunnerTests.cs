@@ -9,18 +9,18 @@ public class BenchmarkRunnerTests
         public int RunCount { get; private set; }
         public BenchmarkConfig? LastConfig { get; private set; }
 
-        public BenchmarkSuite RunBenchmarks(BenchmarkConfig? config = null)
+        public ValueTask<BenchmarkSuite> RunBenchmarksAsync(BenchmarkConfig? config = null)
         {
             RunCount++;
             LastConfig = config;
 
-            return new BenchmarkSuite(
+            return ValueTask.FromResult(new BenchmarkSuite(
                 name: "FakeSuite",
                 environment: new EnvironmentInfo(),
                 results: [BenchmarkResultFactory.Create("FakeBenchmark")],
                 duration: TimeSpan.FromMilliseconds(100),
                 description: "Fake suite for testing"
-            );
+            ));
         }
     }
 

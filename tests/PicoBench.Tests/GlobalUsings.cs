@@ -6,6 +6,7 @@ global using System.IO;
 global using System.IO.Abstractions;
 global using System.Linq;
 global using System.Threading;
+global using System.Threading.Tasks;
 global using PicoBench;
 global using PicoBench.Formatters;
 global using PicoBench.Generators;

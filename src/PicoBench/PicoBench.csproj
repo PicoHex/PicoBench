@@ -26,6 +26,11 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- ValueTask<T> support for netstandard2.0 -->
+        <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
+    </ItemGroup>
+
+    <ItemGroup>
         <!-- Include the source generator DLL in the buildTransitive folder to avoid file lock contention -->
         <None Include="..\PicoBench.Generators\$(OutputPath)PicoBench.Generators.dll"
               Pack="true"
