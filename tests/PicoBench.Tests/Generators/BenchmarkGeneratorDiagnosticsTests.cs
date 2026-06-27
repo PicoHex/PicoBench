@@ -389,6 +389,87 @@ public class BenchmarkGeneratorDiagnosticsTests
         await Assert.That(result.GeneratedSources[0]).Contains("new double[] { 2.5D }");
     }
 
+    // ─── Async lifecycle + benchmark validation ────────────────────
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task AsyncTaskGlobalSetup_NoDiagnostic()
+    {
+        var result = RunGenerator("""
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class GoodBench
+            {
+                [GlobalSetup]
+                public async Task SetupAsync() { await Task.CompletedTask; }
+
+                [Benchmark]
+                public void Work() { }
+            }
+            """);
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(1);
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task AsyncVoidGlobalSetup_ReportsWarning()
+    {
+        var result = RunGenerator("""
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class BadBench
+            {
+                [GlobalSetup]
+                public async void Setup() { }
+
+                [Benchmark]
+                public void Work() { }
+            }
+            """);
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN009")).IsTrue();
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task AsyncTaskBenchmarkMethod_NoDiagnostic()
+    {
+        var result = RunGenerator("""
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class GoodBench
+            {
+                [Benchmark]
+                public async Task WorkAsync() { await Task.CompletedTask; }
+            }
+            """);
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task StaticAsyncBenchmarkMethod_ReportsDiagnostic()
+    {
+        var result = RunGenerator("""
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class BadBench
+            {
+                [Benchmark]
+                public static async Task WorkAsync() { await Task.CompletedTask; }
+            }
+            """);
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN003")).IsTrue();
+    }
+
     private static GeneratorRunResultData RunGenerator(string source)
     {
         var compilation = CSharpCompilation.Create(

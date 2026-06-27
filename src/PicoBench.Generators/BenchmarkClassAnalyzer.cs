@@ -340,16 +340,23 @@ internal static class BenchmarkClassAnalyzer
         return false;
     }
 
-    private static bool IsValidBenchmarkMethod(IMethodSymbol method, Compilation compilation)
-    {
-        return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 } &&
-               (method.ReturnsVoid || IsTaskLike(method.ReturnType, compilation));
-    }
-
     private static bool IsValidLifecycleMethod(IMethodSymbol method, Compilation compilation)
     {
         return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 } &&
-               (method.ReturnsVoid || IsTaskLike(method.ReturnType, compilation));
+               (method.ReturnsVoid || IsTaskOrValueTask(method.ReturnType));
+    }
+
+    private static bool IsValidBenchmarkMethod(IMethodSymbol method, Compilation compilation)
+    {
+        return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 } &&
+               (method.ReturnsVoid || IsTaskOrValueTask(method.ReturnType));
+    }
+
+    private static bool IsTaskOrValueTask(ITypeSymbol type)
+    {
+        return type is INamedTypeSymbol named &&
+            (named.Name == "Task" || named.Name == "ValueTask" ||
+             named.Name.StartsWith("Task`") || named.Name.StartsWith("ValueTask`"));
     }
 
     private static void RegisterLifecycleMethod(
@@ -523,25 +530,6 @@ internal static class BenchmarkClassAnalyzer
     private static Location GetAttributeLocation(AttributeData attr, CancellationToken ct)
     {
         return attr.ApplicationSyntaxReference?.GetSyntax(ct).GetLocation() ?? Location.None;
-    }
-
-    private static bool IsTaskLike(ITypeSymbol type, Compilation compilation)
-    {
-        if (type is not INamedTypeSymbol named)
-            return false;
-
-        // Check via metadata name for both Task and Task<T>
-        var taskType = compilation.GetTypeByMetadataName("System.Threading.Tasks.Task");
-        var taskGenericType = compilation.GetTypeByMetadataName("System.Threading.Tasks.Task`1");
-        var valueTaskType = compilation.GetTypeByMetadataName("System.Threading.Tasks.ValueTask");
-        var valueTaskGenericType = compilation.GetTypeByMetadataName("System.Threading.Tasks.ValueTask`1");
-
-        return SymbolEqualityComparer.Default.Equals(named, taskType)
-            || (named.IsGenericType && SymbolEqualityComparer.Default.Equals(
-                named.ConstructUnboundGenericType(), taskGenericType))
-            || SymbolEqualityComparer.Default.Equals(named, valueTaskType)
-            || (named.IsGenericType && SymbolEqualityComparer.Default.Equals(
-                named.ConstructUnboundGenericType(), valueTaskGenericType));
     }
 }
 

@@ -13,7 +13,7 @@
     <!-- Main project reference -->
     <ProjectReference Include="..\..\src\PicoBench\PicoBench.csproj" />
     
-    <!-- Source generator project (as regular library, not analyzer) for testing internals -->
+    <!-- Source generator project (as regular library) for testing internals -->
     <ProjectReference Include="..\..\src\PicoBench.Generators\PicoBench.Generators.csproj" />
     
     <!-- TUnit testing framework -->

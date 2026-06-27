@@ -456,4 +456,72 @@ public class EmitterTests
 
         await Assert.That(code).Contains("new global::PicoBench.EnvironmentInfo()");
     }
+
+    // ─── Sync class generation ─────────────────────────────────────
+
+    [Test]
+    [Property("Category", "Emitter")]
+    public async Task Generate_SyncClass_ReturnsValueTaskFromResult()
+    {
+        var code = Emitter.Generate(MinimalModel());
+
+        await Assert.That(code).Contains("ValueTask.FromResult(__suite)");
+        await Assert.That(code).DoesNotContain("async ValueTask");
+        await Assert.That(code).DoesNotContain("await ");
+    }
+
+    // ─── Async class generation ────────────────────────────────────
+
+    [Test]
+    [Property("Category", "Emitter")]
+    public async Task Generate_AsyncClass_IsAsyncMethod()
+    {
+        var methods = ImmutableArray.Create(
+            new BenchmarkMethodModel { Name = "WorkAsync", IsAsync = true }
+        );
+        var model = MinimalModel(
+            methods: methods,
+            isAsync: true,
+            globalSetup: new LifecycleMethodInfo { Name = "Setup", IsAsync = true },
+            globalCleanup: new LifecycleMethodInfo { Name = "Cleanup", IsAsync = false }
+        );
+        var code = Emitter.Generate(model);
+
+        await Assert.That(code).Contains("async global::System.Threading.Tasks.ValueTask");
+        await Assert.That(code).Contains("await this.Setup();");
+        await Assert.That(code).Contains("this.Cleanup();");
+        await Assert.That(code).Contains("await global::PicoBench.Benchmark.RunAsync");
+    }
+
+    [Test]
+    [Property("Category", "Emitter")]
+    public async Task Generate_AsyncClassWithSyncBenchmark_WrapsInAsyncLambda()
+    {
+        var methods = ImmutableArray.Create(
+            new BenchmarkMethodModel { Name = "SyncWork", IsAsync = false }
+        );
+        var model = MinimalModel(methods: methods, isAsync: true);
+        var code = Emitter.Generate(model);
+
+        await Assert.That(code).Contains("async () => { this.SyncWork(); }");
+    }
+
+    [Test]
+    [Property("Category", "Emitter")]
+    public async Task Generate_AsyncClassWithAsyncIterSetup_WrapsCorrectly()
+    {
+        var methods = ImmutableArray.Create(
+            new BenchmarkMethodModel { Name = "Bench", IsAsync = true }
+        );
+        var model = MinimalModel(
+            methods: methods,
+            isAsync: true,
+            iterSetup: new LifecycleMethodInfo { Name = "IterSetup", IsAsync = true },
+            iterCleanup: new LifecycleMethodInfo { Name = "IterCleanup", IsAsync = false }
+        );
+        var code = Emitter.Generate(model);
+
+        await Assert.That(code).Contains("setup: async () => { await this.IterSetup(); }");
+        await Assert.That(code).Contains("teardown: async () => { this.IterCleanup(); }");
+    }
 }

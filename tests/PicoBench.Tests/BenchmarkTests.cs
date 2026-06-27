@@ -640,4 +640,65 @@ public class BenchmarkTests
 
         await Assert.That(comparison.Speedup).IsGreaterThan(0);
     }
+
+    // ─── Async benchmark tests ─────────────────────────────────────
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task RunAsync_SimpleOverload_ReturnsValidResult()
+    {
+        var result = await Benchmark.RunAsync(
+            "AsyncSimple",
+            async () => { await Task.CompletedTask; },
+            FastConfig);
+
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result.Name).IsEqualTo("AsyncSimple");
+        await Assert.That(result.SampleCount).IsEqualTo(2);
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task RunAsync_WithSetupAndTeardown_ExecutesThem()
+    {
+        int setupCount = 0;
+        int teardownCount = 0;
+
+        var result = await Benchmark.RunAsync(
+            "AsyncSetupTeardown",
+            async () => { await Task.CompletedTask; },
+            warmup: async () => { await Task.CompletedTask; },
+            FastConfig,
+            setup: () => { setupCount++; return Task.CompletedTask; },
+            teardown: () => { teardownCount++; return Task.CompletedTask; }
+        );
+
+        await Assert.That(result).IsNotNull();
+        await Assert.That(setupCount).IsEqualTo(FastConfig.SampleCount);
+        await Assert.That(teardownCount).IsEqualTo(FastConfig.SampleCount);
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task RunAsync_CancellationAbortsMidRun()
+    {
+        using var cts = new CancellationTokenSource();
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 0,
+            SampleCount = 10,
+            IterationsPerSample = 100,
+            CancellationToken = cts.Token
+        };
+
+        cts.CancelAfter(50);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await Benchmark.RunAsync(
+                "Cancelled",
+                async () => { await Task.Delay(1); },
+                config);
+        });
+    }
 }
