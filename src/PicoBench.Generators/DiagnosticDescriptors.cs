@@ -36,7 +36,7 @@ internal static class DiagnosticDescriptors
         new(
             id: "PBGEN004",
             title: "Invalid lifecycle method",
-            messageFormat: "{0} method '{1}' must be an instance, non-generic, parameterless void method",
+            messageFormat: "{0} method '{1}' must be an instance, non-generic, parameterless method returning void, Task, or ValueTask",
             category: "PicoBench.Generators",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true
@@ -79,6 +79,16 @@ internal static class DiagnosticDescriptors
             messageFormat: "[Params] value '{0}' is not compatible with member '{1}' of type '{2}'",
             category: "PicoBench.Generators",
             defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true
+        );
+
+    public static readonly DiagnosticDescriptor AsyncVoidLifecycleMethod =
+        new(
+            id: "PBGEN009",
+            title: "Async void lifecycle method",
+            messageFormat: "{0} method '{1}' is async void. It will not be awaited. Use Task or ValueTask.",
+            category: "PicoBench.Generators",
+            defaultSeverity: DiagnosticSeverity.Warning,
             isEnabledByDefault: true
         );
 }

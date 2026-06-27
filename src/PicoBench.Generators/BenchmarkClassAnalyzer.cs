@@ -81,6 +81,7 @@ internal static class BenchmarkClassAnalyzer
                         ref baselineMethod,
                         ref hasBenchmarkDeclarations,
                         methods,
+                        ctx.SemanticModel.Compilation,
                         ct
                     );
                     break;
@@ -125,6 +126,12 @@ internal static class BenchmarkClassAnalyzer
         if (diagnostics.Any(static d => d.Severity == DiagnosticSeverity.Error))
             return new GeneratorAnalysisResult(null, [..diagnostics]);
 
+        var isAsync = (globalSetup?.IsAsync ?? false)
+            || (globalCleanup?.IsAsync ?? false)
+            || (iterSetup?.IsAsync ?? false)
+            || (iterCleanup?.IsAsync ?? false)
+            || methods.Any(m => m.IsAsync);
+
         return new GeneratorAnalysisResult(
             new BenchmarkClassModel
             {
@@ -132,7 +139,7 @@ internal static class BenchmarkClassAnalyzer
                 ClassName = typeSymbol.Name,
                 AccessModifier = accessibility,
                 Description = description,
-                IsAsync = false,
+                IsAsync = isAsync,
                 GlobalSetupMethod = globalSetup,
                 GlobalCleanupMethod = globalCleanup,
                 IterationSetupMethod = iterSetup,
@@ -154,6 +161,7 @@ internal static class BenchmarkClassAnalyzer
         ref string? baselineMethod,
         ref bool hasBenchmarkDeclarations,
         ImmutableArray<BenchmarkMethodModel>.Builder methods,
+        Compilation compilation,
         CancellationToken ct
     )
     {
@@ -170,6 +178,7 @@ internal static class BenchmarkClassAnalyzer
                         diagnostics,
                         ref baselineMethod,
                         methods,
+                        compilation,
                         ct
                     );
                     break;
@@ -180,6 +189,7 @@ internal static class BenchmarkClassAnalyzer
                         ref globalSetup,
                         "[GlobalSetup]",
                         diagnostics,
+                        compilation,
                         ct
                     );
                     break;
@@ -190,6 +200,7 @@ internal static class BenchmarkClassAnalyzer
                         ref globalCleanup,
                         "[GlobalCleanup]",
                         diagnostics,
+                        compilation,
                         ct
                     );
                     break;
@@ -200,6 +211,7 @@ internal static class BenchmarkClassAnalyzer
                         ref iterSetup,
                         "[IterationSetup]",
                         diagnostics,
+                        compilation,
                         ct
                     );
                     break;
@@ -210,6 +222,7 @@ internal static class BenchmarkClassAnalyzer
                         ref iterCleanup,
                         "[IterationCleanup]",
                         diagnostics,
+                        compilation,
                         ct
                     );
                     break;
@@ -223,10 +236,11 @@ internal static class BenchmarkClassAnalyzer
         List<Diagnostic> diagnostics,
         ref string? baselineMethod,
         ImmutableArray<BenchmarkMethodModel>.Builder methods,
+        Compilation compilation,
         CancellationToken ct
     )
     {
-        if (!IsValidBenchmarkMethod(method))
+        if (!IsValidBenchmarkMethod(method, compilation))
         {
             diagnostics.Add(
                 Diagnostic.Create(
@@ -272,6 +286,7 @@ internal static class BenchmarkClassAnalyzer
             new BenchmarkMethodModel
             {
                 Name = method.Name,
+                IsAsync = !method.ReturnsVoid,
                 IsBaseline = isBaseline,
                 Description = methodDesc
             }
@@ -325,15 +340,16 @@ internal static class BenchmarkClassAnalyzer
         return false;
     }
 
-    private static bool IsValidBenchmarkMethod(IMethodSymbol method)
+    private static bool IsValidBenchmarkMethod(IMethodSymbol method, Compilation compilation)
     {
-        return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 };
+        return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 } &&
+               (method.ReturnsVoid || IsTaskLike(method.ReturnType, compilation));
     }
 
-    private static bool IsValidLifecycleMethod(IMethodSymbol method)
+    private static bool IsValidLifecycleMethod(IMethodSymbol method, Compilation compilation)
     {
-        return method
-            is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0, ReturnsVoid: true };
+        return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 } &&
+               (method.ReturnsVoid || IsTaskLike(method.ReturnType, compilation));
     }
 
     private static void RegisterLifecycleMethod(
@@ -342,10 +358,11 @@ internal static class BenchmarkClassAnalyzer
         ref LifecycleMethodInfo? target,
         string attributeName,
         List<Diagnostic> diagnostics,
+        Compilation compilation,
         CancellationToken ct
     )
     {
-        if (!IsValidLifecycleMethod(method))
+        if (!IsValidLifecycleMethod(method, compilation))
         {
             diagnostics.Add(
                 Diagnostic.Create(
@@ -356,6 +373,19 @@ internal static class BenchmarkClassAnalyzer
                 )
             );
             return;
+        }
+
+        // Check for async void (PBGEN009 warning)
+        if (method.IsAsync && method.ReturnsVoid)
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.AsyncVoidLifecycleMethod,
+                    GetAttributeLocation(attr, ct),
+                    attributeName,
+                    method.Name
+                )
+            );
         }
 
         if (target is not null)
@@ -370,7 +400,7 @@ internal static class BenchmarkClassAnalyzer
             return;
         }
 
-        target = new LifecycleMethodInfo { Name = method.Name };
+        target = new LifecycleMethodInfo { Name = method.Name, IsAsync = !method.ReturnsVoid };
     }
 
     private static AttributeData? FindAttribute(
@@ -493,6 +523,25 @@ internal static class BenchmarkClassAnalyzer
     private static Location GetAttributeLocation(AttributeData attr, CancellationToken ct)
     {
         return attr.ApplicationSyntaxReference?.GetSyntax(ct).GetLocation() ?? Location.None;
+    }
+
+    private static bool IsTaskLike(ITypeSymbol type, Compilation compilation)
+    {
+        if (type is not INamedTypeSymbol named)
+            return false;
+
+        // Check via metadata name for both Task and Task<T>
+        var taskType = compilation.GetTypeByMetadataName("System.Threading.Tasks.Task");
+        var taskGenericType = compilation.GetTypeByMetadataName("System.Threading.Tasks.Task`1");
+        var valueTaskType = compilation.GetTypeByMetadataName("System.Threading.Tasks.ValueTask");
+        var valueTaskGenericType = compilation.GetTypeByMetadataName("System.Threading.Tasks.ValueTask`1");
+
+        return SymbolEqualityComparer.Default.Equals(named, taskType)
+            || (named.IsGenericType && SymbolEqualityComparer.Default.Equals(
+                named.ConstructUnboundGenericType(), taskGenericType))
+            || SymbolEqualityComparer.Default.Equals(named, valueTaskType)
+            || (named.IsGenericType && SymbolEqualityComparer.Default.Equals(
+                named.ConstructUnboundGenericType(), valueTaskGenericType));
     }
 }
 
