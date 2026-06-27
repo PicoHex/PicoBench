@@ -81,7 +81,6 @@ internal static class BenchmarkClassAnalyzer
                         ref baselineMethod,
                         ref hasBenchmarkDeclarations,
                         methods,
-                        ctx.SemanticModel.Compilation,
                         ct
                     );
                     break;
@@ -161,7 +160,6 @@ internal static class BenchmarkClassAnalyzer
         ref string? baselineMethod,
         ref bool hasBenchmarkDeclarations,
         ImmutableArray<BenchmarkMethodModel>.Builder methods,
-        Compilation compilation,
         CancellationToken ct
     )
     {
@@ -178,7 +176,6 @@ internal static class BenchmarkClassAnalyzer
                         diagnostics,
                         ref baselineMethod,
                         methods,
-                        compilation,
                         ct
                     );
                     break;
@@ -189,7 +186,6 @@ internal static class BenchmarkClassAnalyzer
                         ref globalSetup,
                         "[GlobalSetup]",
                         diagnostics,
-                        compilation,
                         ct
                     );
                     break;
@@ -200,7 +196,6 @@ internal static class BenchmarkClassAnalyzer
                         ref globalCleanup,
                         "[GlobalCleanup]",
                         diagnostics,
-                        compilation,
                         ct
                     );
                     break;
@@ -211,7 +206,6 @@ internal static class BenchmarkClassAnalyzer
                         ref iterSetup,
                         "[IterationSetup]",
                         diagnostics,
-                        compilation,
                         ct
                     );
                     break;
@@ -222,7 +216,6 @@ internal static class BenchmarkClassAnalyzer
                         ref iterCleanup,
                         "[IterationCleanup]",
                         diagnostics,
-                        compilation,
                         ct
                     );
                     break;
@@ -236,11 +229,10 @@ internal static class BenchmarkClassAnalyzer
         List<Diagnostic> diagnostics,
         ref string? baselineMethod,
         ImmutableArray<BenchmarkMethodModel>.Builder methods,
-        Compilation compilation,
         CancellationToken ct
     )
     {
-        if (!IsValidBenchmarkMethod(method, compilation))
+        if (!IsValidBenchmarkMethod(method))
         {
             diagnostics.Add(
                 Diagnostic.Create(
@@ -340,13 +332,13 @@ internal static class BenchmarkClassAnalyzer
         return false;
     }
 
-    private static bool IsValidLifecycleMethod(IMethodSymbol method, Compilation compilation)
+    private static bool IsValidLifecycleMethod(IMethodSymbol method)
     {
         return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 } &&
                (method.ReturnsVoid || IsTaskOrValueTask(method.ReturnType));
     }
 
-    private static bool IsValidBenchmarkMethod(IMethodSymbol method, Compilation compilation)
+    private static bool IsValidBenchmarkMethod(IMethodSymbol method)
     {
         return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 } &&
                (method.ReturnsVoid || IsTaskOrValueTask(method.ReturnType));
@@ -365,11 +357,10 @@ internal static class BenchmarkClassAnalyzer
         ref LifecycleMethodInfo? target,
         string attributeName,
         List<Diagnostic> diagnostics,
-        Compilation compilation,
         CancellationToken ct
     )
     {
-        if (!IsValidLifecycleMethod(method, compilation))
+        if (!IsValidLifecycleMethod(method))
         {
             diagnostics.Add(
                 Diagnostic.Create(

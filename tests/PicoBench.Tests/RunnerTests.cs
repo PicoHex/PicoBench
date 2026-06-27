@@ -199,4 +199,16 @@ public class RunnerTests
         var sample = Runner.Time(1, () => { });
         await Assert.That(sample).IsNotNull();
     }
+
+    // ─── Async timing tests ────────────────────────────────────────
+
+    [Test]
+    [Property("Category", "Runner")]
+    public async Task TimeAsync_ReturnsGcInfoWithIsApproximateTrue()
+    {
+        var sample = await Runner.TimeAsync(10, async () => { await Task.CompletedTask; });
+
+        await Assert.That(sample.GcInfo).IsNotNull();
+        await Assert.That(sample.GcInfo!.IsApproximate).IsTrue();
+    }
 }

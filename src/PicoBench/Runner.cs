@@ -134,11 +134,24 @@ public static partial class Runner
         Stopwatch watch,
         ulong cycleStart,
         ulong cycleEnd,
-        long[] gcBaseline
+        long[] gcBaseline,
+        bool isGcApproximate = false
     )
     {
         var elapsedTicks = watch.ElapsedTicks;
         var elapsedNs = elapsedTicks * (1_000_000_000.0 / Stopwatch.Frequency);
+
+        var gcInfo = CalculateGcDelta(gcBaseline);
+        if (isGcApproximate && gcInfo != null)
+        {
+            gcInfo = new GcInfo
+            {
+                Gen0 = gcInfo.Gen0,
+                Gen1 = gcInfo.Gen1,
+                Gen2 = gcInfo.Gen2,
+                IsApproximate = true
+            };
+        }
 
         return new TimingSample
         {
@@ -146,7 +159,7 @@ public static partial class Runner
             ElapsedMilliseconds = elapsedNs / 1_000_000.0,
             ElapsedTicks = elapsedTicks,
             CpuCycles = cycleEnd - cycleStart,
-            GcInfo = CalculateGcDelta(gcBaseline)
+            GcInfo = gcInfo
         };
     }
 
@@ -181,24 +194,7 @@ public static partial class Runner
         if (teardown != null)
             await teardown();
 
-        var sample = CreateSample(watch, cycleStart, cycleEnd, gcBaseline);
-        if (sample.GcInfo != null)
-        {
-            return new TimingSample
-            {
-                ElapsedNanoseconds = sample.ElapsedNanoseconds,
-                ElapsedMilliseconds = sample.ElapsedMilliseconds,
-                ElapsedTicks = sample.ElapsedTicks,
-                CpuCycles = sample.CpuCycles,
-                GcInfo = new GcInfo
-                {
-                    Gen0 = sample.GcInfo.Gen0,
-                    Gen1 = sample.GcInfo.Gen1,
-                    Gen2 = sample.GcInfo.Gen2,
-                    IsApproximate = true
-                }
-            };
-        }
+        var sample = CreateSample(watch, cycleStart, cycleEnd, gcBaseline, isGcApproximate: true);
         return sample;
     }
 
