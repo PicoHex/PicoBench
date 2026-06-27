@@ -41,8 +41,8 @@ public class BenchmarkTests
             SampleCount = 2,
             IterationsPerSample = 1,
             AutoCalibrateIterations = true,
-            MinSampleTime = TimeSpan.FromMilliseconds(1),
-            MaxAutoIterationsPerSample = 1_000_000
+            MinSampleTime = TimeSpan.FromMilliseconds(5),
+            MaxAutoIterationsPerSample = 500_000
         };
 
     // ─── Run(string, Action, BenchmarkConfig?) ──────────────────────
@@ -219,7 +219,10 @@ public class BenchmarkTests
     [Property("Category", "Benchmark")]
     public async Task Run_AutoCalibrateIterations_IncreasesIterationsForFastWork()
     {
-        var result = Benchmark.Run("AutoCalibrated", () => { }, AutoCalibratedConfig);
+        // Use a lightweight operation that can't be constant-folded,
+        // so auto-calibration must scale up iterations to hit MinSampleTime
+        int counter = 0;
+        var result = Benchmark.Run("AutoCalibrated", () => { counter++; }, AutoCalibratedConfig);
 
         await Assert.That(result.IterationsPerSample).IsGreaterThan(1);
     }
