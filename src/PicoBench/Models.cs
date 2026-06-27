@@ -14,6 +14,9 @@ public sealed class GcInfo
     /// <summary>Gen2 collection count delta.</summary>
     public int Gen2 { get; init; }
 
+    /// <summary>When true, GC counts may include non-benchmark work (async modes).</summary>
+    public bool IsApproximate { get; init; }
+
     /// <summary>Total GC collections across all generations.</summary>
     public int Total => Gen0 + Gen1 + Gen2;
 
@@ -21,7 +24,8 @@ public sealed class GcInfo
     public bool IsZero => Gen0 == 0 && Gen1 == 0 && Gen2 == 0;
 
     /// <inheritdoc />
-    public override string ToString() => $"{Gen0}/{Gen1}/{Gen2}";
+    public override string ToString() =>
+        IsApproximate ? $"~{Gen0}/{Gen1}/{Gen2}" : $"{Gen0}/{Gen1}/{Gen2}";
 }
 
 /// <summary>
@@ -44,8 +48,11 @@ public sealed class TimingSample
     /// </summary>
     public ulong CpuCycles { get; init; }
 
-    /// <summary>GC collection counts during this sample.</summary>
-    public GcInfo GcInfo { get; init; } = new();
+    /// <summary>
+    /// GC collection counts during this sample.
+    /// <c>null</c> when GC data was not collected (CpuOnly async mode).
+    /// </summary>
+    public GcInfo? GcInfo { get; init; }
 }
 
 /// <summary>
@@ -86,8 +93,8 @@ public sealed class Statistics
     /// <summary>Average CPU cycles per operation.</summary>
     public double CpuCyclesPerOp { get; init; }
 
-    /// <summary>Aggregated GC info across all samples.</summary>
-    public GcInfo GcInfo { get; init; } = new GcInfo();
+    /// <summary>Aggregated GC info across all samples. Null when not collected.</summary>
+    public GcInfo? GcInfo { get; init; }
 
     /// <summary>Returns true when sample variation is high enough to question result stability.</summary>
     public bool HasHighVariance => RelativeStdDevPercent >= 10.0;

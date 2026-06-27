@@ -92,11 +92,10 @@ public class ModelsTests
 
     [Test]
     [Property("Category", "Models")]
-    public async Task TimingSample_DefaultGcInfo_IsNotNull()
+    public async Task TimingSample_DefaultGcInfo_IsNull()
     {
         var sample = new TimingSample();
-        await Assert.That(sample.GcInfo).IsNotNull();
-        await Assert.That(sample.GcInfo.IsZero).IsTrue();
+        await Assert.That(sample.GcInfo).IsNull();
     }
 
     [Test]
@@ -123,10 +122,10 @@ public class ModelsTests
 
     [Test]
     [Property("Category", "Models")]
-    public async Task Statistics_DefaultGcInfo_IsNotNull()
+    public async Task Statistics_DefaultGcInfo_IsNull()
     {
         var stats = new Statistics();
-        await Assert.That(stats.GcInfo).IsNotNull();
+        await Assert.That(stats.GcInfo).IsNull();
     }
 
     [Test]

@@ -18,15 +18,19 @@ internal static class StatisticsCalculator
         var sorted = (double[])perOpTimes.Clone();
         Array.Sort(sorted);
 
-        // Aggregate GC info
-        int gen0 = 0,
-            gen1 = 0,
-            gen2 = 0;
-        foreach (var sample in samples)
+        // Aggregate GC info (skip samples with null GcInfo)
+        var gcInfos = samples.Where(s => s.GcInfo != null).Select(s => s.GcInfo!).ToArray();
+        GcInfo? aggregatedGcInfo = null;
+
+        if (gcInfos.Length > 0)
         {
-            gen0 += sample.GcInfo.Gen0;
-            gen1 += sample.GcInfo.Gen1;
-            gen2 += sample.GcInfo.Gen2;
+            aggregatedGcInfo = new GcInfo
+            {
+                Gen0 = gcInfos.Sum(g => g.Gen0),
+                Gen1 = gcInfos.Sum(g => g.Gen1),
+                Gen2 = gcInfos.Sum(g => g.Gen2),
+                IsApproximate = gcInfos.Any(g => g.IsApproximate)
+            };
         }
 
         // Optimized statistics calculation
@@ -74,12 +78,7 @@ internal static class StatisticsCalculator
             StandardError = standardError,
             RelativeStdDevPercent = relativeStdDevPercent,
             CpuCyclesPerOp = cpuCyclesAvg,
-            GcInfo = new GcInfo
-            {
-                Gen0 = gen0,
-                Gen1 = gen1,
-                Gen2 = gen2
-            }
+            GcInfo = aggregatedGcInfo
         };
     }
 

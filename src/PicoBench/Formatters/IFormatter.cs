@@ -210,8 +210,10 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     /// <summary>
     /// Format GC generation counts as <c>gen0/gen1/gen2</c>.
     /// </summary>
-    protected static string FormatGcInfo(GcInfo gc)
+    protected static string FormatGcInfo(GcInfo? gc)
     {
+        if (gc is null)
+            return "N/A";
         return $"{gc.Gen0}/{gc.Gen1}/{gc.Gen2}";
     }
 

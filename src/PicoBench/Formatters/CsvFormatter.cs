@@ -185,9 +185,9 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
             values.AddRange(
 
                 [
-                    s.GcInfo.Gen0.ToString(CultureInfo.InvariantCulture),
-                    s.GcInfo.Gen1.ToString(CultureInfo.InvariantCulture),
-                    s.GcInfo.Gen2.ToString(CultureInfo.InvariantCulture)
+                    s.GcInfo?.Gen0.ToString(CultureInfo.InvariantCulture) ?? "0",
+                    s.GcInfo?.Gen1.ToString(CultureInfo.InvariantCulture) ?? "0",
+                    s.GcInfo?.Gen2.ToString(CultureInfo.InvariantCulture) ?? "0"
                 ]
             );
         }
@@ -282,9 +282,9 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
             values.AddRange(
 
                 [
-                    stats.GcInfo.Gen0.ToString(CultureInfo.InvariantCulture),
-                    stats.GcInfo.Gen1.ToString(CultureInfo.InvariantCulture),
-                    stats.GcInfo.Gen2.ToString(CultureInfo.InvariantCulture)
+                    stats.GcInfo?.Gen0.ToString(CultureInfo.InvariantCulture) ?? "0",
+                    stats.GcInfo?.Gen1.ToString(CultureInfo.InvariantCulture) ?? "0",
+                    stats.GcInfo?.Gen2.ToString(CultureInfo.InvariantCulture) ?? "0"
                 ]
             );
         }
