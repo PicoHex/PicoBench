@@ -1,13 +1,14 @@
 namespace PicoBench.Generators;
 
 /// <summary>
-/// Generates the partial class source code implementing <c>IBenchmarkClass.RunBenchmarks</c>.
+/// Generates the partial class source code implementing <c>IBenchmarkClass.RunBenchmarksAsync</c>.
 /// All types in emitted code use <c>global::</c> qualification to avoid namespace conflicts.
 /// </summary>
 internal static class Emitter
 {
     private const string Bench = "global::PicoBench";
     private const string SystemAction = "global::System.Action";
+    private const string ValueTaskType = "global::System.Threading.Tasks.ValueTask";
 
     public static string Generate(BenchmarkClassModel model)
     {
@@ -40,10 +41,10 @@ internal static class Emitter
         var m1 = indent + "    "; // method indent
         var m2 = m1 + "    "; // body indent
 
-        // ── RunBenchmarks method ─────────────────────────────────────
+        // ── RunBenchmarksAsync method ─────────────────────────────────
         sb.AppendLine($"{m1}/// <inheritdoc/>");
         sb.AppendLine(
-            $"{m1}public {Bench}.BenchmarkSuite RunBenchmarks({Bench}.BenchmarkConfig? config = null)"
+            $"{m1}public {ValueTaskType}<{Bench}.BenchmarkSuite> RunBenchmarksAsync({Bench}.BenchmarkConfig? config = null)"
         );
         sb.AppendLine($"{m1}{{");
 
@@ -81,7 +82,7 @@ internal static class Emitter
         // ── GlobalSetup ──────────────────────────────────────────────
         if (model.GlobalSetupMethod is not null)
         {
-            sb.AppendLine($"{bodyIndent}this.{model.GlobalSetupMethod}();");
+            sb.AppendLine($"{bodyIndent}this.{model.GlobalSetupMethod.Name}();");
             sb.AppendLine();
         }
 
@@ -100,10 +101,10 @@ internal static class Emitter
                 );
 
                 var setupArg = hasIterSetup
-                    ? $"({SystemAction})(() => this.{model.IterationSetupMethod}())"
+                    ? $"({SystemAction})(() => this.{model.IterationSetupMethod!.Name}())"
                     : "null";
                 var teardownArg = hasIterCleanup
-                    ? $"({SystemAction})(() => this.{model.IterationCleanupMethod}())"
+                    ? $"({SystemAction})(() => this.{model.IterationCleanupMethod!.Name}())"
                     : "null";
 
                 sb.AppendLine($"{bodyIndent}var __r_{method.Name} = {Bench}.Benchmark.Run(");
@@ -149,7 +150,7 @@ internal static class Emitter
         // ── GlobalCleanup ────────────────────────────────────────────
         if (model.GlobalCleanupMethod is not null)
         {
-            sb.AppendLine($"{bodyIndent}this.{model.GlobalCleanupMethod}();");
+            sb.AppendLine($"{bodyIndent}this.{model.GlobalCleanupMethod.Name}();");
             sb.AppendLine();
         }
 
@@ -170,13 +171,14 @@ internal static class Emitter
             : "null";
 
         sb.AppendLine($"{m2}__sw.Stop();");
-        sb.AppendLine($"{m2}return new {Bench}.BenchmarkSuite(");
+        sb.AppendLine($"{m2}var __suite = new {Bench}.BenchmarkSuite(");
         sb.AppendLine($"{m2}    \"{EscapeRaw(model.ClassName)}\",");
         sb.AppendLine($"{m2}    new {Bench}.EnvironmentInfo(),");
         sb.AppendLine($"{m2}    __results,");
         sb.AppendLine($"{m2}    __sw.Elapsed,");
         sb.AppendLine($"{m2}    description: {descExpr},");
         sb.AppendLine($"{m2}    comparisons: __comparisons);");
+        sb.AppendLine($"{m2}return {ValueTaskType}.FromResult(__suite);");
 
         // ── Close method / class / namespace ─────────────────────────
         sb.AppendLine($"{m1}}}");

@@ -1,6 +1,32 @@
 namespace PicoBench.Generators;
 
 /// <summary>
+/// Describes a lifecycle method (GlobalSetup/GlobalCleanup/IterationSetup/IterationCleanup).
+/// </summary>
+internal sealed class LifecycleMethodInfo : IEquatable<LifecycleMethodInfo>
+{
+    public string Name { get; init; } = "";
+    public bool IsAsync { get; init; }
+
+    public bool Equals(LifecycleMethodInfo? other)
+    {
+        if (other is null)
+            return false;
+        return Name == other.Name && IsAsync == other.IsAsync;
+    }
+
+    public override bool Equals(object? obj) => Equals(obj as LifecycleMethodInfo);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            return (Name.GetHashCode() * 397) ^ IsAsync.GetHashCode();
+        }
+    }
+}
+
+/// <summary>
 /// Describes a benchmark class discovered by the source generator.
 /// All members are value-comparable to support incremental generator caching.
 /// </summary>
@@ -10,10 +36,11 @@ internal sealed class BenchmarkClassModel : IEquatable<BenchmarkClassModel>
     public string ClassName { get; init; } = "";
     public string AccessModifier { get; init; } = "public";
     public string? Description { get; init; }
-    public string? GlobalSetupMethod { get; init; }
-    public string? GlobalCleanupMethod { get; init; }
-    public string? IterationSetupMethod { get; init; }
-    public string? IterationCleanupMethod { get; init; }
+    public bool IsAsync { get; init; }
+    public LifecycleMethodInfo? GlobalSetupMethod { get; init; }
+    public LifecycleMethodInfo? GlobalCleanupMethod { get; init; }
+    public LifecycleMethodInfo? IterationSetupMethod { get; init; }
+    public LifecycleMethodInfo? IterationCleanupMethod { get; init; }
     public ImmutableArray<BenchmarkMethodModel> Methods { get; init; } =
         ImmutableArray<BenchmarkMethodModel>.Empty;
     public ImmutableArray<ParamsPropertyModel> ParamsProperties { get; init; } =
@@ -29,12 +56,22 @@ internal sealed class BenchmarkClassModel : IEquatable<BenchmarkClassModel>
             && ClassName == other.ClassName
             && AccessModifier == other.AccessModifier
             && Description == other.Description
-            && GlobalSetupMethod == other.GlobalSetupMethod
-            && GlobalCleanupMethod == other.GlobalCleanupMethod
-            && IterationSetupMethod == other.IterationSetupMethod
-            && IterationCleanupMethod == other.IterationCleanupMethod
+            && IsAsync == other.IsAsync
+            && LifecycleEquals(GlobalSetupMethod, other.GlobalSetupMethod)
+            && LifecycleEquals(GlobalCleanupMethod, other.GlobalCleanupMethod)
+            && LifecycleEquals(IterationSetupMethod, other.IterationSetupMethod)
+            && LifecycleEquals(IterationCleanupMethod, other.IterationCleanupMethod)
             && Methods.SequenceEqual(other.Methods)
             && ParamsProperties.SequenceEqual(other.ParamsProperties);
+    }
+
+    private static bool LifecycleEquals(LifecycleMethodInfo? left, LifecycleMethodInfo? right)
+    {
+        if (left is null && right is null)
+            return true;
+        if (left is null || right is null)
+            return false;
+        return left.Equals(right);
     }
 
     public override bool Equals(object? obj) => Equals(obj as BenchmarkClassModel);
@@ -48,6 +85,7 @@ internal sealed class BenchmarkClassModel : IEquatable<BenchmarkClassModel>
             hash = hash * 31 + ClassName.GetHashCode();
             hash = hash * 31 + AccessModifier.GetHashCode();
             hash = hash * 31 + (Description?.GetHashCode() ?? 0);
+            hash = hash * 31 + IsAsync.GetHashCode();
             hash = hash * 31 + (GlobalSetupMethod?.GetHashCode() ?? 0);
             hash = hash * 31 + (GlobalCleanupMethod?.GetHashCode() ?? 0);
             hash = hash * 31 + (IterationSetupMethod?.GetHashCode() ?? 0);
@@ -65,6 +103,7 @@ internal sealed class BenchmarkClassModel : IEquatable<BenchmarkClassModel>
 internal sealed class BenchmarkMethodModel : IEquatable<BenchmarkMethodModel>
 {
     public string Name { get; init; } = "";
+    public bool IsAsync { get; init; }
     public bool IsBaseline { get; init; }
     public string? Description { get; init; }
 
@@ -73,6 +112,7 @@ internal sealed class BenchmarkMethodModel : IEquatable<BenchmarkMethodModel>
         if (other is null)
             return false;
         return Name == other.Name
+            && IsAsync == other.IsAsync
             && IsBaseline == other.IsBaseline
             && Description == other.Description;
     }
@@ -85,6 +125,7 @@ internal sealed class BenchmarkMethodModel : IEquatable<BenchmarkMethodModel>
         {
             var hash = 17;
             hash = hash * 31 + Name.GetHashCode();
+            hash = hash * 31 + IsAsync.GetHashCode();
             hash = hash * 31 + IsBaseline.GetHashCode();
             hash = hash * 31 + (Description?.GetHashCode() ?? 0);
             return hash;

@@ -55,10 +55,10 @@ internal static class BenchmarkClassAnalyzer
                 description = desc;
         }
 
-        string? globalSetup = null;
-        string? globalCleanup = null;
-        string? iterSetup = null;
-        string? iterCleanup = null;
+        LifecycleMethodInfo? globalSetup = null;
+        LifecycleMethodInfo? globalCleanup = null;
+        LifecycleMethodInfo? iterSetup = null;
+        LifecycleMethodInfo? iterCleanup = null;
         string? baselineMethod = null;
         var hasBenchmarkDeclarations = false;
         var methods = ImmutableArray.CreateBuilder<BenchmarkMethodModel>();
@@ -132,6 +132,7 @@ internal static class BenchmarkClassAnalyzer
                 ClassName = typeSymbol.Name,
                 AccessModifier = accessibility,
                 Description = description,
+                IsAsync = false,
                 GlobalSetupMethod = globalSetup,
                 GlobalCleanupMethod = globalCleanup,
                 IterationSetupMethod = iterSetup,
@@ -146,10 +147,10 @@ internal static class BenchmarkClassAnalyzer
     private static void AnalyzeMethod(
         IMethodSymbol method,
         List<Diagnostic> diagnostics,
-        ref string? globalSetup,
-        ref string? globalCleanup,
-        ref string? iterSetup,
-        ref string? iterCleanup,
+        ref LifecycleMethodInfo? globalSetup,
+        ref LifecycleMethodInfo? globalCleanup,
+        ref LifecycleMethodInfo? iterSetup,
+        ref LifecycleMethodInfo? iterCleanup,
         ref string? baselineMethod,
         ref bool hasBenchmarkDeclarations,
         ImmutableArray<BenchmarkMethodModel>.Builder methods,
@@ -338,7 +339,7 @@ internal static class BenchmarkClassAnalyzer
     private static void RegisterLifecycleMethod(
         IMethodSymbol method,
         AttributeData attr,
-        ref string? target,
+        ref LifecycleMethodInfo? target,
         string attributeName,
         List<Diagnostic> diagnostics,
         CancellationToken ct
@@ -369,7 +370,7 @@ internal static class BenchmarkClassAnalyzer
             return;
         }
 
-        target = method.Name;
+        target = new LifecycleMethodInfo { Name = method.Name };
     }
 
     private static AttributeData? FindAttribute(

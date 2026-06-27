@@ -218,10 +218,11 @@ public class ModelsTests
         string? ns = "NS",
         string accessModifier = "public",
         string? description = null,
-        string? globalSetup = null,
-        string? globalCleanup = null,
-        string? iterSetup = null,
-        string? iterCleanup = null,
+        LifecycleMethodInfo? globalSetup = null,
+        LifecycleMethodInfo? globalCleanup = null,
+        LifecycleMethodInfo? iterSetup = null,
+        LifecycleMethodInfo? iterCleanup = null,
+        bool isAsync = false,
         ImmutableArray<BenchmarkMethodModel>? methods = null,
         ImmutableArray<ParamsPropertyModel>? paramsProps = null
     )
@@ -232,6 +233,7 @@ public class ModelsTests
             ClassName = className,
             AccessModifier = accessModifier,
             Description = description,
+            IsAsync = isAsync,
             GlobalSetupMethod = globalSetup,
             GlobalCleanupMethod = globalCleanup,
             IterationSetupMethod = iterSetup,
@@ -306,8 +308,8 @@ public class ModelsTests
     [Property("Category", "Models")]
     public async Task BenchmarkClassModel_DifferentGlobalSetup_AreNotEqual()
     {
-        var a = CreateModel(globalSetup: "SetupA");
-        var b = CreateModel(globalSetup: "SetupB");
+        var a = CreateModel(globalSetup: new LifecycleMethodInfo { Name = "SetupA" });
+        var b = CreateModel(globalSetup: new LifecycleMethodInfo { Name = "SetupB" });
 
         await Assert.That(a.Equals(b)).IsFalse();
     }
@@ -316,8 +318,8 @@ public class ModelsTests
     [Property("Category", "Models")]
     public async Task BenchmarkClassModel_DifferentGlobalCleanup_AreNotEqual()
     {
-        var a = CreateModel(globalCleanup: "CleanA");
-        var b = CreateModel(globalCleanup: "CleanB");
+        var a = CreateModel(globalCleanup: new LifecycleMethodInfo { Name = "CleanA" });
+        var b = CreateModel(globalCleanup: new LifecycleMethodInfo { Name = "CleanB" });
 
         await Assert.That(a.Equals(b)).IsFalse();
     }
@@ -326,8 +328,8 @@ public class ModelsTests
     [Property("Category", "Models")]
     public async Task BenchmarkClassModel_DifferentIterSetup_AreNotEqual()
     {
-        var a = CreateModel(iterSetup: "IA");
-        var b = CreateModel(iterSetup: "IB");
+        var a = CreateModel(iterSetup: new LifecycleMethodInfo { Name = "IA" });
+        var b = CreateModel(iterSetup: new LifecycleMethodInfo { Name = "IB" });
 
         await Assert.That(a.Equals(b)).IsFalse();
     }
@@ -336,8 +338,8 @@ public class ModelsTests
     [Property("Category", "Models")]
     public async Task BenchmarkClassModel_DifferentIterCleanup_AreNotEqual()
     {
-        var a = CreateModel(iterCleanup: "CA");
-        var b = CreateModel(iterCleanup: "CB");
+        var a = CreateModel(iterCleanup: new LifecycleMethodInfo { Name = "CA" });
+        var b = CreateModel(iterCleanup: new LifecycleMethodInfo { Name = "CB" });
 
         await Assert.That(a.Equals(b)).IsFalse();
     }

@@ -9,10 +9,11 @@ public class EmitterTests
         string? ns = null,
         string accessModifier = "public",
         string? description = null,
-        string? globalSetup = null,
-        string? globalCleanup = null,
-        string? iterSetup = null,
-        string? iterCleanup = null,
+        LifecycleMethodInfo? globalSetup = null,
+        LifecycleMethodInfo? globalCleanup = null,
+        LifecycleMethodInfo? iterSetup = null,
+        LifecycleMethodInfo? iterCleanup = null,
+        bool isAsync = false,
         ImmutableArray<BenchmarkMethodModel>? methods = null,
         ImmutableArray<ParamsPropertyModel>? paramsProps = null
     )
@@ -23,6 +24,7 @@ public class EmitterTests
             ClassName = className,
             AccessModifier = accessModifier,
             Description = description,
+            IsAsync = isAsync,
             GlobalSetupMethod = globalSetup,
             GlobalCleanupMethod = globalCleanup,
             IterationSetupMethod = iterSetup,
@@ -65,7 +67,7 @@ public class EmitterTests
     {
         var code = Emitter.Generate(MinimalModel());
 
-        await Assert.That(code).Contains("public global::PicoBench.BenchmarkSuite RunBenchmarks(");
+        await Assert.That(code).Contains("RunBenchmarksAsync(");
     }
 
     [Test]
@@ -83,7 +85,8 @@ public class EmitterTests
     {
         var code = Emitter.Generate(MinimalModel());
 
-        await Assert.That(code).Contains("return new global::PicoBench.BenchmarkSuite(");
+        await Assert.That(code).Contains("var __suite = new global::PicoBench.BenchmarkSuite(");
+        await Assert.That(code).Contains("ValueTask.FromResult(__suite)");
     }
 
     // ─── Namespace handling ─────────────────────────────────────────
@@ -226,7 +229,7 @@ public class EmitterTests
     [Property("Category", "Emitter")]
     public async Task Generate_WithGlobalSetup_CallsSetupMethod()
     {
-        var code = Emitter.Generate(MinimalModel(globalSetup: "Setup"));
+        var code = Emitter.Generate(MinimalModel(globalSetup: new LifecycleMethodInfo { Name = "Setup" }));
 
         await Assert.That(code).Contains("this.Setup();");
     }
@@ -235,7 +238,7 @@ public class EmitterTests
     [Property("Category", "Emitter")]
     public async Task Generate_WithGlobalCleanup_CallsCleanupMethod()
     {
-        var code = Emitter.Generate(MinimalModel(globalCleanup: "Cleanup"));
+        var code = Emitter.Generate(MinimalModel(globalCleanup: new LifecycleMethodInfo { Name = "Cleanup" }));
 
         await Assert.That(code).Contains("this.Cleanup();");
     }
@@ -257,7 +260,7 @@ public class EmitterTests
     [Property("Category", "Emitter")]
     public async Task Generate_WithIterationSetup_PassesSetupDelegate()
     {
-        var code = Emitter.Generate(MinimalModel(iterSetup: "IterSetup"));
+        var code = Emitter.Generate(MinimalModel(iterSetup: new LifecycleMethodInfo { Name = "IterSetup" }));
 
         await Assert.That(code).Contains("setup: (global::System.Action)(() => this.IterSetup())");
     }
@@ -266,7 +269,7 @@ public class EmitterTests
     [Property("Category", "Emitter")]
     public async Task Generate_WithIterationCleanup_PassesTeardownDelegate()
     {
-        var code = Emitter.Generate(MinimalModel(iterCleanup: "IterCleanup"));
+        var code = Emitter.Generate(MinimalModel(iterCleanup: new LifecycleMethodInfo { Name = "IterCleanup" }));
 
         await Assert
             .That(code)
@@ -277,7 +280,7 @@ public class EmitterTests
     [Property("Category", "Emitter")]
     public async Task Generate_WithIterationSetupOnly_TeardownIsNull()
     {
-        var code = Emitter.Generate(MinimalModel(iterSetup: "IterSetup", iterCleanup: null));
+        var code = Emitter.Generate(MinimalModel(iterSetup: new LifecycleMethodInfo { Name = "IterSetup" }, iterCleanup: null));
 
         await Assert.That(code).Contains("teardown: null");
     }
@@ -286,7 +289,7 @@ public class EmitterTests
     [Property("Category", "Emitter")]
     public async Task Generate_WithIterationCleanupOnly_SetupIsNull()
     {
-        var code = Emitter.Generate(MinimalModel(iterSetup: null, iterCleanup: "IterCleanup"));
+        var code = Emitter.Generate(MinimalModel(iterSetup: null, iterCleanup: new LifecycleMethodInfo { Name = "IterCleanup" }));
 
         await Assert.That(code).Contains("setup: null");
     }
@@ -402,10 +405,10 @@ public class EmitterTests
             MinimalModel(
                 ns: "My.Namespace",
                 description: "Full test",
-                globalSetup: "Setup",
-                globalCleanup: "Cleanup",
-                iterSetup: "IterSetup",
-                iterCleanup: "IterCleanup",
+                globalSetup: new LifecycleMethodInfo { Name = "Setup" },
+                globalCleanup: new LifecycleMethodInfo { Name = "Cleanup" },
+                iterSetup: new LifecycleMethodInfo { Name = "IterSetup" },
+                iterCleanup: new LifecycleMethodInfo { Name = "IterCleanup" },
                 methods: methods,
                 paramsProps: paramsProps
             )
