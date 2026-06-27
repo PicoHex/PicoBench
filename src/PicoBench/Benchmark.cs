@@ -265,5 +265,171 @@ public static class Benchmark
         return iterations;
     }
 
+    /// <summary>
+    /// Run an async benchmark with the given action.
+    /// </summary>
+    public static Task<BenchmarkResult> RunAsync(
+        string name,
+        Func<Task> action,
+        BenchmarkConfig? config = null)
+    {
+        ValidateName(name, nameof(name));
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+
+        return RunAsync(name, action, warmup: action, config);
+    }
+
+    /// <summary>
+    /// Run an async benchmark with separate warmup, setup, and teardown.
+    /// </summary>
+    public static async Task<BenchmarkResult> RunAsync(
+        string name,
+        Func<Task> action,
+        Func<Task>? warmup,
+        BenchmarkConfig? config = null,
+        Func<Task>? setup = null,
+        Func<Task>? teardown = null)
+    {
+        ValidateName(name, nameof(name));
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+
+        config ??= BenchmarkConfig.Default;
+        Runner.Initialize();
+
+        // Warmup phase
+        if (warmup != null && config.WarmupIterations > 0)
+        {
+            for (int i = 0; i < config.WarmupIterations; i++)
+                await warmup();
+        }
+
+        return await CollectAndBuildAsync(
+            name,
+            config,
+            iterations => DispatchAsyncTiming(iterations, action, setup, teardown, config)
+        );
+    }
+
+    /// <summary>
+    /// Run an async benchmark with state passed.
+    /// </summary>
+    public static async Task<BenchmarkResult> RunAsync<TState>(
+        string name,
+        TState state,
+        Func<TState, Task> action,
+        Func<TState, Task>? warmup = null,
+        BenchmarkConfig? config = null)
+    {
+        ValidateName(name, nameof(name));
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+
+        config ??= BenchmarkConfig.Default;
+        Runner.Initialize();
+
+        if (warmup != null && config.WarmupIterations > 0)
+        {
+            for (int i = 0; i < config.WarmupIterations; i++)
+                await warmup(state);
+        }
+        else if (config.WarmupIterations > 0)
+        {
+            for (int i = 0; i < config.WarmupIterations; i++)
+                await action(state);
+        }
+
+        return await CollectAndBuildAsync(
+            name,
+            config,
+            iterations => DispatchAsyncTiming(
+                iterations,
+                async () => await action(state),
+                setup: null,
+                teardown: null,
+                config
+            )
+        );
+    }
+
+    private static Task<TimingSample> DispatchAsyncTiming(
+        int iterations,
+        Func<Task> action,
+        Func<Task>? setup,
+        Func<Task>? teardown,
+        BenchmarkConfig config)
+    {
+        return config.TimingMode == AsyncTimingMode.CpuOnly
+            ? Runner.TimeCpuAsync(iterations, action, setup, teardown)
+            : Runner.TimeAsync(iterations, action, setup, teardown);
+    }
+
+    private static async Task<BenchmarkResult> CollectAndBuildAsync(
+        string name,
+        BenchmarkConfig config,
+        Func<int, Task<TimingSample>> sampleFuncAsync)
+    {
+        ForceGc();
+
+        var iterationsPerSample = await ResolveIterationsPerSampleAsync(config, sampleFuncAsync);
+
+        var samples = new TimingSample[config.SampleCount];
+        var perOpTimes = new double[config.SampleCount];
+        var perOpCycles = new double[config.SampleCount];
+
+        for (var s = 0; s < config.SampleCount; s++)
+        {
+            config.CancellationToken.ThrowIfCancellationRequested();
+
+            var sample = await sampleFuncAsync(iterationsPerSample);
+            samples[s] = sample;
+            perOpTimes[s] = sample.ElapsedNanoseconds / iterationsPerSample;
+            perOpCycles[s] = (double)sample.CpuCycles / iterationsPerSample;
+        }
+
+        var stats = StatisticsCalculator.Compute(perOpTimes, perOpCycles, samples);
+
+        return new BenchmarkResult(
+            name: name,
+            statistics: stats,
+            iterationsPerSample: iterationsPerSample,
+            sampleCount: config.SampleCount,
+            samples: config.RetainSamples ? samples : null
+        );
+    }
+
+    private static async Task<int> ResolveIterationsPerSampleAsync(
+        BenchmarkConfig config,
+        Func<int, Task<TimingSample>> sampleFuncAsync)
+    {
+        if (!config.AutoCalibrateIterations)
+            return config.IterationsPerSample;
+
+        var iterations = config.IterationsPerSample;
+        var minSampleNanoseconds = Math.Max(
+            config.MinSampleTime.TotalMilliseconds * 1_000_000.0, 1.0);
+
+        while (iterations < config.MaxAutoIterationsPerSample)
+        {
+            var sample = await sampleFuncAsync(iterations);
+            if (sample.ElapsedNanoseconds >= minSampleNanoseconds)
+                return iterations;
+
+            var scale = minSampleNanoseconds / Math.Max(sample.ElapsedNanoseconds, 1.0);
+            var nextIterations = (int)Math.Min(
+                config.MaxAutoIterationsPerSample,
+                Math.Max(iterations + 1,
+                    Math.Ceiling(iterations * Math.Min(Math.Max(scale, 2.0), 10.0)))
+            );
+
+            if (nextIterations <= iterations)
+                break;
+            iterations = nextIterations;
+        }
+
+        return iterations;
+    }
+
     #endregion
 }

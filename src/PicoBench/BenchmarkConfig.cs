@@ -81,6 +81,12 @@ public sealed class BenchmarkConfig
                     );
     } = 1_000_000_000;
 
+    /// <summary>Timing strategy for async benchmarks. Sync benchmarks ignore this.</summary>
+    public AsyncTimingMode TimingMode { get; init; } = AsyncTimingMode.WallClock;
+
+    /// <summary>CancellationToken to allow early termination of a benchmark run.</summary>
+    public CancellationToken CancellationToken { get; init; } = CancellationToken.None;
+
     /// <summary>Default configuration suitable for most benchmarks.</summary>
     public static BenchmarkConfig Default => _default ??= new BenchmarkConfig();
 
@@ -104,4 +110,16 @@ public sealed class BenchmarkConfig
             AutoCalibrateIterations = true,
             MinSampleTime = TimeSpan.FromMilliseconds(1)
         };
+}
+
+/// <summary>
+/// Controls how async benchmark timing is measured.
+/// </summary>
+public enum AsyncTimingMode
+{
+    /// <summary>Full wall-clock duration including await suspension time. Default.</summary>
+    WallClock = 0,
+
+    /// <summary>CPU execution time only (Process.TotalProcessorTime), excluding I/O wait.</summary>
+    CpuOnly = 1
 }

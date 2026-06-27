@@ -149,4 +149,96 @@ public static partial class Runner
             GcInfo = CalculateGcDelta(gcBaseline)
         };
     }
+
+    /// <summary>
+    /// Run an async timed measurement with optional setup and teardown.
+    /// Uses Stopwatch for wall-clock timing. GC info is marked approximate.
+    /// </summary>
+    public static async Task<TimingSample> TimeAsync(
+        int iterations,
+        Func<Task> action,
+        Func<Task>? setup = null,
+        Func<Task>? teardown = null)
+    {
+        ValidateIterations(iterations);
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+
+        var gcBaseline = GetGcBaselineCounts();
+
+        if (setup != null)
+            await setup();
+
+        var cycleStart = GetCpuCycles();
+        var watch = Stopwatch.StartNew();
+
+        for (int i = 0; i < iterations; i++)
+            await action();
+
+        watch.Stop();
+        var cycleEnd = GetCpuCycles();
+
+        if (teardown != null)
+            await teardown();
+
+        var sample = CreateSample(watch, cycleStart, cycleEnd, gcBaseline);
+        if (sample.GcInfo != null)
+        {
+            return new TimingSample
+            {
+                ElapsedNanoseconds = sample.ElapsedNanoseconds,
+                ElapsedMilliseconds = sample.ElapsedMilliseconds,
+                ElapsedTicks = sample.ElapsedTicks,
+                CpuCycles = sample.CpuCycles,
+                GcInfo = new GcInfo
+                {
+                    Gen0 = sample.GcInfo.Gen0,
+                    Gen1 = sample.GcInfo.Gen1,
+                    Gen2 = sample.GcInfo.Gen2,
+                    IsApproximate = true
+                }
+            };
+        }
+        return sample;
+    }
+
+    /// <summary>
+    /// Run an async timed measurement using Process.TotalProcessorTime.
+    /// Only CPU execution time is counted; I/O wait time is excluded.
+    /// GC info is not collected (null).
+    /// </summary>
+    public static async Task<TimingSample> TimeCpuAsync(
+        int iterations,
+        Func<Task> action,
+        Func<Task>? setup = null,
+        Func<Task>? teardown = null)
+    {
+        ValidateIterations(iterations);
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+
+        if (setup != null)
+            await setup();
+
+        var cpuBefore = Process.GetCurrentProcess().TotalProcessorTime;
+        var cycleStart = GetCpuCycles();
+
+        for (int i = 0; i < iterations; i++)
+            await action();
+
+        var cycleEnd = GetCpuCycles();
+        var cpuDelta = Process.GetCurrentProcess().TotalProcessorTime - cpuBefore;
+
+        if (teardown != null)
+            await teardown();
+
+        return new TimingSample
+        {
+            ElapsedNanoseconds = cpuDelta.Ticks * 100.0, // 1 tick = 100ns
+            ElapsedMilliseconds = cpuDelta.TotalMilliseconds,
+            ElapsedTicks = cpuDelta.Ticks,
+            CpuCycles = cycleEnd - cycleStart,
+            GcInfo = null
+        };
+    }
 }

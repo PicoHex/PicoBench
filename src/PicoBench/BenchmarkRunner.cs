@@ -2,23 +2,41 @@ namespace PicoBench;
 
 /// <summary>
 /// Static helper for running attribute-based benchmarks.
-/// Provides a generic <c>Run{T}</c> entry point that is fully AOT-compatible
-/// because the source generator implements <see cref="IBenchmarkClass"/> on the benchmark type.
+/// Provides generic <c>Run{T}</c> and <c>RunAsync{T}</c> entry points.
 /// </summary>
 public static class BenchmarkRunner
 {
     /// <summary>
     /// Creates a new instance of <typeparamref name="T"/> and runs all benchmarks
-    /// declared with <see cref="BenchmarkAttribute"/>.
+    /// asynchronously.
     /// </summary>
     /// <typeparam name="T">
     /// A <see cref="BenchmarkClassAttribute"/>-decorated partial class.
-    /// The source generator implements <see cref="IBenchmarkClass"/> automatically.
     /// </typeparam>
-    /// <param name="config">
-    /// Optional configuration. Defaults to <see cref="BenchmarkConfig.Default"/> when <c>null</c>.
-    /// </param>
-    /// <returns>A <see cref="BenchmarkSuite"/> containing all results and comparisons.</returns>
+    /// <returns>A task that completes with the <see cref="BenchmarkSuite"/>.</returns>
+    public static async Task<BenchmarkSuite> RunAsync<T>(BenchmarkConfig? config = null)
+        where T : IBenchmarkClass, new()
+    {
+        return await new T().RunBenchmarksAsync(config);
+    }
+
+    /// <summary>
+    /// Runs all benchmarks on an existing instance asynchronously.
+    /// </summary>
+    public static async Task<BenchmarkSuite> RunAsync<T>(T instance,
+        BenchmarkConfig? config = null)
+        where T : IBenchmarkClass
+    {
+        if (instance == null)
+            throw new ArgumentNullException(nameof(instance));
+
+        return await instance.RunBenchmarksAsync(config);
+    }
+
+    /// <summary>
+    /// Synchronous shortcut. Blocks the calling thread —
+    /// avoid in UI/SynchronizationContext environments.
+    /// </summary>
     public static BenchmarkSuite Run<T>(BenchmarkConfig? config = null)
         where T : IBenchmarkClass, new()
     {
@@ -26,14 +44,15 @@ public static class BenchmarkRunner
     }
 
     /// <summary>
-    /// Runs all benchmarks on an existing instance.
-    /// Useful when the benchmark class requires constructor arguments or pre-configured state.
+    /// Synchronous shortcut. Blocks the calling thread —
+    /// avoid in UI/SynchronizationContext environments.
     /// </summary>
     public static BenchmarkSuite Run<T>(T instance, BenchmarkConfig? config = null)
         where T : IBenchmarkClass
     {
-        return instance == null
-            ? throw new ArgumentNullException(nameof(instance))
-            : instance.RunBenchmarksAsync(config).GetAwaiter().GetResult();
+        if (instance == null)
+            throw new ArgumentNullException(nameof(instance));
+
+        return instance.RunBenchmarksAsync(config).GetAwaiter().GetResult();
     }
 }
