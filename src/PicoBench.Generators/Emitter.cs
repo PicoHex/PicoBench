@@ -13,6 +13,7 @@ internal static class Emitter
     public static string Generate(BenchmarkClassModel model)
     {
         var sb = new StringBuilder();
+        var isAsync = model.IsAsync;
         var hasParams = model.ParamsProperties.Length > 0;
         var hasIterSetup = model.IterationSetupMethod is not null;
         var hasIterCleanup = model.IterationCleanupMethod is not null;
@@ -42,9 +43,10 @@ internal static class Emitter
         var m2 = m1 + "    "; // body indent
 
         // ── RunBenchmarksAsync method ─────────────────────────────────
+        var asyncKeyword = isAsync ? "async " : "";
         sb.AppendLine($"{m1}/// <inheritdoc/>");
         sb.AppendLine(
-            $"{m1}public {ValueTaskType}<{Bench}.BenchmarkSuite> RunBenchmarksAsync({Bench}.BenchmarkConfig? config = null)"
+            $"{m1}public {asyncKeyword}{ValueTaskType}<{Bench}.BenchmarkSuite> RunBenchmarksAsync({Bench}.BenchmarkConfig? config = null)"
         );
         sb.AppendLine($"{m1}{{");
 
@@ -82,7 +84,8 @@ internal static class Emitter
         // ── GlobalSetup ──────────────────────────────────────────────
         if (model.GlobalSetupMethod is not null)
         {
-            sb.AppendLine($"{bodyIndent}this.{model.GlobalSetupMethod.Name}();");
+            var awaitPrefix = model.GlobalSetupMethod.IsAsync ? "await " : "";
+            sb.AppendLine($"{bodyIndent}{awaitPrefix}this.{model.GlobalSetupMethod.Name}();");
             sb.AppendLine();
         }
 
@@ -93,27 +96,13 @@ internal static class Emitter
                 ? $"$\"{method.Name} [{{__paramLabel}}]\""
                 : $"\"{method.Name}\"";
 
-            if (hasIterSetup || hasIterCleanup)
+            if (isAsync)
             {
-                // Need the full Benchmark.Run overload with setup/teardown
-                sb.AppendLine(
-                    $"{bodyIndent}{SystemAction} __action_{method.Name} = () => this.{method.Name}();"
-                );
-
-                var setupArg = hasIterSetup
-                    ? $"({SystemAction})(() => this.{model.IterationSetupMethod!.Name}())"
-                    : "null";
-                var teardownArg = hasIterCleanup
-                    ? $"({SystemAction})(() => this.{model.IterationCleanupMethod!.Name}())"
-                    : "null";
-
-                sb.AppendLine($"{bodyIndent}var __r_{method.Name} = {Bench}.Benchmark.Run(");
-                sb.AppendLine($"{bodyIndent}    {nameExpr},");
-                sb.AppendLine($"{bodyIndent}    __action_{method.Name},");
-                sb.AppendLine($"{bodyIndent}    warmup: __action_{method.Name},");
-                sb.AppendLine($"{bodyIndent}    config: config,");
-                sb.AppendLine($"{bodyIndent}    setup: {setupArg},");
-                sb.AppendLine($"{bodyIndent}    teardown: {teardownArg});");
+                EmitAsyncBenchmark(sb, model, method, bodyIndent, nameExpr, hasIterSetup, hasIterCleanup);
+            }
+            else if (hasIterSetup || hasIterCleanup)
+            {
+                EmitSyncBenchmarkWithIter(sb, model, method, bodyIndent, nameExpr, hasIterSetup, hasIterCleanup);
             }
             else
             {
@@ -150,7 +139,8 @@ internal static class Emitter
         // ── GlobalCleanup ────────────────────────────────────────────
         if (model.GlobalCleanupMethod is not null)
         {
-            sb.AppendLine($"{bodyIndent}this.{model.GlobalCleanupMethod.Name}();");
+            var awaitPrefix = model.GlobalCleanupMethod.IsAsync ? "await " : "";
+            sb.AppendLine($"{bodyIndent}{awaitPrefix}this.{model.GlobalCleanupMethod.Name}();");
             sb.AppendLine();
         }
 
@@ -178,7 +168,15 @@ internal static class Emitter
         sb.AppendLine($"{m2}    __sw.Elapsed,");
         sb.AppendLine($"{m2}    description: {descExpr},");
         sb.AppendLine($"{m2}    comparisons: __comparisons);");
-        sb.AppendLine($"{m2}return {ValueTaskType}.FromResult(__suite);");
+
+        if (isAsync)
+        {
+            sb.AppendLine($"{m2}return __suite;");
+        }
+        else
+        {
+            sb.AppendLine($"{m2}return {ValueTaskType}.FromResult(__suite);");
+        }
 
         // ── Close method / class / namespace ─────────────────────────
         sb.AppendLine($"{m1}}}");
@@ -188,6 +186,80 @@ internal static class Emitter
             sb.AppendLine("}");
 
         return sb.ToString();
+    }
+
+    private static void EmitSyncBenchmarkWithIter(
+        StringBuilder sb,
+        BenchmarkClassModel model,
+        BenchmarkMethodModel method,
+        string bodyIndent,
+        string nameExpr,
+        bool hasIterSetup,
+        bool hasIterCleanup)
+    {
+        sb.AppendLine(
+            $"{bodyIndent}{SystemAction} __action_{method.Name} = () => this.{method.Name}();"
+        );
+
+        var setupArg = hasIterSetup
+            ? $"({SystemAction})(() => this.{model.IterationSetupMethod!.Name}())"
+            : "null";
+        var teardownArg = hasIterCleanup
+            ? $"({SystemAction})(() => this.{model.IterationCleanupMethod!.Name}())"
+            : "null";
+
+        sb.AppendLine($"{bodyIndent}var __r_{method.Name} = {Bench}.Benchmark.Run(");
+        sb.AppendLine($"{bodyIndent}    {nameExpr},");
+        sb.AppendLine($"{bodyIndent}    __action_{method.Name},");
+        sb.AppendLine($"{bodyIndent}    warmup: __action_{method.Name},");
+        sb.AppendLine($"{bodyIndent}    config: config,");
+        sb.AppendLine($"{bodyIndent}    setup: {setupArg},");
+        sb.AppendLine($"{bodyIndent}    teardown: {teardownArg});");
+    }
+
+    private static void EmitAsyncBenchmark(
+        StringBuilder sb,
+        BenchmarkClassModel model,
+        BenchmarkMethodModel method,
+        string bodyIndent,
+        string nameExpr,
+        bool hasIterSetup,
+        bool hasIterCleanup)
+    {
+        // Always wrap in Func<Task> for async class
+        var wrap = method.IsAsync
+            ? $"async () => {{ await this.{method.Name}(); }}"
+            : $"async () => {{ this.{method.Name}(); }}";
+
+        var setupArg = GetAsyncIterArg(model.IterationSetupMethod);
+        var teardownArg = GetAsyncIterArg(model.IterationCleanupMethod);
+
+        if (hasIterSetup || hasIterCleanup)
+        {
+            sb.AppendLine($"{bodyIndent}var __r_{method.Name} = await {Bench}.Benchmark.RunAsync(");
+            sb.AppendLine($"{bodyIndent}    {nameExpr},");
+            sb.AppendLine($"{bodyIndent}    {wrap},");
+            sb.AppendLine($"{bodyIndent}    warmup: {wrap},");
+            sb.AppendLine($"{bodyIndent}    config: config,");
+            sb.AppendLine($"{bodyIndent}    setup: {setupArg},");
+            sb.AppendLine($"{bodyIndent}    teardown: {teardownArg});");
+        }
+        else
+        {
+            sb.AppendLine(
+                $"{bodyIndent}var __r_{method.Name} = await {Bench}.Benchmark.RunAsync({nameExpr}, {wrap}, config);"
+            );
+        }
+    }
+
+    private static string GetAsyncIterArg(LifecycleMethodInfo? method)
+    {
+        if (method is null)
+            return "null";
+
+        return method.IsAsync
+            ? $"async () => {{ await this.{method.Name}(); }}"
+            : $"async () => {{ this.{method.Name}(); }}";
     }
 
     private static string EscapeStringLiteral(string s) => $"\"{EscapeRaw(s)}\"";
