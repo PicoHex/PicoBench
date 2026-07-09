@@ -27,7 +27,7 @@ public class RunnerTests
         var sample = Runner.Time(10, () => { });
 
         await Assert.That(sample.GcInfo).IsNotNull();
-        await Assert.That(sample.GcInfo.Gen0).IsGreaterThanOrEqualTo(0);
+        await Assert.That(sample.GcInfo!.Gen0).IsGreaterThanOrEqualTo(0);
     }
 
     // ─── Time(int, Action, Action?, Action?) — with setup/teardown ──
@@ -206,9 +206,44 @@ public class RunnerTests
     [Property("Category", "Runner")]
     public async Task TimeAsync_ReturnsGcInfoWithIsApproximateTrue()
     {
-        var sample = await Runner.TimeAsync(10, async () => { await Task.CompletedTask; });
+        var sample = await Runner.TimeAsync(
+            10,
+            async () =>
+            {
+                await Task.CompletedTask;
+            }
+        );
 
         await Assert.That(sample.GcInfo).IsNotNull();
         await Assert.That(sample.GcInfo!.IsApproximate).IsTrue();
     }
+
+    [Test]
+    [Property("Category", "Runner")]
+    public async Task TimeAsync_WithState_PassesStateCorrectly()
+    {
+        int sum = 0;
+        await Runner.TimeAsync(
+            3,
+            10,
+            async s =>
+            {
+                sum += s;
+                await Task.CompletedTask;
+            }
+        );
+
+        await Assert.That(sum).IsEqualTo(30);
+    }
+
+    [Test]
+    [Property("Category", "Runner")]
+#pragma warning disable CS8619 // Task<T> nullability mismatch in assertion lambda
+    public async Task TimeAsync_WithState_ZeroIterations_ThrowsArgumentOutOfRangeException()
+    {
+        await Assert
+            .That(() => Runner.TimeAsync<int>(0, 42, s => Task.CompletedTask))
+            .Throws<ArgumentOutOfRangeException>();
+    }
+#pragma warning restore CS8619
 }

@@ -150,7 +150,7 @@ public class SummaryFormatterTests
             WinsLabel = "victories",
             GroupByCategory = false,
             ShowDetailedTable = false,
-            ShowDuration = false
+            ShowDuration = false,
         };
 
         var summary = SummaryFormatter.Format(comparisons, null, options);
@@ -215,12 +215,12 @@ public class SummaryFormatterTests
         {
             IncludePercentiles = false,
             BaselineLabel = "Control",
-            CandidateLabel = "Test"
+            CandidateLabel = "Test",
         };
         var summaryOptions = new SummaryOptions
         {
             ShowDetailedTable = true,
-            TableOptions = tableOptions
+            TableOptions = tableOptions,
         };
 
         var summary = SummaryFormatter.Format(comparisons, null, summaryOptions);
@@ -264,8 +264,8 @@ public class SummaryFormatterTests
     [Property("SubCategory", "Summary")]
     public async Task Format_WithNullComparisons_ThrowsArgumentNullException()
     {
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => SummaryFormatter.Format(null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => SummaryFormatter.Format(null!))
         );
     }
 
@@ -274,8 +274,8 @@ public class SummaryFormatterTests
     [Property("SubCategory", "Summary")]
     public async Task Write_WithNullComparisons_ThrowsArgumentNullException()
     {
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => SummaryFormatter.Write((IEnumerable<ComparisonResult>)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => SummaryFormatter.Write((IEnumerable<ComparisonResult>)null!))
         );
     }
 
@@ -284,8 +284,8 @@ public class SummaryFormatterTests
     [Property("SubCategory", "Summary")]
     public async Task Write_WithNullSuite_ThrowsArgumentNullException()
     {
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => SummaryFormatter.Write((BenchmarkSuite)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => SummaryFormatter.Write((BenchmarkSuite)null!))
         );
     }
 
@@ -311,7 +311,7 @@ public class SummaryFormatterTests
         var comparisons = new List<ComparisonResult>
         {
             new("Comp1", baseline, candidate1),
-            new("Comp2", baseline, candidate2)
+            new("Comp2", baseline, candidate2),
         };
 
         var summary = SummaryFormatter.Format(comparisons);
@@ -346,15 +346,15 @@ public class SummaryFormatterTests
         }
     }
 
-    public static IEnumerable<IEnumerable<ComparisonResult>> GetEdgeCaseComparisons()
+    public static IEnumerable<Func<IEnumerable<ComparisonResult>>> GetEdgeCaseComparisons()
     {
-        yield return ComparisonResultFactory.GetEdgeCases().ToList();
-        yield return new List<ComparisonResult> { ComparisonResultFactory.WithHighSpeedup() };
-        yield return new List<ComparisonResult> { ComparisonResultFactory.WithSlowCandidate() };
-        yield return new List<ComparisonResult>
-        {
-            ComparisonResultFactory.WithNearZeroCandidateTime()
-        };
-        yield return new List<ComparisonResult> { ComparisonResultFactory.WithBothNearZeroTimes() };
+        yield return () => ComparisonResultFactory.GetEdgeCases().ToList();
+        yield return () => new List<ComparisonResult> { ComparisonResultFactory.WithHighSpeedup() };
+        yield return () =>
+            new List<ComparisonResult> { ComparisonResultFactory.WithSlowCandidate() };
+        yield return () =>
+            new List<ComparisonResult> { ComparisonResultFactory.WithNearZeroCandidateTime() };
+        yield return () =>
+            new List<ComparisonResult> { ComparisonResultFactory.WithBothNearZeroTimes() };
     }
 }

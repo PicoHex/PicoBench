@@ -7,7 +7,7 @@
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <NoWarn>$(NoWarn);RS2007</NoWarn>
+        <NoWarn>$(NoWarn);RS2007;RS2008</NoWarn>
 
         <!-- This project is consumed as an analyzer, not a regular library -->
         <IncludeBuildOutput>false</IncludeBuildOutput>

@@ -6,14 +6,13 @@ namespace PicoBench.Tests;
 /// </summary>
 public class StatisticsCalculatorTests
 {
-    private static readonly BenchmarkConfig FastConfig =
-        new()
-        {
-            WarmupIterations = 1,
-            SampleCount = 5,
-            IterationsPerSample = 2,
-            RetainSamples = true
-        };
+    private static readonly BenchmarkConfig FastConfig = new()
+    {
+        WarmupIterations = 1,
+        SampleCount = 5,
+        IterationsPerSample = 2,
+        RetainSamples = true,
+    };
 
     // ─── Basic statistics are populated ─────────────────────────────
 
@@ -81,9 +80,9 @@ public class StatisticsCalculatorTests
         var result = Benchmark.Run("GcInfoTest", () => { }, FastConfig);
 
         await Assert.That(result.Statistics.GcInfo).IsNotNull();
-        await Assert.That(result.Statistics.GcInfo.Gen0).IsGreaterThanOrEqualTo(0);
-        await Assert.That(result.Statistics.GcInfo.Gen1).IsGreaterThanOrEqualTo(0);
-        await Assert.That(result.Statistics.GcInfo.Gen2).IsGreaterThanOrEqualTo(0);
+        await Assert.That(result.Statistics.GcInfo!.Gen0).IsGreaterThanOrEqualTo(0);
+        await Assert.That(result.Statistics.GcInfo!.Gen1).IsGreaterThanOrEqualTo(0);
+        await Assert.That(result.Statistics.GcInfo!.Gen2).IsGreaterThanOrEqualTo(0);
     }
 
     // ─── CPU cycles ─────────────────────────────────────────────────
@@ -134,7 +133,7 @@ public class StatisticsCalculatorTests
         {
             WarmupIterations = 0,
             SampleCount = 1,
-            IterationsPerSample = 1
+            IterationsPerSample = 1,
         };
 
         var result = Benchmark.Run("SingleSample", () => { }, singleConfig);
@@ -153,7 +152,7 @@ public class StatisticsCalculatorTests
         {
             WarmupIterations = 1,
             SampleCount = 3,
-            IterationsPerSample = 2
+            IterationsPerSample = 2,
         };
 
         var result = Benchmark.Run("MeasurableWork", () => Thread.SpinWait(100), config);

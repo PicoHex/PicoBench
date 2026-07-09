@@ -91,11 +91,7 @@ public static class Benchmark
                 action(state);
         }
 
-        return CollectAndBuild(
-            name,
-            config,
-            iterations => Runner.Time(iterations, state, action)
-        );
+        return CollectAndBuild(name, config, iterations => Runner.Time(iterations, state, action));
     }
 
     /// <summary>
@@ -243,7 +239,10 @@ public static class Benchmark
             return config.IterationsPerSample;
 
         var iterations = config.IterationsPerSample;
-        var minSampleNanoseconds = Math.Max(config.MinSampleTime.TotalMilliseconds * 1_000_000.0, 1.0);
+        var minSampleNanoseconds = Math.Max(
+            config.MinSampleTime.TotalMilliseconds * 1_000_000.0,
+            1.0
+        );
 
         while (iterations < config.MaxAutoIterationsPerSample)
         {
@@ -252,10 +251,14 @@ public static class Benchmark
                 return iterations;
 
             var scale = minSampleNanoseconds / Math.Max(sample.ElapsedNanoseconds, 1.0);
-            var nextIterations = (int)Math.Min(
-                config.MaxAutoIterationsPerSample,
-                Math.Max(iterations + 1, Math.Ceiling(iterations * Math.Min(Math.Max(scale, 2.0), 10.0)))
-            );
+            var nextIterations = (int)
+                Math.Min(
+                    config.MaxAutoIterationsPerSample,
+                    Math.Max(
+                        iterations + 1,
+                        Math.Ceiling(iterations * Math.Min(Math.Max(scale, 2.0), 10.0))
+                    )
+                );
 
             if (nextIterations <= iterations)
                 break;
@@ -271,7 +274,8 @@ public static class Benchmark
     public static Task<BenchmarkResult> RunAsync(
         string name,
         Func<Task> action,
-        BenchmarkConfig? config = null)
+        BenchmarkConfig? config = null
+    )
     {
         ValidateName(name, nameof(name));
         if (action == null)
@@ -289,7 +293,8 @@ public static class Benchmark
         Func<Task>? warmup,
         BenchmarkConfig? config = null,
         Func<Task>? setup = null,
-        Func<Task>? teardown = null)
+        Func<Task>? teardown = null
+    )
     {
         ValidateName(name, nameof(name));
         if (action == null)
@@ -320,7 +325,8 @@ public static class Benchmark
         TState state,
         Func<TState, Task> action,
         Func<TState, Task>? warmup = null,
-        BenchmarkConfig? config = null)
+        BenchmarkConfig? config = null
+    )
     {
         ValidateName(name, nameof(name));
         if (action == null)
@@ -343,13 +349,9 @@ public static class Benchmark
         return await CollectAndBuildAsync(
             name,
             config,
-            iterations => DispatchAsyncTiming(
-                iterations,
-                async () => await action(state),
-                setup: null,
-                teardown: null,
-                config
-            )
+            config.TimingMode == AsyncTimingMode.CpuOnly
+                ? iterations => Runner.TimeCpuAsync(iterations, state, action)
+                : iterations => Runner.TimeAsync(iterations, state, action)
         );
     }
 
@@ -358,7 +360,8 @@ public static class Benchmark
         Func<Task> action,
         Func<Task>? setup,
         Func<Task>? teardown,
-        BenchmarkConfig config)
+        BenchmarkConfig config
+    )
     {
         return config.TimingMode == AsyncTimingMode.CpuOnly
             ? Runner.TimeCpuAsync(iterations, action, setup, teardown)
@@ -368,7 +371,8 @@ public static class Benchmark
     private static async Task<BenchmarkResult> CollectAndBuildAsync(
         string name,
         BenchmarkConfig config,
-        Func<int, Task<TimingSample>> sampleFuncAsync)
+        Func<int, Task<TimingSample>> sampleFuncAsync
+    )
     {
         ForceGc();
 
@@ -401,14 +405,17 @@ public static class Benchmark
 
     private static async Task<int> ResolveIterationsPerSampleAsync(
         BenchmarkConfig config,
-        Func<int, Task<TimingSample>> sampleFuncAsync)
+        Func<int, Task<TimingSample>> sampleFuncAsync
+    )
     {
         if (!config.AutoCalibrateIterations)
             return config.IterationsPerSample;
 
         var iterations = config.IterationsPerSample;
         var minSampleNanoseconds = Math.Max(
-            config.MinSampleTime.TotalMilliseconds * 1_000_000.0, 1.0);
+            config.MinSampleTime.TotalMilliseconds * 1_000_000.0,
+            1.0
+        );
 
         while (iterations < config.MaxAutoIterationsPerSample)
         {
@@ -417,11 +424,14 @@ public static class Benchmark
                 return iterations;
 
             var scale = minSampleNanoseconds / Math.Max(sample.ElapsedNanoseconds, 1.0);
-            var nextIterations = (int)Math.Min(
-                config.MaxAutoIterationsPerSample,
-                Math.Max(iterations + 1,
-                    Math.Ceiling(iterations * Math.Min(Math.Max(scale, 2.0), 10.0)))
-            );
+            var nextIterations = (int)
+                Math.Min(
+                    config.MaxAutoIterationsPerSample,
+                    Math.Max(
+                        iterations + 1,
+                        Math.Ceiling(iterations * Math.Min(Math.Max(scale, 2.0), 10.0))
+                    )
+                );
 
             if (nextIterations <= iterations)
                 break;

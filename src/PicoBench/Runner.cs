@@ -6,8 +6,10 @@ namespace PicoBench;
 /// </summary>
 public static partial class Runner
 {
-    private static readonly Lazy<bool> Initializer =
-        new(InitializeCore, LazyThreadSafetyMode.ExecutionAndPublication);
+    private static readonly Lazy<bool> Initializer = new(
+        InitializeCore,
+        LazyThreadSafetyMode.ExecutionAndPublication
+    );
 
     /// <summary>
     /// Initialize the runner by setting process/thread priority and warming up timing APIs.
@@ -149,7 +151,7 @@ public static partial class Runner
                 Gen0 = gcInfo.Gen0,
                 Gen1 = gcInfo.Gen1,
                 Gen2 = gcInfo.Gen2,
-                IsApproximate = true
+                IsApproximate = true,
             };
         }
 
@@ -159,7 +161,7 @@ public static partial class Runner
             ElapsedMilliseconds = elapsedNs / 1_000_000.0,
             ElapsedTicks = elapsedTicks,
             CpuCycles = cycleEnd - cycleStart,
-            GcInfo = gcInfo
+            GcInfo = gcInfo,
         };
     }
 
@@ -171,7 +173,8 @@ public static partial class Runner
         int iterations,
         Func<Task> action,
         Func<Task>? setup = null,
-        Func<Task>? teardown = null)
+        Func<Task>? teardown = null
+    )
     {
         ValidateIterations(iterations);
         if (action == null)
@@ -199,6 +202,34 @@ public static partial class Runner
     }
 
     /// <summary>
+    /// Run an async timed measurement with state passed (avoids closure allocation).
+    /// Uses Stopwatch for wall-clock timing. GC info is marked approximate.
+    /// </summary>
+    public static async Task<TimingSample> TimeAsync<TState>(
+        int iterations,
+        TState state,
+        Func<TState, Task> action
+    )
+    {
+        ValidateIterations(iterations);
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+
+        var gcBaseline = GetGcBaselineCounts();
+
+        var cycleStart = GetCpuCycles();
+        var watch = Stopwatch.StartNew();
+
+        for (int i = 0; i < iterations; i++)
+            await action(state);
+
+        watch.Stop();
+        var cycleEnd = GetCpuCycles();
+
+        return CreateSample(watch, cycleStart, cycleEnd, gcBaseline, isGcApproximate: true);
+    }
+
+    /// <summary>
     /// Run an async timed measurement using Process.TotalProcessorTime.
     /// Only CPU execution time is counted; I/O wait time is excluded.
     /// GC info is not collected (null).
@@ -207,7 +238,8 @@ public static partial class Runner
         int iterations,
         Func<Task> action,
         Func<Task>? setup = null,
-        Func<Task>? teardown = null)
+        Func<Task>? teardown = null
+    )
     {
         ValidateIterations(iterations);
         if (action == null)
@@ -234,7 +266,40 @@ public static partial class Runner
             ElapsedMilliseconds = cpuDelta.TotalMilliseconds,
             ElapsedTicks = cpuDelta.Ticks,
             CpuCycles = cycleEnd - cycleStart,
-            GcInfo = null
+            GcInfo = null,
+        };
+    }
+
+    /// <summary>
+    /// Run an async CPU-only timed measurement with state passed (avoids closure allocation).
+    /// GC info is not collected (null).
+    /// </summary>
+    public static async Task<TimingSample> TimeCpuAsync<TState>(
+        int iterations,
+        TState state,
+        Func<TState, Task> action
+    )
+    {
+        ValidateIterations(iterations);
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+
+        var cpuBefore = Process.GetCurrentProcess().TotalProcessorTime;
+        var cycleStart = GetCpuCycles();
+
+        for (int i = 0; i < iterations; i++)
+            await action(state);
+
+        var cycleEnd = GetCpuCycles();
+        var cpuDelta = Process.GetCurrentProcess().TotalProcessorTime - cpuBefore;
+
+        return new TimingSample
+        {
+            ElapsedNanoseconds = cpuDelta.Ticks * 100.0,
+            ElapsedMilliseconds = cpuDelta.TotalMilliseconds,
+            ElapsedTicks = cpuDelta.Ticks,
+            CpuCycles = cycleEnd - cycleStart,
+            GcInfo = null,
         };
     }
 }

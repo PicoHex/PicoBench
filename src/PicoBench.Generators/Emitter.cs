@@ -98,11 +98,27 @@ internal static class Emitter
 
             if (isAsync)
             {
-                EmitAsyncBenchmark(sb, model, method, bodyIndent, nameExpr, hasIterSetup, hasIterCleanup);
+                EmitAsyncBenchmark(
+                    sb,
+                    model,
+                    method,
+                    bodyIndent,
+                    nameExpr,
+                    hasIterSetup,
+                    hasIterCleanup
+                );
             }
             else if (hasIterSetup || hasIterCleanup)
             {
-                EmitSyncBenchmarkWithIter(sb, model, method, bodyIndent, nameExpr, hasIterSetup, hasIterCleanup);
+                EmitSyncBenchmarkWithIter(
+                    sb,
+                    model,
+                    method,
+                    bodyIndent,
+                    nameExpr,
+                    hasIterSetup,
+                    hasIterCleanup
+                );
             }
             else
             {
@@ -163,7 +179,16 @@ internal static class Emitter
         sb.AppendLine($"{m2}__sw.Stop();");
         sb.AppendLine($"{m2}var __suite = new {Bench}.BenchmarkSuite(");
         sb.AppendLine($"{m2}    \"{EscapeRaw(model.ClassName)}\",");
-        sb.AppendLine($"{m2}    new {Bench}.EnvironmentInfo(),");
+        sb.AppendLine($"{m2}    new {Bench}.EnvironmentInfo");
+        sb.AppendLine($"{m2}    {{");
+        sb.AppendLine($"{m2}#if NET8_0_OR_GREATER");
+        sb.AppendLine(
+            $"{m2}        ExecutionMode = global::System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported"
+        );
+        sb.AppendLine($"{m2}            ? {Bench}.RuntimeExecutionMode.Jit");
+        sb.AppendLine($"{m2}            : {Bench}.RuntimeExecutionMode.NativeAot,");
+        sb.AppendLine($"{m2}#endif");
+        sb.AppendLine($"{m2}    }},");
         sb.AppendLine($"{m2}    __results,");
         sb.AppendLine($"{m2}    __sw.Elapsed,");
         sb.AppendLine($"{m2}    description: {descExpr},");
@@ -195,7 +220,8 @@ internal static class Emitter
         string bodyIndent,
         string nameExpr,
         bool hasIterSetup,
-        bool hasIterCleanup)
+        bool hasIterCleanup
+    )
     {
         sb.AppendLine(
             $"{bodyIndent}{SystemAction} __action_{method.Name} = () => this.{method.Name}();"
@@ -224,7 +250,8 @@ internal static class Emitter
         string bodyIndent,
         string nameExpr,
         bool hasIterSetup,
-        bool hasIterCleanup)
+        bool hasIterCleanup
+    )
     {
         // Always wrap in Func<Task> for async class
         var wrap = method.IsAsync
@@ -264,10 +291,24 @@ internal static class Emitter
 
     private static string EscapeStringLiteral(string s) => $"\"{EscapeRaw(s)}\"";
 
-    private static string EscapeRaw(string s) =>
-        s.Replace("\\", "\\\\")
-            .Replace("\"", "\\\"")
-            .Replace("\r", "\\r")
-            .Replace("\n", "\\n")
-            .Replace("\t", "\\t");
+    private static string EscapeRaw(string s)
+    {
+        var sb = new StringBuilder(s.Length * 2); // worst-case: every char is a 2-char escape
+        foreach (var c in s)
+        {
+            sb.Append(
+                c switch
+                {
+                    '"' => "\\\"",
+                    '\\' => "\\\\",
+                    '\n' => "\\n",
+                    '\r' => "\\r",
+                    '\t' => "\\t",
+                    _ when c < 0x20 => $"\\u{(int)c:X4}",
+                    _ => c.ToString(),
+                }
+            );
+        }
+        return sb.ToString();
+    }
 }

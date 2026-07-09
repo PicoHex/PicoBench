@@ -9,41 +9,37 @@ public class BenchmarkTests
     /// <summary>
     /// Minimal config to keep tests fast.
     /// </summary>
-    private static readonly BenchmarkConfig FastConfig =
-        new()
-        {
-            WarmupIterations = 1,
-            SampleCount = 2,
-            IterationsPerSample = 3
-        };
+    private static readonly BenchmarkConfig FastConfig = new()
+    {
+        WarmupIterations = 1,
+        SampleCount = 2,
+        IterationsPerSample = 3,
+    };
 
-    private static readonly BenchmarkConfig FastConfigNoWarmup =
-        new()
-        {
-            WarmupIterations = 0,
-            SampleCount = 2,
-            IterationsPerSample = 3
-        };
+    private static readonly BenchmarkConfig FastConfigNoWarmup = new()
+    {
+        WarmupIterations = 0,
+        SampleCount = 2,
+        IterationsPerSample = 3,
+    };
 
-    private static readonly BenchmarkConfig FastConfigRetainSamples =
-        new()
-        {
-            WarmupIterations = 1,
-            SampleCount = 2,
-            IterationsPerSample = 3,
-            RetainSamples = true
-        };
+    private static readonly BenchmarkConfig FastConfigRetainSamples = new()
+    {
+        WarmupIterations = 1,
+        SampleCount = 2,
+        IterationsPerSample = 3,
+        RetainSamples = true,
+    };
 
-    private static readonly BenchmarkConfig AutoCalibratedConfig =
-        new()
-        {
-            WarmupIterations = 0,
-            SampleCount = 2,
-            IterationsPerSample = 1,
-            AutoCalibrateIterations = true,
-            MinSampleTime = TimeSpan.FromMilliseconds(5),
-            MaxAutoIterationsPerSample = 500_000
-        };
+    private static readonly BenchmarkConfig AutoCalibratedConfig = new()
+    {
+        WarmupIterations = 0,
+        SampleCount = 2,
+        IterationsPerSample = 1,
+        AutoCalibrateIterations = true,
+        MinSampleTime = TimeSpan.FromMilliseconds(5),
+        MaxAutoIterationsPerSample = 500_000,
+    };
 
     // ─── Run(string, Action, BenchmarkConfig?) ──────────────────────
 
@@ -222,7 +218,14 @@ public class BenchmarkTests
         // Use a lightweight operation that can't be constant-folded,
         // so auto-calibration must scale up iterations to hit MinSampleTime
         int counter = 0;
-        var result = Benchmark.Run("AutoCalibrated", () => { counter++; }, AutoCalibratedConfig);
+        var result = Benchmark.Run(
+            "AutoCalibrated",
+            () =>
+            {
+                counter++;
+            },
+            AutoCalibratedConfig
+        );
 
         await Assert.That(result.IterationsPerSample).IsGreaterThan(1);
     }
@@ -238,7 +241,7 @@ public class BenchmarkTests
             IterationsPerSample = 1,
             AutoCalibrateIterations = true,
             MinSampleTime = TimeSpan.FromSeconds(1),
-            MaxAutoIterationsPerSample = 128
+            MaxAutoIterationsPerSample = 128,
         };
 
         var result = Benchmark.Run("AutoCalibratedMax", () => { }, config);
@@ -356,7 +359,7 @@ public class BenchmarkTests
             WarmupIterations = 1,
             SampleCount = 3,
             IterationsPerSample = 2,
-            RetainSamples = true
+            RetainSamples = true,
         };
 
         var result = Benchmark.Run("RetainState", 0, s => { }, config: config);
@@ -422,14 +425,13 @@ public class BenchmarkTests
     public async Task RunScoped_NullAction_ThrowsArgumentNullException()
     {
         await Assert
-            .That(
-                () =>
-                    Benchmark.RunScoped(
-                        "Test",
-                        () => new TestScope(),
-                        (Action<TestScope>)null!,
-                        FastConfig
-                    )
+            .That(() =>
+                Benchmark.RunScoped(
+                    "Test",
+                    () => new TestScope(),
+                    (Action<TestScope>)null!,
+                    FastConfig
+                )
             )
             .Throws<ArgumentNullException>();
     }
@@ -652,8 +654,12 @@ public class BenchmarkTests
     {
         var result = await Benchmark.RunAsync(
             "AsyncSimple",
-            async () => { await Task.CompletedTask; },
-            FastConfig);
+            async () =>
+            {
+                await Task.CompletedTask;
+            },
+            FastConfig
+        );
 
         await Assert.That(result).IsNotNull();
         await Assert.That(result.Name).IsEqualTo("AsyncSimple");
@@ -669,11 +675,25 @@ public class BenchmarkTests
 
         var result = await Benchmark.RunAsync(
             "AsyncSetupTeardown",
-            async () => { await Task.CompletedTask; },
-            warmup: async () => { await Task.CompletedTask; },
+            async () =>
+            {
+                await Task.CompletedTask;
+            },
+            warmup: async () =>
+            {
+                await Task.CompletedTask;
+            },
             FastConfig,
-            setup: () => { setupCount++; return Task.CompletedTask; },
-            teardown: () => { teardownCount++; return Task.CompletedTask; }
+            setup: () =>
+            {
+                setupCount++;
+                return Task.CompletedTask;
+            },
+            teardown: () =>
+            {
+                teardownCount++;
+                return Task.CompletedTask;
+            }
         );
 
         await Assert.That(result).IsNotNull();
@@ -691,7 +711,7 @@ public class BenchmarkTests
             WarmupIterations = 0,
             SampleCount = 10,
             IterationsPerSample = 100,
-            CancellationToken = cts.Token
+            CancellationToken = cts.Token,
         };
 
         cts.CancelAfter(50);
@@ -700,8 +720,38 @@ public class BenchmarkTests
         {
             await Benchmark.RunAsync(
                 "Cancelled",
-                async () => { await Task.Delay(1); },
-                config);
+                async () =>
+                {
+                    await Task.Delay(1);
+                },
+                config
+            );
         });
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task RunAsync_WithState_CpuOnlyTimingMode_DisablesGcTracking()
+    {
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 0,
+            SampleCount = 2,
+            IterationsPerSample = 3,
+            TimingMode = AsyncTimingMode.CpuOnly,
+        };
+
+        var result = await Benchmark.RunAsync(
+            "CpuOnlyState",
+            0,
+            async s =>
+            {
+                await Task.CompletedTask;
+            },
+            config: config
+        );
+
+        // CpuOnly mode should produce null GcInfo (wall-clock should have non-null)
+        await Assert.That(result.Statistics.GcInfo).IsNull();
     }
 }

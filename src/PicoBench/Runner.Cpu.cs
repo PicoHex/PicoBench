@@ -25,8 +25,9 @@ public static partial class Runner
 
     internal static bool HasMeaningfulCpuCycles()
     {
-        return GetCpuCycleMeasurementKind() is CpuCycleMeasurementKind.ThreadCycles
-            or CpuCycleMeasurementKind.PerfEventCpuCycles;
+        return GetCpuCycleMeasurementKind()
+            is CpuCycleMeasurementKind.ThreadCycles
+                or CpuCycleMeasurementKind.PerfEventCpuCycles;
     }
 
     private static ulong GetCpuCycles()
@@ -72,7 +73,7 @@ public static partial class Runner
             Architecture.X86 => 336,
             Architecture.Arm64 => 241,
             Architecture.Arm => 364,
-            _ => -1
+            _ => -1,
         };
     }
 
@@ -159,7 +160,7 @@ public static partial class Runner
                 Type = PerfTypeHardware,
                 Size = (uint)Marshal.SizeOf<PerfEventAttr>(),
                 Config = PerfCountHwCpuCycles,
-                Flags = 0
+                Flags = 0,
             };
 
             var syscallNumber = GetPerfEventOpenSyscallNumber();
@@ -218,16 +219,6 @@ public static partial class Runner
 
     [DllImport("/usr/lib/libSystem.dylib")]
     private static extern ulong mach_absolute_time();
-
-    [DllImport("/usr/lib/libSystem.dylib")]
-    private static extern int mach_timebase_info(out MachTimebaseInfo info);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MachTimebaseInfo
-    {
-        public uint Numer;
-        public uint Denom;
-    }
 
     private static ulong GetMacOsMonotonicTime()
     {
