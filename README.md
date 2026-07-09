@@ -6,11 +6,11 @@
 [![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A lightweight, zero-dependency benchmarking library for .NET with **two complementary APIs**: an imperative API and an attribute-based, source-generated API that is fully **AOT-compatible**.
+A lightweight benchmarking library for .NET with **two complementary APIs**: an imperative API and an attribute-based, source-generated API that is fully **AOT-compatible**. No third-party dependencies — the only NuGet reference is a .NET BCL polyfill for `ValueTask<T>` on netstandard2.0.
 
 ## Features
 
-- **Zero Dependencies** - Pure .NET implementation, no external packages required
+- **Zero Third-Party Dependencies** — Only a single BCL polyfill (`System.Threading.Tasks.Extensions`) to backport `ValueTask<T>` to netstandard2.0. No external packages.
 - **Two APIs** - Imperative (`Benchmark.Run`) for ad-hoc tests; attribute-based (`[Benchmark]` + source generator) for structured suites
 - **AOT-Compatible Source Generator** - The incremental generator emits direct method calls with zero reflection at runtime
 - **Cross-Platform** - Full support for Windows, Linux, and macOS
@@ -373,7 +373,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 | Feature | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
-| Dependencies | 0 | Many |
+| Dependencies | 1 BCL polyfill | Many |
 | Package size | Tiny | Large |
 | Target framework | netstandard2.0 | net6.0+ |
 | AOT support | Source generator | Reflection-based |

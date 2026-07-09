@@ -2,11 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-Uma biblioteca de benchmarking leve e sem dependências para .NET com **duas APIs complementares**: uma API imperativa e uma API baseada em atributos, gerada por código fonte, totalmente **compatível com AOT**.
+Uma biblioteca de benchmarking leve para .NET com **duas APIs complementares**: uma API imperativa e uma API baseada em atributos, gerada por código fonte, totalmente **compatível com AOT**. Sem dependências de terceiros — a única referência NuGet é um polyfill BCL do .NET para `ValueTask<T>` no netstandard2.0.
 
 ## Características
 
-- **Zero Dependências** - Implementação pura .NET, nenhum pacote externo necessário
+- **Zero Dependências de Terceiros** — Apenas um polyfill BCL (`System.Threading.Tasks.Extensions`) para trazer `ValueTask<T>` ao netstandard2.0. Nenhum pacote externo.
 - **Duas APIs** - Imperativa (`Benchmark.Run`) para testes ad hoc; baseada em atributos (`[Benchmark]` + gerador de código fonte) para suites estruturadas
 - **Gerador de Código Fonte Compatível com AOT** - O gerador incremental emite chamadas de método diretas com zero reflexão em tempo de execução
 - **Multiplataforma** - Suporte total para Windows, Linux e macOS
@@ -369,7 +369,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 | Recurso | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
-| Dependências | 0 | Muitas |
+| Dependências | 1 polyfill BCL | Muitas |
 | Tamanho do pacote | Pequeno | Grande |
 | Framework de destino | netstandard2.0 | net6.0+ |
 | Suporte a AOT | Gerador de código fonte | Baseado em reflexão |
