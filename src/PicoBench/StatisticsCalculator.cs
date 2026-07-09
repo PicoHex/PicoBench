@@ -19,17 +19,34 @@ internal static class StatisticsCalculator
         Array.Sort(sorted);
 
         // Aggregate GC info (skip samples with null GcInfo)
-        var gcInfos = samples.Where(s => s.GcInfo != null).Select(s => s.GcInfo!).ToArray();
-        GcInfo? aggregatedGcInfo = null;
+        int gen0Sum = 0,
+            gen1Sum = 0,
+            gen2Sum = 0;
+        bool anyApproximate = false;
+        int gcInfoCount = 0;
 
-        if (gcInfos.Length > 0)
+        for (int i = 0; i < samples.Length; i++)
+        {
+            var gc = samples[i].GcInfo;
+            if (gc == null)
+                continue;
+            gen0Sum += gc.Gen0;
+            gen1Sum += gc.Gen1;
+            gen2Sum += gc.Gen2;
+            if (gc.IsApproximate)
+                anyApproximate = true;
+            gcInfoCount++;
+        }
+
+        GcInfo? aggregatedGcInfo = null;
+        if (gcInfoCount > 0)
         {
             aggregatedGcInfo = new GcInfo
             {
-                Gen0 = gcInfos.Sum(g => g.Gen0),
-                Gen1 = gcInfos.Sum(g => g.Gen1),
-                Gen2 = gcInfos.Sum(g => g.Gen2),
-                IsApproximate = gcInfos.Any(g => g.IsApproximate)
+                Gen0 = gen0Sum,
+                Gen1 = gen1Sum,
+                Gen2 = gen2Sum,
+                IsApproximate = anyApproximate,
             };
         }
 
@@ -54,7 +71,12 @@ internal static class StatisticsCalculator
         var variance = 0.0;
         if (perOpTimes.Length > 1)
         {
-            var m2 = perOpTimes.Select(t => t - avg).Select(delta => delta * delta).Sum();
+            double m2 = 0;
+            for (int i = 0; i < perOpTimes.Length; i++)
+            {
+                var delta = perOpTimes[i] - avg;
+                m2 += delta * delta;
+            }
             variance = m2 / (perOpTimes.Length - 1);
         }
         var stdDev = Math.Sqrt(Math.Max(0, variance));
@@ -62,7 +84,9 @@ internal static class StatisticsCalculator
         var relativeStdDevPercent = Math.Abs(avg) < 1e-12 ? 0.0 : (stdDev / Math.Abs(avg)) * 100.0;
 
         // Calculate CPU cycles average
-        var cpuCyclesSum = perOpCycles.Sum();
+        double cpuCyclesSum = 0;
+        for (int i = 0; i < perOpCycles.Length; i++)
+            cpuCyclesSum += perOpCycles[i];
         var cpuCyclesAvg = cpuCyclesSum / perOpCycles.Length;
 
         return new Statistics
@@ -78,7 +102,7 @@ internal static class StatisticsCalculator
             StandardError = standardError,
             RelativeStdDevPercent = relativeStdDevPercent,
             CpuCyclesPerOp = cpuCyclesAvg,
-            GcInfo = aggregatedGcInfo
+            GcInfo = aggregatedGcInfo,
         };
     }
 

@@ -27,7 +27,7 @@
 
     <ItemGroup>
         <!-- ValueTask<T> support for netstandard2.0 -->
-        <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
+        <PackageReference Include="System.Threading.Tasks.Extensions" />
     </ItemGroup>
 
     <ItemGroup>
@@ -58,7 +58,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.103" />
+      <PackageReference Update="Microsoft.SourceLink.GitHub" />
     </ItemGroup>
 
 </Project>
