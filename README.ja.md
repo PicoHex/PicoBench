@@ -11,7 +11,7 @@
 - **AOT互換ソースジェネレーター** - インクリメンタルジェネレーターが実行時に直接メソッド呼び出しを生成、リフレクションゼロ
 - **クロスプラットフォーム** - Windows、Linux、macOSを完全サポート
 - **高精度タイミング** - `Stopwatch` を使用し、1操作あたりの時間をナノ秒スケールで報告
-- **GC追跡** - ベンチマーク中のGen0/Gen1/Gen2コレクション回数を監視
+- **GC追跡** - ベンチマーク中のGen0/Gen1/Gen2コレクション回数を監視（setup/teardown を除く）
 - **CPUサイクルカウント** - Windows / Linux ではハードウェアサイクル、macOS では単調クロックのプロキシ値（`mach_absolute_time`）を使用
 - **統計分析** - 平均、中央値、P90、P95、P99、最小値、最大値、標準偏差、標準誤差、相対標準偏差
 - **複数出力形式** - 4 つの組み込み `IFormatter` フォーマッター（Console、Markdown、HTML、CSV）とプログラム要約出力
@@ -99,6 +99,16 @@ var result = Benchmark.RunScoped("DbQuery",
     static ctx => ctx.Users.FirstOrDefault()
 );
 // 各サンプルで新しいスコープが作成され、各サンプル後にスコープが破棄されます。
+```
+
+非同期バリアントも利用できます:
+
+```csharp
+var result = await Benchmark.RunScopedAsync("DbQueryAsync",
+    () => new MyDbContext(),
+    static async ctx => await ctx.Users.FirstOrDefaultAsync()
+);
+// 非同期バリアント: 各サンプルで新しいスコープを作成し、各サンプル後に破棄します。
 ```
 
 ### 2つの実装を比較
@@ -218,12 +228,13 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000
+    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-自動キャリブレーションを有効にすると、PicoBench は最小サンプル時間の予算に達するか、`MaxAutoIterationsPerSample` に達するまで `IterationsPerSample` を増やします。これは、タイマーノイズの影響を受けやすい極めて高速な処理で特に有効です。
+自動キャリブレーションを有効にすると、PicoBench は最小サンプル時間の予算に達するか、`MaxAutoIterationsPerSample` に達するまで `IterationsPerSample` を増やします。これは、タイマーノイズの影響を受けやすい極めて高速な処理で特に有効です。 多数のベンチマークとパラメーターの組み合わせを実行する場合、`ForceGcBeforeBenchmark = false` に設定するとコレクション段階前の強制フル GC をスキップできます。
 
 ---
 
@@ -269,6 +280,7 @@ var options = new FormatterOptions
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
     CandidateLabel        = "New"
+    OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
 var formatter = new ConsoleFormatter(options);

@@ -4,7 +4,7 @@
 
 **PicoBench** 的单元测试，使用 [TUnit](https://github.com/thomhurst/TUnit) 测试框架。
 
-**总计：479 个测试**
+**总计：518 个测试**
 
 ## 运行
 
@@ -14,26 +14,26 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 
 ## 测试分类
 
-### Formatters/ (224 个测试)
+### Formatters/ (249 个测试)
 
 四个基于 `IFormatter` 的输出格式化器、`SummaryFormatter` 及其支持基础设施的测试。
 
 | 文件 | 测试数 | 描述 |
 |------|-------|-------------|
-| `ConsoleFormatterTests.cs` | 40+ | 盒绘制表格生成、对齐、编码 |
-| `MarkdownFormatterTests.cs` | 40+ | GitHub Markdown 表格渲染 |
-| `HtmlFormatterTests.cs` | 40+ | 带样式的 HTML 报告生成 |
-| `CsvFormatterTests.cs` | 40+ | 带正确转义的 CSV 导出 |
-| `SummaryFormatterTests.cs` | 20+ | 胜/负摘要文本 |
-| `FormatterBaseTests.cs` | 15+ | 模板方法基类行为 |
-| `FormatterOptionsTests.cs` | 10+ | 选项默认值、预设、路径解析 |
-| `CrossPlatformTests.cs` | 10+ | 行尾和编码一致性 |
+| `ConsoleFormatterTests.cs` | 41 | 盒绘制表格生成、对齐、编码 |
+| `MarkdownFormatterTests.cs` | 28 | GitHub Markdown 表格渲染 |
+| `HtmlFormatterTests.cs` | 36 | 带样式的 HTML 报告生成 |
+| `CsvFormatterTests.cs` | 31 | 带正确转义的 CSV 导出 |
+| `SummaryFormatterTests.cs` | 25 | 胜/负摘要文本 |
+| `FormatterBaseTests.cs` | 37 | 模板方法基类行为 |
+| `FormatterOptionsTests.cs` | 42 | 选项默认值、预设、路径解析 |
+| `CrossPlatformTests.cs` | 9 | 行尾和编码一致性 |
 
-### Formatters/Integration/ (8 个测试)
+### Formatters/Integration/ (6 个测试)
 
 | 文件 | 测试数 | 描述 |
 |------|-------|-------------|
-| `FormatterIntegrationTests.cs` | 8 | 完整 `BenchmarkSuite` 对象的端到端格式化 |
+| `FormatterIntegrationTests.cs` | 6 | 完整 `BenchmarkSuite` 对象的端到端格式化 |
 
 ### Attributes/ (18 个测试)
 
@@ -41,27 +41,27 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 |------|-------|-------------|
 | `AttributeTests.cs` | 18 | 所有七个属性：默认值、属性设置、`AttributeUsage` 目标、`[Params]` 值存储 |
 
-### BenchmarkRunnerTests.cs (8 个测试)
+### BenchmarkRunnerTests.cs (11 个测试)
 
 | 文件 | 测试数 | 描述 |
 |------|-------|-------------|
-| `BenchmarkRunnerTests.cs` | 8 | `BenchmarkRunner.Run<T>()` 带无参数/预配置实例、空值检查、配置传播 |
+| `BenchmarkRunnerTests.cs` | 11 | `BenchmarkRunner.Run<T>()` 带无参数/预配置实例、空值检查、配置传播 |
 
-### Generators/ (47 个测试)
+### Generators/ (90 个测试)
 
 | 文件 | 测试数 | 描述 |
 |------|-------|-------------|
-| `EmitterTests.cs` | 25 | 源生成器代码发射：类结构、参数迭代、设置/清理钩子、基准比较、`global::` 限定 |
-| `ModelsTests.cs` | 22 | `BenchmarkClassModel`、`BenchmarkMethodModel`、`ParamsPropertyModel` 相等性、哈希码、边界情况 |
-| `BenchmarkGeneratorDiagnosticsTests.cs` | 10+ | 无效签名、重复 baseline、非法 `[Params]` 和枚举参数发射的端到端生成器诊断测试 |
+| `EmitterTests.cs` | 38 | 源生成器代码发射：类结构、参数迭代、设置/清理钩子、基准比较、`global::` 限定 |
+| `ModelsTests.cs` | 30 | `BenchmarkClassModel`、`BenchmarkMethodModel`、`ParamsPropertyModel` 相等性、哈希码、边界情况 |
+| `BenchmarkGeneratorDiagnosticsTests.cs` | 22 | 无效签名、重复 baseline、非法 `[Params]` 和枚举参数发射的端到端生成器诊断测试 |
 
 ### 核心运行时覆盖
 
 | 文件 | 测试数 | 描述 |
 |------|-------|-------------|
-| `BenchmarkTests.cs` | 40+ | 命令式 API、作用域执行、保留样本、比较以及自动校准行为 |
-| `StatisticsCalculatorTests.cs` | 10+ | 包含标准误、CPU 周期和边界情况的统计计算 |
-| `ModelsTests.cs` | 40+ | 结果模型校验、CPU 计数器元数据和波动辅助属性 |
+| `BenchmarkTests.cs` | 56 | 命令式 API、作用域执行、保留样本、比较以及自动校准行为 |
+| `StatisticsCalculatorTests.cs` | 12 | 包含标准误、CPU 周期和边界情况的统计计算 |
+| `ModelsTests.cs` | 38 | 结果模型校验、CPU 计数器元数据和波动辅助属性 |
 
 格式化器测试现在也覆盖更偏精度分析的输出，例如标准误、相对标准差，以及 Console、Markdown、HTML、CSV 中的 CPU 计数器说明。
 

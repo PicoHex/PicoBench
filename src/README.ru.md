@@ -12,7 +12,7 @@
 
 | Файл | Назначение |
 |------|---------|
-| `Benchmark.cs` | Императивный API - `Run()`, `Run<TState>()`, `RunScoped<TScope>()`, `Compare()` |
+| `Benchmark.cs` | Императивный API - `Run()`, `Run<TState>()`, `RunScoped<TScope>()`, `RunScopedAsync<TScope>()`, `Compare()` |
 | `BenchmarkRunner.cs` | Точка входа на основе атрибутов - `Run<T>()` |
 | `Attributes.cs` | Семь атрибутов: `[BenchmarkClass]`, `[Benchmark]`, `[Params]`, `[GlobalSetup]`, `[GlobalCleanup]`, `[IterationSetup]`, `[IterationCleanup]` |
 | `IBenchmarkClass.cs` | Интерфейс, реализуемый генератором исходного кода в декорированных классах |

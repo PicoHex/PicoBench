@@ -4,7 +4,7 @@
 
 Модульные тесты для **PicoBench** с использованием фреймворка тестирования [TUnit](https://github.com/thomhurst/TUnit).
 
-**Всего: 479 тестов**
+**Всего: 518 тестов**
 
 ## Запуск
 
@@ -14,26 +14,26 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 
 ## Категории тестов
 
-### Formatters/ (224 теста)
+### Formatters/ (249 теста)
 
 Тесты для четырёх форматтеров вывода на базе `IFormatter`, `SummaryFormatter` и их поддерживающей инфраструктуры.
 
 | Файл | Тесты | Описание |
 |------|-------|-------------|
-| `ConsoleFormatterTests.cs` | 40+ | Генерация таблиц с рисованием рамок, выравнивание, кодировка |
-| `MarkdownFormatterTests.cs` | 40+ | Рендеринг Markdown таблиц GitHub |
-| `HtmlFormatterTests.cs` | 40+ | Генерация HTML отчетов со стилями |
-| `CsvFormatterTests.cs` | 40+ | Экспорт CSV с правильным экранированием |
-| `SummaryFormatterTests.cs` | 20+ | Текст сводки побед/поражений |
-| `FormatterBaseTests.cs` | 15+ | Поведение базового класса Template Method |
-| `FormatterOptionsTests.cs` | 10+ | Значения по умолчанию опций, предустановки, разрешение путей |
-| `CrossPlatformTests.cs` | 10+ | Согласованность конца строк и кодировки |
+| `ConsoleFormatterTests.cs` | 41 | Генерация таблиц с рисованием рамок, выравнивание, кодировка |
+| `MarkdownFormatterTests.cs` | 28 | Рендеринг Markdown таблиц GitHub |
+| `HtmlFormatterTests.cs` | 36 | Генерация HTML отчетов со стилями |
+| `CsvFormatterTests.cs` | 31 | Экспорт CSV с правильным экранированием |
+| `SummaryFormatterTests.cs` | 25 | Текст сводки побед/поражений |
+| `FormatterBaseTests.cs` | 37 | Поведение базового класса Template Method |
+| `FormatterOptionsTests.cs` | 42 | Значения по умолчанию опций, предустановки, разрешение путей |
+| `CrossPlatformTests.cs` | 9 | Согласованность конца строк и кодировки |
 
-### Formatters/Integration/ (8 тестов)
+### Formatters/Integration/ (6 тестов)
 
 | Файл | Тесты | Описание |
 |------|-------|-------------|
-| `FormatterIntegrationTests.cs` | 8 | Сквозное форматирование полных объектов `BenchmarkSuite` |
+| `FormatterIntegrationTests.cs` | 6 | Сквозное форматирование полных объектов `BenchmarkSuite` |
 
 ### Attributes/ (18 тестов)
 
@@ -41,27 +41,27 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 |------|-------|-------------|
 | `AttributeTests.cs` | 18 | Все семь атрибутов: значения по умолчанию, установка свойств, цели `AttributeUsage`, хранение значений `[Params]` |
 
-### BenchmarkRunnerTests.cs (8 тестов)
+### BenchmarkRunnerTests.cs (11 тестов)
 
 | Файл | Тесты | Описание |
 |------|-------|-------------|
-| `BenchmarkRunnerTests.cs` | 8 | `BenchmarkRunner.Run<T>()` с экземпляром без параметров / предварительно настроенным, проверки null, распространение конфигурации |
+| `BenchmarkRunnerTests.cs` | 11 | `BenchmarkRunner.Run<T>()` с экземпляром без параметров / предварительно настроенным, проверки null, распространение конфигурации |
 
-### Generators/ (47 тестов)
+### Generators/ (90 тестов)
 
 | Файл | Тесты | Описание |
 |------|-------|-------------|
-| `EmitterTests.cs` | 25 | Генерация кода генератором исходного кода: структура класса, итерация параметров, хуки настройки/очистки, сравнения базовых вариантов, квалификация `global::` |
-| `ModelsTests.cs` | 22 | Равенство `BenchmarkClassModel`, `BenchmarkMethodModel`, `ParamsPropertyModel`, хэш-коды, граничные случаи |
-| `BenchmarkGeneratorDiagnosticsTests.cs` | 10+ | Сквозные диагностики генератора для неверных сигнатур, дублирующихся baseline, неверных `[Params]` и генерации enum-параметров |
+| `EmitterTests.cs` | 38 | Генерация кода генератором исходного кода: структура класса, итерация параметров, хуки настройки/очистки, сравнения базовых вариантов, квалификация `global::` |
+| `ModelsTests.cs` | 30 | Равенство `BenchmarkClassModel`, `BenchmarkMethodModel`, `ParamsPropertyModel`, хэш-коды, граничные случаи |
+| `BenchmarkGeneratorDiagnosticsTests.cs` | 22 | Сквозные диагностики генератора для неверных сигнатур, дублирующихся baseline, неверных `[Params]` и генерации enum-параметров |
 
 ### Покрытие основного runtime
 
 | Файл | Тесты | Описание |
 |------|-------|-------------|
-| `BenchmarkTests.cs` | 40+ | Императивный API, scoped-выполнение, сохранение образцов, сравнения и поведение автокалибровки |
-| `StatisticsCalculatorTests.cs` | 10+ | Статистические вычисления, включая стандартную ошибку, циклы CPU и граничные случаи |
-| `ModelsTests.cs` | 40+ | Проверка модели результатов, метаданные счетчика CPU и вспомогательные свойства вариативности |
+| `BenchmarkTests.cs` | 56 | Императивный API, scoped-выполнение, сохранение образцов, сравнения и поведение автокалибровки |
+| `StatisticsCalculatorTests.cs` | 12 | Статистические вычисления, включая стандартную ошибку, циклы CPU и граничные случаи |
+| `ModelsTests.cs` | 38 | Проверка модели результатов, метаданные счетчика CPU и вспомогательные свойства вариативности |
 
 Тесты форматтеров теперь также покрывают ориентированный на точность вывод: стандартную ошибку, относительное стандартное отклонение и пояснения по счетчику CPU в Console, Markdown, HTML и CSV.
 

@@ -4,7 +4,7 @@
 
 [TUnit](https://github.com/thomhurst/TUnit) テストフレームワークを使用した **PicoBench** の単体テストです。
 
-**合計：479テスト**
+**合計：518テスト**
 
 ## 実行
 
@@ -14,26 +14,26 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 
 ## テストカテゴリー
 
-### Formatters/ (224テスト)
+### Formatters/ (249テスト)
 
 4 つの `IFormatter` ベースの出力フォーマッター、`SummaryFormatter`、およびその周辺インフラのテスト。
 
 | ファイル | テスト数 | 説明 |
 |------|-------|-------------|
-| `ConsoleFormatterTests.cs` | 40+ | ボックス描画テーブル生成、整列、エンコーディング |
-| `MarkdownFormatterTests.cs` | 40+ | GitHub Markdownテーブルレンダリング |
-| `HtmlFormatterTests.cs` | 40+ | スタイル付きHTMLレポート生成 |
-| `CsvFormatterTests.cs` | 40+ | 適切なエスケープ付きCSVエクスポート |
-| `SummaryFormatterTests.cs` | 20+ | 勝敗概要テキスト |
-| `FormatterBaseTests.cs` | 15+ | Template Method基本クラスの動作 |
-| `FormatterOptionsTests.cs` | 10+ | オプションのデフォルト値、プリセット、パス解決 |
-| `CrossPlatformTests.cs` | 10+ | 行末とエンコーディングの一貫性 |
+| `ConsoleFormatterTests.cs` | 41 | ボックス描画テーブル生成、整列、エンコーディング |
+| `MarkdownFormatterTests.cs` | 28 | GitHub Markdownテーブルレンダリング |
+| `HtmlFormatterTests.cs` | 36 | スタイル付きHTMLレポート生成 |
+| `CsvFormatterTests.cs` | 31 | 適切なエスケープ付きCSVエクスポート |
+| `SummaryFormatterTests.cs` | 25 | 勝敗概要テキスト |
+| `FormatterBaseTests.cs` | 37 | Template Method基本クラスの動作 |
+| `FormatterOptionsTests.cs` | 42 | オプションのデフォルト値、プリセット、パス解決 |
+| `CrossPlatformTests.cs` | 9 | 行末とエンコーディングの一貫性 |
 
-### Formatters/Integration/ (8テスト)
+### Formatters/Integration/ (6テスト)
 
 | ファイル | テスト数 | 説明 |
 |------|-------|-------------|
-| `FormatterIntegrationTests.cs` | 8 | 完全な`BenchmarkSuite`オブジェクトのエンドツーエンドフォーマット |
+| `FormatterIntegrationTests.cs` | 6 | 完全な`BenchmarkSuite`オブジェクトのエンドツーエンドフォーマット |
 
 ### Attributes/ (18テスト)
 
@@ -41,27 +41,27 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 |------|-------|-------------|
 | `AttributeTests.cs` | 18 | 7つの属性すべて：デフォルト値、プロパティ設定、`AttributeUsage`ターゲット、`[Params]`値ストレージ |
 
-### BenchmarkRunnerTests.cs (8テスト)
+### BenchmarkRunnerTests.cs (11テスト)
 
 | ファイル | テスト数 | 説明 |
 |------|-------|-------------|
-| `BenchmarkRunnerTests.cs` | 8 | パラメータなし/事前設定済みインスタンスでの`BenchmarkRunner.Run<T>()`、nullチェック、設定伝播 |
+| `BenchmarkRunnerTests.cs` | 11 | パラメータなし/事前設定済みインスタンスでの`BenchmarkRunner.Run<T>()`、nullチェック、設定伝播 |
 
-### Generators/ (47テスト)
+### Generators/ (90テスト)
 
 | ファイル | テスト数 | 説明 |
 |------|-------|-------------|
-| `EmitterTests.cs` | 25 | ソースジェネレーターコード生成：クラス構造、パラメータ反復、セットアップ/ティアダウンフック、ベースライン比較、`global::`修飾 |
-| `ModelsTests.cs` | 22 | `BenchmarkClassModel`、`BenchmarkMethodModel`、`ParamsPropertyModel`の等価性、ハッシュコード、エッジケース |
-| `BenchmarkGeneratorDiagnosticsTests.cs` | 10+ | 無効なシグネチャ、重複 baseline、無効な `[Params]`、enum パラメーター出力に対するエンドツーエンドのジェネレーター診断 |
+| `EmitterTests.cs` | 38 | ソースジェネレーターコード生成：クラス構造、パラメータ反復、セットアップ/ティアダウンフック、ベースライン比較、`global::`修飾 |
+| `ModelsTests.cs` | 30 | `BenchmarkClassModel`、`BenchmarkMethodModel`、`ParamsPropertyModel`の等価性、ハッシュコード、エッジケース |
+| `BenchmarkGeneratorDiagnosticsTests.cs` | 22 | 無効なシグネチャ、重複 baseline、無効な `[Params]`、enum パラメーター出力に対するエンドツーエンドのジェネレーター診断 |
 
 ### コアランタイムのカバレッジ
 
 | ファイル | テスト数 | 説明 |
 |------|-------|-------------|
-| `BenchmarkTests.cs` | 40+ | 命令型 API、scoped 実行、サンプル保持、比較、自動キャリブレーションの動作 |
-| `StatisticsCalculatorTests.cs` | 10+ | 標準誤差、CPU サイクル、境界ケースを含む統計計算 |
-| `ModelsTests.cs` | 40+ | 結果モデルの検証、CPU カウンターメタデータ、分散ヘルパー |
+| `BenchmarkTests.cs` | 56 | 命令型 API、scoped 実行、サンプル保持、比較、自動キャリブレーションの動作 |
+| `StatisticsCalculatorTests.cs` | 12 | 標準誤差、CPU サイクル、境界ケースを含む統計計算 |
+| `ModelsTests.cs` | 38 | 結果モデルの検証、CPU カウンターメタデータ、分散ヘルパー |
 
 フォーマッターテストでは、Console、Markdown、HTML、CSV における標準誤差、相対標準偏差、CPU カウンターノートなどの精度重視の出力もカバーするようになりました。
 

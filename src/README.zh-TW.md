@@ -12,7 +12,7 @@
 
 | 文件 | 用途 |
 |------|---------|
-| `Benchmark.cs` | 命令式 API - `Run()`、`Run<TState>()`、`RunScoped<TScope>()`、`Compare()` |
+| `Benchmark.cs` | 命令式 API - `Run()`、`Run<TState>()`、`RunScoped<TScope>()`、`RunScopedAsync<TScope>()`、`Compare()` |
 | `BenchmarkRunner.cs` | 基於屬性的入口點 - `Run<T>()` |
 | `Attributes.cs` | 七個屬性：`[BenchmarkClass]`、`[Benchmark]`、`[Params]`、`[GlobalSetup]`、`[GlobalCleanup]`、`[IterationSetup]`、`[IterationCleanup]` |
 | `IBenchmarkClass.cs` | 由源生成器在裝飾類上實現的接口 |

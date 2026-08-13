@@ -12,7 +12,7 @@ La bibliothèque de benchmarking principale ciblant **netstandard2.0** sans dép
 
 | Fichier | Objectif |
 |------|---------|
-| `Benchmark.cs` | API impérative - `Run()`, `Run<TState>()`, `RunScoped<TScope>()`, `Compare()` |
+| `Benchmark.cs` | API impérative - `Run()`, `Run<TState>()`, `RunScoped<TScope>()`, `RunScopedAsync<TScope>()`, `Compare()` |
 | `BenchmarkRunner.cs` | Point d'entrée basé sur les attributs - `Run<T>()` |
 | `Attributes.cs` | Sept attributs : `[BenchmarkClass]`, `[Benchmark]`, `[Params]`, `[GlobalSetup]`, `[GlobalCleanup]`, `[IterationSetup]`, `[IterationCleanup]` |
 | `IBenchmarkClass.cs` | Interface implémentée par le générateur de source sur les classes décorées |

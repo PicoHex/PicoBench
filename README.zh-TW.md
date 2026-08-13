@@ -11,7 +11,7 @@
 - **AOT 相容的源生成器** - 增量生成器在執行時生成直接方法呼叫，零反射
 - **跨平台** - 完全支援 Windows、Linux 和 macOS
 - **高精度計時** - 使用 `Stopwatch` 並回報奈秒尺度的每操作耗時
-- **GC 追蹤** - 監控基準測試期間的 Gen0/Gen1/Gen2 回收計數
+- **GC 追蹤** - 監控基準測試期間的 Gen0/Gen1/Gen2 回收計數（不含 setup/teardown）
 - **CPU 週期計數** - Windows / Linux 提供硬體週期計數，macOS 提供單調時鐘代理值（`mach_absolute_time`）
 - **統計分析** - 均值、中位數、P90、P95、P99、最小值、最大值、標準差、標準誤和相對標準差
 - **多種輸出格式** - 4 個內建 `IFormatter` 格式化器（Console、Markdown、HTML、CSV）以及程式化摘要輸出
@@ -99,6 +99,16 @@ var result = Benchmark.RunScoped("DbQuery",
     static ctx => ctx.Users.FirstOrDefault()
 );
 // 每個樣本創建新作用域；每個樣本後銷毀作用域。
+```
+
+也提供非同步變體:
+
+```csharp
+var result = await Benchmark.RunScopedAsync("DbQueryAsync",
+    () => new MyDbContext(),
+    static async ctx => await ctx.Users.FirstOrDefaultAsync()
+);
+// 非同步變體：每個樣本建立新作用域，每個樣本後銷毀。
 ```
 
 ### 比較兩種實現
@@ -218,12 +228,13 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000
+    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-啟用自動校準後，PicoBench 會自動增加 `IterationsPerSample`，直到達到最小樣本耗時預算，或命中 `MaxAutoIterationsPerSample` 上限。這對極快操作特別有用，可降低計時噪聲影響。
+啟用自動校準後，PicoBench 會自動增加 `IterationsPerSample`，直到達到最小樣本耗時預算，或命中 `MaxAutoIterationsPerSample` 上限。這對極快操作特別有用，可降低計時噪聲影響。 將 `ForceGcBeforeBenchmark` 設為 `false` 可跳過取樣階段之前的強制完整 GC——在執行大量基準與參數組合時很有用。
 
 ---
 
@@ -269,6 +280,7 @@ var options = new FormatterOptions
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
     CandidateLabel        = "New"
+    OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
 var formatter = new ConsoleFormatter(options);

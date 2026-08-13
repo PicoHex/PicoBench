@@ -11,7 +11,7 @@
 - **Генератор исходного кода, совместимый с AOT** - Инкрементальный генератор создает прямые вызовы методов без рефлексии во время выполнения
 - **Кроссплатформенность** - Полная поддержка Windows, Linux и macOS
 - **Высокоточное измерение времени** - Использует `Stopwatch` и сообщает время на операцию в наносекундном масштабе
-- **Отслеживание GC** - Мониторинг количества сборок Gen0/Gen1/Gen2 во время бенчмарков
+- **Отслеживание GC** - Мониторинг количества сборок Gen0/Gen1/Gen2 во время бенчмарков (без setup/teardown)
 - **Подсчет циклов CPU** - Аппаратные циклы на Windows/Linux и монотонный прокси на macOS (`mach_absolute_time`)
 - **Статистический анализ** - Среднее, Медиана, P90, P95, P99, Минимум, Максимум, Стандартное отклонение, стандартная ошибка и относительное стандартное отклонение
 - **Несколько форматов вывода** - Четыре встроенных форматтера `IFormatter` (Console, Markdown, HTML, CSV) и программная сводка
@@ -99,6 +99,16 @@ var result = Benchmark.RunScoped("DbQuery",
     static ctx => ctx.Users.FirstOrDefault()
 );
 // Новая область создается для каждого образца; область удаляется после каждого образца.
+```
+
+Также доступен асинхронный вариант:
+
+```csharp
+var result = await Benchmark.RunScopedAsync("DbQueryAsync",
+    () => new MyDbContext(),
+    static async ctx => await ctx.Users.FirstOrDefaultAsync()
+);
+// Асинхронный вариант: новая область на образец, удаляется после каждого образца.
 ```
 
 ### Сравнение двух реализаций
@@ -218,12 +228,13 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000
+    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-При включенной автокалибровке PicoBench увеличивает `IterationsPerSample`, пока не будет достигнут минимальный бюджет времени на образец или предел `MaxAutoIterationsPerSample`. Это особенно полезно для очень быстрых операций, которые иначе будут сильно зависеть от шума таймера.
+При включенной автокалибровке PicoBench увеличивает `IterationsPerSample`, пока не будет достигнут минимальный бюджет времени на образец или предел `MaxAutoIterationsPerSample`. Это особенно полезно для очень быстрых операций, которые иначе будут сильно зависеть от шума таймера. Установите `ForceGcBeforeBenchmark = false`, чтобы пропустить принудительную полную сборку мусора перед фазой сбора — полезно при большом количестве бенчмарков и комбинаций параметров.
 
 ---
 
@@ -269,6 +280,7 @@ var options = new FormatterOptions
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
     CandidateLabel        = "New"
+    OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
 var formatter = new ConsoleFormatter(options);

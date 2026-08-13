@@ -12,7 +12,7 @@
 
 | ファイル | 目的 |
 |------|---------|
-| `Benchmark.cs` | 命令型API - `Run()`、`Run<TState>()`、`RunScoped<TScope>()`、`Compare()` |
+| `Benchmark.cs` | 命令型API - `Run()`、`Run<TState>()`、`RunScoped<TScope>()`、`RunScopedAsync<TScope>()`、`Compare()` |
 | `BenchmarkRunner.cs` | 属性ベースエントリーポイント - `Run<T>()` |
 | `Attributes.cs` | 7つの属性：`[BenchmarkClass]`、`[Benchmark]`、`[Params]`、`[GlobalSetup]`、`[GlobalCleanup]`、`[IterationSetup]`、`[IterationCleanup]` |
 | `IBenchmarkClass.cs` | ソースジェネレーターが装飾クラスで実装するインターフェース |

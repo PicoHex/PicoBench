@@ -4,7 +4,7 @@
 
 Tests unitaires pour **PicoBench** utilisant le framework de test [TUnit](https://github.com/thomhurst/TUnit).
 
-**Total : 479 tests**
+**Total : 518 tests**
 
 ## Exécution
 
@@ -14,26 +14,26 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 
 ## Catégories de Tests
 
-### Formatters/ (224 tests)
+### Formatters/ (249 tests)
 
 Tests pour les quatre formateurs de sortie basés sur `IFormatter`, `SummaryFormatter` et leur infrastructure de support.
 
 | Fichier | Tests | Description |
 |------|-------|-------------|
-| `ConsoleFormatterTests.cs` | 40+ | Génération de tableaux avec dessin de boîtes, alignement, encodage |
-| `MarkdownFormatterTests.cs` | 40+ | Rendu de tableaux Markdown GitHub |
-| `HtmlFormatterTests.cs` | 40+ | Génération de rapports HTML avec styles |
-| `CsvFormatterTests.cs` | 40+ | Export CSV avec échappement approprié |
-| `SummaryFormatterTests.cs` | 20+ | Texte de résumé victoires/défaites |
-| `FormatterBaseTests.cs` | 15+ | Comportement de la classe de base Template Method |
-| `FormatterOptionsTests.cs` | 10+ | Valeurs par défaut des options, préconfigurations, résolution de chemins |
-| `CrossPlatformTests.cs` | 10+ | Consistance des fins de ligne et de l'encodage |
+| `ConsoleFormatterTests.cs` | 41 | Génération de tableaux avec dessin de boîtes, alignement, encodage |
+| `MarkdownFormatterTests.cs` | 28 | Rendu de tableaux Markdown GitHub |
+| `HtmlFormatterTests.cs` | 36 | Génération de rapports HTML avec styles |
+| `CsvFormatterTests.cs` | 31 | Export CSV avec échappement approprié |
+| `SummaryFormatterTests.cs` | 25 | Texte de résumé victoires/défaites |
+| `FormatterBaseTests.cs` | 37 | Comportement de la classe de base Template Method |
+| `FormatterOptionsTests.cs` | 42 | Valeurs par défaut des options, préconfigurations, résolution de chemins |
+| `CrossPlatformTests.cs` | 9 | Consistance des fins de ligne et de l'encodage |
 
-### Formatters/Integration/ (8 tests)
+### Formatters/Integration/ (6 tests)
 
 | Fichier | Tests | Description |
 |------|-------|-------------|
-| `FormatterIntegrationTests.cs` | 8 | Formatage de bout en bout d'objets `BenchmarkSuite` complets |
+| `FormatterIntegrationTests.cs` | 6 | Formatage de bout en bout d'objets `BenchmarkSuite` complets |
 
 ### Attributes/ (18 tests)
 
@@ -41,27 +41,27 @@ Tests pour les quatre formateurs de sortie basés sur `IFormatter`, `SummaryForm
 |------|-------|-------------|
 | `AttributeTests.cs` | 18 | Les sept attributs : valeurs par défaut, définition des propriétés, cibles `AttributeUsage`, stockage des valeurs `[Params]` |
 
-### BenchmarkRunnerTests.cs (8 tests)
+### BenchmarkRunnerTests.cs (11 tests)
 
 | Fichier | Tests | Description |
 |------|-------|-------------|
-| `BenchmarkRunnerTests.cs` | 8 | `BenchmarkRunner.Run<T>()` avec instance sans paramètres / préconfigurée, vérifications de null, propagation de configuration |
+| `BenchmarkRunnerTests.cs` | 11 | `BenchmarkRunner.Run<T>()` avec instance sans paramètres / préconfigurée, vérifications de null, propagation de configuration |
 
-### Generators/ (47 tests)
+### Generators/ (90 tests)
 
 | Fichier | Tests | Description |
 |------|-------|-------------|
-| `EmitterTests.cs` | 25 | Émission de code du générateur de source : structure de classe, itération des paramètres, crochets de configuration/nettoyage, comparaisons de base, qualification `global::` |
-| `ModelsTests.cs` | 22 | Égalité de `BenchmarkClassModel`, `BenchmarkMethodModel`, `ParamsPropertyModel`, codes de hachage, cas limites |
-| `BenchmarkGeneratorDiagnosticsTests.cs` | 10+ | Diagnostics end-to-end du générateur pour signatures invalides, baselines dupliquées, `[Params]` invalides et émission de paramètres enum |
+| `EmitterTests.cs` | 38 | Émission de code du générateur de source : structure de classe, itération des paramètres, crochets de configuration/nettoyage, comparaisons de base, qualification `global::` |
+| `ModelsTests.cs` | 30 | Égalité de `BenchmarkClassModel`, `BenchmarkMethodModel`, `ParamsPropertyModel`, codes de hachage, cas limites |
+| `BenchmarkGeneratorDiagnosticsTests.cs` | 22 | Diagnostics end-to-end du générateur pour signatures invalides, baselines dupliquées, `[Params]` invalides et émission de paramètres enum |
 
 ### Couverture du runtime principal
 
 | Fichier | Tests | Description |
 |------|-------|-------------|
-| `BenchmarkTests.cs` | 40+ | API impérative, exécution scoped, échantillons conservés, comparaisons et comportement d'auto-calibrage |
-| `StatisticsCalculatorTests.cs` | 10+ | Calcul statistique incluant erreur standard, cycles CPU et cas limites |
-| `ModelsTests.cs` | 40+ | Validation du modèle de résultat, métadonnées du compteur CPU et aides de variance |
+| `BenchmarkTests.cs` | 56 | API impérative, exécution scoped, échantillons conservés, comparaisons et comportement d'auto-calibrage |
+| `StatisticsCalculatorTests.cs` | 12 | Calcul statistique incluant erreur standard, cycles CPU et cas limites |
+| `ModelsTests.cs` | 38 | Validation du modèle de résultat, métadonnées du compteur CPU et aides de variance |
 
 Les tests des formateurs couvrent désormais aussi des sorties orientées précision comme l'erreur standard, l'écart-type relatif et les notes de compteur CPU dans Console, Markdown, HTML et CSV.
 
