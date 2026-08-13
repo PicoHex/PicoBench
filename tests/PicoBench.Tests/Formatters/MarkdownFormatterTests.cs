@@ -66,6 +66,46 @@ public class MarkdownFormatterTests
     [Test]
     [Property("Category", "Formatter")]
     [Property("SubCategory", "Markdown")]
+    public async Task Escape_HandlesBackslashesAndNewlines_InNames()
+    {
+        var result = BenchmarkResultFactory.Create("A|B\\C\nD");
+        var formatter = new MarkdownFormatter();
+
+        var markdown = formatter.Format(result);
+
+        // Pipe escaped, backslash escaped, newline replaced with <br>
+        await Assert.That(markdown).Contains("A\\|B\\\\C<br>D");
+        await Assert.That(markdown).DoesNotContain("\nD");
+    }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "Markdown")]
+    [Property("FileSystem", "true")]
+    [NotInParallel]
+    public async Task WriteToFile_RespectsOutputDirectory()
+    {
+        var testDir = FileSystemHelper.CreateTestDirectory();
+        try
+        {
+            var options = new FormatterOptions { OutputDirectory = testDir };
+            MarkdownFormatter.WriteToFile(
+                "results.md",
+                BenchmarkResultFactory.Create("M"),
+                options
+            );
+
+            await Assert.That(File.Exists(Path.Combine(testDir, "results.md"))).IsTrue();
+        }
+        finally
+        {
+            FileSystemHelper.DeleteTestDirectory(testDir);
+        }
+    }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "Markdown")]
     public async Task Format_Comparisons_ReturnsComparisonTable()
     {
         var comparisons = ComparisonResultFactory.CreateMultiple(2).ToList();
@@ -213,7 +253,6 @@ public class MarkdownFormatterTests
 
             await Assert.That(content).Contains("| Name | Avg (ns) | P50 (ns)");
             await Assert.That(content).Contains(result.Name);
-
         }
         finally
         {
@@ -243,7 +282,7 @@ public class MarkdownFormatterTests
         var options = new FormatterOptions
         {
             BaselineLabel = "Control",
-            CandidateLabel = "Treatment"
+            CandidateLabel = "Treatment",
         };
         var comparisons = ComparisonResultFactory.CreateMultiple(1).ToList();
         var formatter = new MarkdownFormatter(options);
@@ -262,27 +301,26 @@ public class MarkdownFormatterTests
     {
         var formatter = new MarkdownFormatter();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((BenchmarkResult)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((BenchmarkResult)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((IEnumerable<BenchmarkResult>)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((IEnumerable<BenchmarkResult>)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((ComparisonResult)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((ComparisonResult)null!))
         );
 
         await Assert
-            .That(
-                async () =>
-                    await Task.Run(() => formatter.Format((IEnumerable<ComparisonResult>)null!))
+            .That(async () =>
+                await Task.Run(() => formatter.Format((IEnumerable<ComparisonResult>)null!))
             )
             .Throws<ArgumentNullException>();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((BenchmarkSuite)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((BenchmarkSuite)null!))
         );
     }
 
@@ -367,7 +405,6 @@ public class MarkdownFormatterTests
 
             await Assert.That(content).Contains("| Test Case |");
             await Assert.That(content).Contains("**"); // Bold speedup
-
         }
         finally
         {
@@ -395,7 +432,6 @@ public class MarkdownFormatterTests
 
             await Assert.That(content).StartsWith($"# {suite.Name}");
             await Assert.That(content).Contains("## Results");
-
         }
         finally
         {
@@ -410,15 +446,13 @@ public class MarkdownFormatterTests
     {
         var comparisons = ComparisonResultFactory.CreateMultiple(2).ToList();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () =>
-                Task.Run(
-                    () =>
-                        MarkdownFormatter.FormatGroupedComparisons(
-                            comparisons,
-                            (Func<ComparisonResult, string>)null!
-                        )
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() =>
+                MarkdownFormatter.FormatGroupedComparisons(
+                    comparisons,
+                    (Func<ComparisonResult, string>)null!
                 )
+            )
         );
     }
 

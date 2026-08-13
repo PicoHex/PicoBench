@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-三個示例項目展示了 PicoBench 提供的兩種 API。
+四個示例項目展示了 PicoBench 提供的兩種 API。
 
 ## StringVsStringBuilder（命令式 API）
 
@@ -58,6 +58,50 @@ public partial class StringBenchmarks
 dotnet run --project samples/AttributeBased -c Release
 ```
 
+## AsyncBenchmarks（非同步 API + 混合生命週期）
+
+透過全非同步入口點和同步/非同步混合的生命週期方法模擬非同步檔案 I/O。
+
+**亮點：**
+
+- `BenchmarkRunner.RunAsync<T>()` — 全非同步執行
+- `[GlobalSetup]` / `[GlobalCleanup]` 使用同步方法並共用暫存檔 fixture
+- `[IterationSetup]` 使用 `async Task` 方法
+- 回傳 `Task` 的 `[Benchmark(Baseline = true)]` — 循序非同步讀取
+- 使用 `Task.WhenAll` 的平行讀取候選，以及作為對照的同步讀取
+- `SummaryFormatter` 快速查看勝負概覽
+- 輸出到主控台和 Markdown
+
+```csharp
+[BenchmarkClass(Description = "Simulating async I/O operations")]
+public partial class FileSimulationBenchmarks
+{
+    private string? _tempPath;
+
+    [GlobalSetup]
+    public void SetupSync() { /* create temp-file fixture */ }
+
+    [GlobalCleanup]
+    public void CleanupSync() { /* delete temp file */ }
+
+    [IterationSetup]
+    public async Task PrepareAsync() => await Task.Delay(1);
+
+    [Benchmark(Baseline = true)]
+    public async Task SequentialReadsAsync() { /* three awaited reads */ }
+
+    [Benchmark]
+    public async Task ParallelReadsAsync() { /* Task.WhenAll */ }
+
+    [Benchmark]
+    public void SyncRead() { /* three sync reads */ }
+}
+```
+
+```bash
+dotnet run --project samples/AsyncBenchmarks -c Release
+```
+
 ## CollectionBenchmarks（完整屬性展示）
 
 通過比較 List、Dictionary 和 HashSet 的查找性能，展示**大多數**屬性。
@@ -101,6 +145,6 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## 輸出
 
-`StringVsStringBuilder` 和 `CollectionBenchmarks` 會將結果保存到輸出文件夾下的 `results/` 子目錄中，格式為 Markdown、HTML 和 CSV。`AttributeBased` 目前僅保存 Markdown 輸出。
+`StringVsStringBuilder` 和 `CollectionBenchmarks` 會將結果保存到輸出文件夾下的 `results/` 子目錄中，格式為 Markdown、HTML 和 CSV。`AttributeBased` 和 `AsyncBenchmarks` 目前僅保存 Markdown 輸出。
 
 這些報告現在還會包含更偏精度分析的元資料，例如標準誤、相對標準差，以及在可用時顯示 CPU 計數器說明。

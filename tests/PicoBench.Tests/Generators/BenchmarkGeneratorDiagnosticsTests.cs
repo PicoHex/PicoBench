@@ -395,7 +395,8 @@ public class BenchmarkGeneratorDiagnosticsTests
     [Property("Category", "Generators")]
     public async Task AsyncTaskGlobalSetup_NoDiagnostic()
     {
-        var result = RunGenerator("""
+        var result = RunGenerator(
+            """
             using PicoBench;
 
             [BenchmarkClass]
@@ -407,7 +408,8 @@ public class BenchmarkGeneratorDiagnosticsTests
                 [Benchmark]
                 public void Work() { }
             }
-            """);
+            """
+        );
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.GeneratedSources.Length).IsEqualTo(1);
@@ -417,7 +419,8 @@ public class BenchmarkGeneratorDiagnosticsTests
     [Property("Category", "Generators")]
     public async Task AsyncVoidGlobalSetup_ReportsWarning()
     {
-        var result = RunGenerator("""
+        var result = RunGenerator(
+            """
             using PicoBench;
 
             [BenchmarkClass]
@@ -429,7 +432,8 @@ public class BenchmarkGeneratorDiagnosticsTests
                 [Benchmark]
                 public void Work() { }
             }
-            """);
+            """
+        );
 
         await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN009")).IsTrue();
     }
@@ -438,7 +442,8 @@ public class BenchmarkGeneratorDiagnosticsTests
     [Property("Category", "Generators")]
     public async Task AsyncTaskBenchmarkMethod_NoDiagnostic()
     {
-        var result = RunGenerator("""
+        var result = RunGenerator(
+            """
             using PicoBench;
 
             [BenchmarkClass]
@@ -447,7 +452,8 @@ public class BenchmarkGeneratorDiagnosticsTests
                 [Benchmark]
                 public async Task WorkAsync() { await Task.CompletedTask; }
             }
-            """);
+            """
+        );
 
         await Assert.That(result.Diagnostics).IsEmpty();
     }
@@ -456,7 +462,8 @@ public class BenchmarkGeneratorDiagnosticsTests
     [Property("Category", "Generators")]
     public async Task StaticAsyncBenchmarkMethod_ReportsDiagnostic()
     {
-        var result = RunGenerator("""
+        var result = RunGenerator(
+            """
             using PicoBench;
 
             [BenchmarkClass]
@@ -465,9 +472,57 @@ public class BenchmarkGeneratorDiagnosticsTests
                 [Benchmark]
                 public static async Task WorkAsync() { await Task.CompletedTask; }
             }
-            """);
+            """
+        );
 
         await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN003")).IsTrue();
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task BenchmarkAndLifecycleOnSameMethod_ReportsDiagnostic()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class ConfusedBench
+            {
+                [Benchmark]
+                [GlobalSetup]
+                public void Confused() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN010")).IsTrue();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task Params_NullValueOnNullableValueType_GeneratesCode()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class NullableBench
+            {
+                [Params(1, null, 3)]
+                public int? N { get; set; }
+
+                [Benchmark]
+                public void Work() { _ = N; }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(1);
+        await Assert.That(result.GeneratedSources[0]).Contains("null");
     }
 
     private static GeneratorRunResultData RunGenerator(string source)
@@ -479,7 +534,9 @@ public class BenchmarkGeneratorDiagnosticsTests
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
 
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new BenchmarkGenerator().AsSourceGenerator());
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new BenchmarkGenerator().AsSourceGenerator()
+        );
         driver = driver.RunGenerators(compilation);
 
         var runResult = driver.GetRunResult();
@@ -493,8 +550,8 @@ public class BenchmarkGeneratorDiagnosticsTests
 
     private static MetadataReference[] GetMetadataReferences()
     {
-        var paths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))
-            !.Split(Path.PathSeparator)
+        var paths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))!
+            .Split(Path.PathSeparator)
             .Concat([typeof(BenchmarkClassAttribute).Assembly.Location])
             .Distinct(StringComparer.OrdinalIgnoreCase);
 

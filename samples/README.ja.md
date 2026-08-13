@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-3つのサンプルプロジェクトがPicoBenchが提供する2つのAPIを実演します。
+4つのサンプルプロジェクトがPicoBenchが提供する2つのAPIを実演します。
 
 ## StringVsStringBuilder（命令型API）
 
@@ -58,6 +58,50 @@ public partial class StringBenchmarks
 dotnet run --project samples/AttributeBased -c Release
 ```
 
+## AsyncBenchmarks（Async API + 混在ライフサイクル）
+
+完全非同期のエントリポイントと同期/非同期が混在するライフサイクルメソッドを使用して、非同期ファイル I/O をシミュレートします。
+
+**ハイライト:**
+
+- `BenchmarkRunner.RunAsync<T>()` — 完全非同期実行
+- `[GlobalSetup]` / `[GlobalCleanup]` を同期メソッドとして実装し、一時ファイルのフィクスチャを共有
+- `[IterationSetup]` を `async Task` メソッドとして実装
+- `Task` を返す `[Benchmark(Baseline = true)]` — 逐次的な非同期読み取り
+- `Task.WhenAll` による並列読み取り候補と、対比のための同期読み取り
+- `SummaryFormatter` による勝敗の概要表示
+- コンソールと Markdown に出力
+
+```csharp
+[BenchmarkClass(Description = "Simulating async I/O operations")]
+public partial class FileSimulationBenchmarks
+{
+    private string? _tempPath;
+
+    [GlobalSetup]
+    public void SetupSync() { /* create temp-file fixture */ }
+
+    [GlobalCleanup]
+    public void CleanupSync() { /* delete temp file */ }
+
+    [IterationSetup]
+    public async Task PrepareAsync() => await Task.Delay(1);
+
+    [Benchmark(Baseline = true)]
+    public async Task SequentialReadsAsync() { /* three awaited reads */ }
+
+    [Benchmark]
+    public async Task ParallelReadsAsync() { /* Task.WhenAll */ }
+
+    [Benchmark]
+    public void SyncRead() { /* three sync reads */ }
+}
+```
+
+```bash
+dotnet run --project samples/AsyncBenchmarks -c Release
+```
+
 ## CollectionBenchmarks（完全な属性展示）
 
 List、Dictionary、HashSetの検索性能を比較して、**ほとんどの**属性を実演します。
@@ -101,6 +145,6 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## 出力
 
-`StringVsStringBuilder` と `CollectionBenchmarks` は、Markdown、HTML、CSV 形式で出力フォルダー配下の `results/` サブディレクトリに結果を保存します。`AttributeBased` は現在 Markdown 出力のみを保存します。
+`StringVsStringBuilder` と `CollectionBenchmarks` は、Markdown、HTML、CSV 形式で出力フォルダー配下の `results/` サブディレクトリに結果を保存します。`AttributeBased` と `AsyncBenchmarks` は現在 Markdown 出力のみを保存します。
 
 これらのレポートには、標準誤差、相対標準偏差、利用可能な場合の CPU カウンター注記など、精度重視のメタデータも含まれるようになりました。

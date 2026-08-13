@@ -19,7 +19,7 @@ internal static class BenchmarkClassAnalyzer
         var diagnostics = new List<Diagnostic>();
 
         if (ctx.TargetSymbol is not INamedTypeSymbol typeSymbol)
-            return new GeneratorAnalysisResult(null, [..diagnostics]);
+            return new GeneratorAnalysisResult(null, [.. diagnostics]);
 
         ct.ThrowIfCancellationRequested();
 
@@ -45,7 +45,7 @@ internal static class BenchmarkClassAnalyzer
             Accessibility.Protected => "protected",
             Accessibility.ProtectedOrInternal => "protected internal",
             Accessibility.ProtectedAndInternal => "private protected",
-            _ => "internal"
+            _ => "internal",
         };
 
         string? description = null;
@@ -123,9 +123,10 @@ internal static class BenchmarkClassAnalyzer
         }
 
         if (diagnostics.Any(static d => d.Severity == DiagnosticSeverity.Error))
-            return new GeneratorAnalysisResult(null, [..diagnostics]);
+            return new GeneratorAnalysisResult(null, [.. diagnostics]);
 
-        var isAsync = (globalSetup?.IsAsync ?? false)
+        var isAsync =
+            (globalSetup?.IsAsync ?? false)
             || (globalCleanup?.IsAsync ?? false)
             || (iterSetup?.IsAsync ?? false)
             || (iterCleanup?.IsAsync ?? false)
@@ -144,9 +145,9 @@ internal static class BenchmarkClassAnalyzer
                 IterationSetupMethod = iterSetup,
                 IterationCleanupMethod = iterCleanup,
                 Methods = methods.ToImmutable(),
-                ParamsProperties = paramsProps.ToImmutable()
+                ParamsProperties = paramsProps.ToImmutable(),
             },
-            [..diagnostics]
+            [.. diagnostics]
         );
     }
 
@@ -163,6 +164,36 @@ internal static class BenchmarkClassAnalyzer
         CancellationToken ct
     )
     {
+        var attrNames = new HashSet<string>();
+        AttributeData? conflictingAttr = null;
+        foreach (var attr in method.GetAttributes())
+        {
+            var attrName = attr.AttributeClass?.ToDisplayString();
+            if (attrName is null)
+                continue;
+            attrNames.Add(attrName);
+            conflictingAttr ??= attr;
+        }
+
+        var isBenchmark = attrNames.Contains(BenchmarkAttributeName);
+        var isLifecycle =
+            attrNames.Contains(GlobalSetupAttributeName)
+            || attrNames.Contains(GlobalCleanupAttributeName)
+            || attrNames.Contains(IterationSetupAttributeName)
+            || attrNames.Contains(IterationCleanupAttributeName);
+
+        if (isBenchmark && isLifecycle)
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.ConflictingMethodRoles,
+                    GetAttributeLocation(conflictingAttr!, ct),
+                    method.Name
+                )
+            );
+            return;
+        }
+
         foreach (var attr in method.GetAttributes())
         {
             var attrName = attr.AttributeClass?.ToDisplayString();
@@ -280,7 +311,7 @@ internal static class BenchmarkClassAnalyzer
                 Name = method.Name,
                 IsAsync = !method.ReturnsVoid,
                 IsBaseline = isBaseline,
-                Description = methodDesc
+                Description = methodDesc,
             }
         );
     }
@@ -320,9 +351,9 @@ internal static class BenchmarkClassAnalyzer
         {
             if (
                 syntaxRef.GetSyntax() is ClassDeclarationSyntax classDecl
-                && classDecl
-                    .Modifiers
-                    .Any(static modifier => modifier.IsKind(SyntaxKind.PartialKeyword))
+                && classDecl.Modifiers.Any(static modifier =>
+                    modifier.IsKind(SyntaxKind.PartialKeyword)
+                )
             )
             {
                 return true;
@@ -334,21 +365,25 @@ internal static class BenchmarkClassAnalyzer
 
     private static bool IsValidLifecycleMethod(IMethodSymbol method)
     {
-        return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 } &&
-               (method.ReturnsVoid || IsTaskOrValueTask(method.ReturnType));
+        return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 }
+            && (method.ReturnsVoid || IsTaskOrValueTask(method.ReturnType));
     }
 
     private static bool IsValidBenchmarkMethod(IMethodSymbol method)
     {
-        return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 } &&
-               (method.ReturnsVoid || IsTaskOrValueTask(method.ReturnType));
+        return method is { IsStatic: false, IsGenericMethod: false, Parameters.Length: 0 }
+            && (method.ReturnsVoid || IsTaskOrValueTask(method.ReturnType));
     }
 
     private static bool IsTaskOrValueTask(ITypeSymbol type)
     {
-        return type is INamedTypeSymbol named &&
-            (named.Name == "Task" || named.Name == "ValueTask" ||
-             named.Name.StartsWith("Task`") || named.Name.StartsWith("ValueTask`"));
+        return type is INamedTypeSymbol named
+            && (
+                named.Name == "Task"
+                || named.Name == "ValueTask"
+                || named.Name.StartsWith("Task`")
+                || named.Name.StartsWith("ValueTask`")
+            );
     }
 
     private static void RegisterLifecycleMethod(
@@ -406,8 +441,8 @@ internal static class BenchmarkClassAnalyzer
         string fullyQualifiedName
     )
     {
-        return attrs.FirstOrDefault(
-            attr => attr.AttributeClass?.ToDisplayString() == fullyQualifiedName
+        return attrs.FirstOrDefault(attr =>
+            attr.AttributeClass?.ToDisplayString() == fullyQualifiedName
         );
     }
 
@@ -442,7 +477,7 @@ internal static class BenchmarkClassAnalyzer
             {
                 Name = memberName,
                 TypeFullName = typeName,
-                FormattedValues = values.ToImmutable()
+                FormattedValues = values.ToImmutable(),
             };
         }
 
@@ -453,7 +488,7 @@ internal static class BenchmarkClassAnalyzer
             {
                 Name = memberName,
                 TypeFullName = typeName,
-                FormattedValues = values.ToImmutable()
+                FormattedValues = values.ToImmutable(),
             };
         }
 
@@ -480,7 +515,7 @@ internal static class BenchmarkClassAnalyzer
         {
             Name = memberName,
             TypeFullName = typeName,
-            FormattedValues = values.ToImmutable()
+            FormattedValues = values.ToImmutable(),
         };
     }
 
@@ -488,10 +523,10 @@ internal static class BenchmarkClassAnalyzer
     {
         return memberSymbol switch
         {
-            IPropertySymbol property
-                => property is { IsStatic: false, SetMethod.IsInitOnly: false },
+            IPropertySymbol property => property
+                is { IsStatic: false, SetMethod.IsInitOnly: false },
             IFieldSymbol field => field is { IsStatic: false, IsReadOnly: false, IsConst: false },
-            _ => false
+            _ => false,
         };
     }
 

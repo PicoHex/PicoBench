@@ -15,7 +15,9 @@ public sealed class BenchmarkClassAttribute : Attribute
 
 /// <summary>
 /// Marks a method as a benchmark to be measured.
-/// The method must be parameterless and may return any type (the return value is discarded).
+/// The method must be a parameterless instance method returning <c>void</c>,
+/// <c>Task</c>, or <c>ValueTask</c> (including <c>Task&lt;T&gt;</c> and
+/// <c>ValueTask&lt;T&gt;</c>; the returned value is discarded).
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
 public sealed class BenchmarkAttribute : Attribute

@@ -172,6 +172,27 @@ public class HtmlFormatterTests
     [Test]
     [Property("Category", "Formatter")]
     [Property("SubCategory", "HTML")]
+    [Property("FileSystem", "true")]
+    [NotInParallel]
+    public async Task WriteToFile_RespectsOutputDirectory()
+    {
+        var testDir = FileSystemHelper.CreateTestDirectory();
+        try
+        {
+            var options = new FormatterOptions { OutputDirectory = testDir };
+            HtmlFormatter.WriteToFile("results.html", BenchmarkResultFactory.Create("H"), options);
+
+            await Assert.That(File.Exists(Path.Combine(testDir, "results.html"))).IsTrue();
+        }
+        finally
+        {
+            FileSystemHelper.DeleteTestDirectory(testDir);
+        }
+    }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "HTML")]
     public async Task Format_Results_IncludesPrecisionColumns()
     {
         var result = BenchmarkResultFactory.Create(
@@ -207,7 +228,6 @@ public class HtmlFormatterTests
 
             await Assert.That(content).Contains("<!DOCTYPE html>");
             await Assert.That(content).Contains(result.Name);
-
         }
         finally
         {
@@ -255,7 +275,7 @@ public class HtmlFormatterTests
         var options = new FormatterOptions
         {
             BaselineLabel = "Control",
-            CandidateLabel = "Treatment"
+            CandidateLabel = "Treatment",
         };
         var comparisons = ComparisonResultFactory.CreateMultiple(1).ToList();
         var formatter = new HtmlFormatter(options);
@@ -274,24 +294,24 @@ public class HtmlFormatterTests
     {
         var formatter = new HtmlFormatter();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((BenchmarkResult)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((BenchmarkResult)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((IEnumerable<BenchmarkResult>)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((IEnumerable<BenchmarkResult>)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((ComparisonResult)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((ComparisonResult)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((IEnumerable<ComparisonResult>)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((IEnumerable<ComparisonResult>)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((BenchmarkSuite)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((BenchmarkSuite)null!))
         );
     }
 
@@ -352,7 +372,6 @@ public class HtmlFormatterTests
 
             await Assert.That(content).Contains("Benchmark Comparison");
             await Assert.That(content).Contains("summary-box");
-
         }
         finally
         {
@@ -380,7 +399,6 @@ public class HtmlFormatterTests
 
             await Assert.That(content).Contains(suite.Name);
             await Assert.That(content).Contains("<footer>");
-
         }
         finally
         {

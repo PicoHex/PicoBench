@@ -70,10 +70,12 @@ public static partial class Runner
         if (action == null)
             throw new ArgumentNullException(nameof(action));
 
-        var gcBaseline = GetGcBaselineCounts();
-
         // Run setup (not timed)
         setup?.Invoke();
+
+        // GC baseline is captured after setup so setup allocations are
+        // not attributed to the benchmark.
+        var gcBaseline = GetGcBaselineCounts();
 
         // Start timing
         var cycleStart = GetCpuCycles();
@@ -87,10 +89,14 @@ public static partial class Runner
         watch.Stop();
         var cycleEnd = GetCpuCycles();
 
+        // GC delta is computed before teardown so teardown allocations
+        // are not attributed to the benchmark.
+        var gcInfo = CalculateGcDelta(gcBaseline);
+
         // Run teardown (not timed)
         teardown?.Invoke();
 
-        return CreateSample(watch, cycleStart, cycleEnd, gcBaseline);
+        return CreateSample(watch, cycleStart, cycleEnd, gcInfo);
     }
 
     /// <summary>
@@ -114,7 +120,7 @@ public static partial class Runner
         watch.Stop();
         var cycleEnd = GetCpuCycles();
 
-        return CreateSample(watch, cycleStart, cycleEnd, gcBaseline);
+        return CreateSample(watch, cycleStart, cycleEnd, CalculateGcDelta(gcBaseline));
     }
 
     /// <summary>
@@ -136,15 +142,14 @@ public static partial class Runner
         Stopwatch watch,
         ulong cycleStart,
         ulong cycleEnd,
-        long[] gcBaseline,
+        GcInfo gcInfo,
         bool isGcApproximate = false
     )
     {
         var elapsedTicks = watch.ElapsedTicks;
         var elapsedNs = elapsedTicks * (1_000_000_000.0 / Stopwatch.Frequency);
 
-        var gcInfo = CalculateGcDelta(gcBaseline);
-        if (isGcApproximate && gcInfo != null)
+        if (isGcApproximate)
         {
             gcInfo = new GcInfo
             {
@@ -180,10 +185,12 @@ public static partial class Runner
         if (action == null)
             throw new ArgumentNullException(nameof(action));
 
-        var gcBaseline = GetGcBaselineCounts();
-
         if (setup != null)
             await setup();
+
+        // GC baseline is captured after setup so setup allocations are
+        // not attributed to the benchmark.
+        var gcBaseline = GetGcBaselineCounts();
 
         var cycleStart = GetCpuCycles();
         var watch = Stopwatch.StartNew();
@@ -194,11 +201,14 @@ public static partial class Runner
         watch.Stop();
         var cycleEnd = GetCpuCycles();
 
+        // GC delta is computed before teardown so teardown allocations
+        // are not attributed to the benchmark.
+        var gcInfo = CalculateGcDelta(gcBaseline);
+
         if (teardown != null)
             await teardown();
 
-        var sample = CreateSample(watch, cycleStart, cycleEnd, gcBaseline, isGcApproximate: true);
-        return sample;
+        return CreateSample(watch, cycleStart, cycleEnd, gcInfo, isGcApproximate: true);
     }
 
     /// <summary>
@@ -226,7 +236,13 @@ public static partial class Runner
         watch.Stop();
         var cycleEnd = GetCpuCycles();
 
-        return CreateSample(watch, cycleStart, cycleEnd, gcBaseline, isGcApproximate: true);
+        return CreateSample(
+            watch,
+            cycleStart,
+            cycleEnd,
+            CalculateGcDelta(gcBaseline),
+            isGcApproximate: true
+        );
     }
 
     /// <summary>

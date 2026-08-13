@@ -33,11 +33,14 @@ public class BenchmarkTests
 
     private static readonly BenchmarkConfig AutoCalibratedConfig = new()
     {
-        WarmupIterations = 0,
+        // Warmup JIT-compiles the measured delegate before the first calibration
+        // probe; otherwise the first probe includes JIT cost and can falsely
+        // satisfy MinSampleTime under system load (flaky in CI).
+        WarmupIterations = 1000,
         SampleCount = 2,
         IterationsPerSample = 1,
         AutoCalibrateIterations = true,
-        MinSampleTime = TimeSpan.FromMilliseconds(5),
+        MinSampleTime = TimeSpan.FromMilliseconds(20),
         MaxAutoIterationsPerSample = 500_000,
     };
 
@@ -232,6 +235,65 @@ public class BenchmarkTests
 
     [Test]
     [Property("Category", "Benchmark")]
+    public async Task AutoCalibration_DiscardsFirstProbeToAvoidJitCost()
+    {
+        int invocations = 0;
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 0,
+            SampleCount = 1,
+            IterationsPerSample = 1,
+            AutoCalibrateIterations = true,
+            MinSampleTime = TimeSpan.FromHours(1),
+            MaxAutoIterationsPerSample = 8,
+        };
+
+        var result = Benchmark.Run(
+            "JitProbe",
+            () =>
+            {
+                invocations++;
+            },
+            config
+        );
+
+        // discard probe (1) + probe (1) + samples (1 × 8)
+        await Assert.That(invocations).IsEqualTo(10);
+        await Assert.That(result.IterationsPerSample).IsEqualTo(8);
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task AutoCalibrationAsync_DiscardsFirstProbeToAvoidJitCost()
+    {
+        int invocations = 0;
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 0,
+            SampleCount = 1,
+            IterationsPerSample = 1,
+            AutoCalibrateIterations = true,
+            MinSampleTime = TimeSpan.FromHours(1),
+            MaxAutoIterationsPerSample = 8,
+        };
+
+        var result = await Benchmark.RunAsync(
+            "AsyncJitProbe",
+            () =>
+            {
+                invocations++;
+                return Task.CompletedTask;
+            },
+            config
+        );
+
+        // discard probe (1) + probe (1) + samples (1 × 8)
+        await Assert.That(invocations).IsEqualTo(10);
+        await Assert.That(result.IterationsPerSample).IsEqualTo(8);
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
     public async Task Run_AutoCalibrateIterations_RespectsMaxIterations()
     {
         var config = new BenchmarkConfig
@@ -317,7 +379,7 @@ public class BenchmarkTests
 
     [Test]
     [Property("Category", "Benchmark")]
-    public async Task RunWithState_NullWarmup_UsesActionAsWarmup()
+    public async Task RunWithState_NullWarmup_PerformsNoWarmup()
     {
         int actionCount = 0;
         var result = Benchmark.Run(
@@ -328,10 +390,9 @@ public class BenchmarkTests
             config: FastConfig
         );
 
-        // Action runs for warmup iterations + sample iterations
-        var expectedMin =
-            FastConfig.WarmupIterations + FastConfig.SampleCount * FastConfig.IterationsPerSample;
-        await Assert.That(actionCount).IsEqualTo(expectedMin);
+        // Only sample iterations run; null warmup means no warmup.
+        var expected = FastConfig.SampleCount * FastConfig.IterationsPerSample;
+        await Assert.That(actionCount).IsEqualTo(expected);
     }
 
     [Test]
@@ -409,6 +470,68 @@ public class BenchmarkTests
         await Assert
             .That(() => Benchmark.RunScoped("   ", () => new TestScope(), scope => { }, FastConfig))
             .Throws<ArgumentException>();
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task RunScopedAsync_ReturnsValidResult()
+    {
+        var result = await Benchmark.RunScopedAsync(
+            "AsyncScoped",
+            () => new TestScope(),
+            async scope =>
+            {
+                scope.ActionCount++;
+                await Task.CompletedTask;
+            },
+            FastConfig
+        );
+
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result.Name).IsEqualTo("AsyncScoped");
+        await Assert.That(result.SampleCount).IsEqualTo(2);
+    }
+
+    // ─── ForceGcBeforeBenchmark option ──────────────────────────────
+
+    [Test]
+    [NotInParallel] // reads process-wide GC counters
+    [Property("Category", "Benchmark")]
+    public async Task ForceGcBeforeBenchmark_False_SkipsForcedCollections()
+    {
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 0,
+            SampleCount = 1,
+            IterationsPerSample = 1,
+            ForceGcBeforeBenchmark = false,
+        };
+
+        var before = GC.CollectionCount(GC.MaxGeneration);
+        Benchmark.Run("NoForcedGc", () => { }, config);
+        var after = GC.CollectionCount(GC.MaxGeneration);
+
+        await Assert.That(after).IsEqualTo(before);
+    }
+
+    [Test]
+    [NotInParallel] // reads process-wide GC counters
+    [Property("Category", "Benchmark")]
+    public async Task ForceGcBeforeBenchmark_False_SkipsForcedCollections_Async()
+    {
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 0,
+            SampleCount = 1,
+            IterationsPerSample = 1,
+            ForceGcBeforeBenchmark = false,
+        };
+
+        var before = GC.CollectionCount(GC.MaxGeneration);
+        await Benchmark.RunAsync("NoForcedGcAsync", () => Task.CompletedTask, config);
+        var after = GC.CollectionCount(GC.MaxGeneration);
+
+        await Assert.That(after).IsEqualTo(before);
     }
 
     [Test]
@@ -699,6 +822,28 @@ public class BenchmarkTests
         await Assert.That(result).IsNotNull();
         await Assert.That(setupCount).IsEqualTo(FastConfig.SampleCount);
         await Assert.That(teardownCount).IsEqualTo(FastConfig.SampleCount);
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task RunAsyncWithState_NullWarmup_PerformsNoWarmup()
+    {
+        int actionCount = 0;
+        var result = await Benchmark.RunAsync(
+            "AsyncNullWarmup",
+            0,
+            s =>
+            {
+                actionCount++;
+                return Task.CompletedTask;
+            },
+            warmup: null,
+            config: FastConfig
+        );
+
+        // Only sample iterations run; null warmup means no warmup.
+        var expected = FastConfig.SampleCount * FastConfig.IterationsPerSample;
+        await Assert.That(actionCount).IsEqualTo(expected);
     }
 
     [Test]

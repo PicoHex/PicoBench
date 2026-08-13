@@ -2,7 +2,6 @@ namespace PicoBench.Tests.Formatters;
 
 public class CsvFormatterTests
 {
-
     [Test]
     [Property("Category", "Formatter")]
     [Property("SubCategory", "CSV")]
@@ -82,7 +81,6 @@ public class CsvFormatterTests
             var content = await File.ReadAllTextAsync(filePath);
             await Assert.That(content).Contains("Name,Category,Avg_ns,P50_ns");
             await Assert.That(content).Contains(result.Name);
-
         }
         finally
         {
@@ -122,7 +120,6 @@ public class CsvFormatterTests
             await Assert
                 .That(content.IndexOf("Name,Category,Avg_ns,P50_ns"))
                 .IsEqualTo(content.LastIndexOf("Name,Category,Avg_ns,P50_ns"));
-
         }
         finally
         {
@@ -149,7 +146,49 @@ public class CsvFormatterTests
             var content = await File.ReadAllTextAsync(filePath);
             // Should include header since file didn't exist
             await Assert.That(content).Contains("Name,Category,Avg_ns,P50_ns");
+        }
+        finally
+        {
+            FileSystemHelper.DeleteTestDirectory(testDir);
+        }
+    }
 
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "CSV")]
+    public async Task PrefixesFormulaTriggeringCharactersWithApostrophe()
+    {
+        var results = new[]
+        {
+            BenchmarkResultFactory.Create("=SUM(A1)"),
+            BenchmarkResultFactory.Create("+cmd"),
+            BenchmarkResultFactory.Create("-2+3"),
+            BenchmarkResultFactory.Create("@inject"),
+        };
+        var formatter = new CsvFormatter();
+
+        var csv = formatter.Format(results);
+
+        await Assert.That(csv).Contains("'=SUM(A1)");
+        await Assert.That(csv).Contains("'+cmd");
+        await Assert.That(csv).Contains("'-2+3");
+        await Assert.That(csv).Contains("'@inject");
+    }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "CSV")]
+    [Property("FileSystem", "true")]
+    [NotInParallel]
+    public async Task WriteToFile_RespectsOutputDirectory()
+    {
+        var testDir = FileSystemHelper.CreateTestDirectory();
+        try
+        {
+            var options = new FormatterOptions { OutputDirectory = testDir };
+            CsvFormatter.WriteToFile("results.csv", BenchmarkResultFactory.Create("C"), options);
+
+            await Assert.That(File.Exists(Path.Combine(testDir, "results.csv"))).IsTrue();
         }
         finally
         {
@@ -293,7 +332,6 @@ public class CsvFormatterTests
             var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
             await Assert.That(lines.Length).IsEqualTo(4); // Header + 3 rows
-
         }
         finally
         {
@@ -321,7 +359,6 @@ public class CsvFormatterTests
             var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
             await Assert.That(lines.Length).IsEqualTo(5); // Header + (2 * 2) rows
-
         }
         finally
         {
@@ -350,7 +387,6 @@ public class CsvFormatterTests
             await Assert.That(content).Contains("# Suite:");
             await Assert.That(content).Contains("# Results");
             await Assert.That(content).Contains("# Comparisons");
-
         }
         finally
         {
@@ -379,24 +415,24 @@ public class CsvFormatterTests
     {
         var formatter = new CsvFormatter();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((BenchmarkResult)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((BenchmarkResult)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((IEnumerable<BenchmarkResult>)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((IEnumerable<BenchmarkResult>)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((ComparisonResult)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((ComparisonResult)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((IEnumerable<ComparisonResult>)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((IEnumerable<ComparisonResult>)null!))
         );
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => formatter.Format((BenchmarkSuite)null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => formatter.Format((BenchmarkSuite)null!))
         );
     }
 

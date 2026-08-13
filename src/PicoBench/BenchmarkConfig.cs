@@ -5,10 +5,6 @@ namespace PicoBench;
 /// </summary>
 public sealed class BenchmarkConfig
 {
-    private static BenchmarkConfig? _default;
-    private static BenchmarkConfig? _quick;
-    private static BenchmarkConfig? _precise;
-
     /// <summary>Number of warmup iterations before measurement.</summary>
     public int WarmupIterations
     {
@@ -55,6 +51,14 @@ public sealed class BenchmarkConfig
     public bool RetainSamples { get; init; } = false;
 
     /// <summary>
+    /// When true (default), a full forced GC runs before each benchmark's
+    /// collection phase to establish a clean heap baseline. Set to false to
+    /// skip the forced collections — useful for suite runs with many
+    /// benchmarks and parameter combinations where the cost adds up.
+    /// </summary>
+    public bool ForceGcBeforeBenchmark { get; init; } = true;
+
+    /// <summary>
     /// When enabled, PicoBench automatically increases iterations per sample until
     /// a minimum timing budget is reached for more stable measurements.
     /// </summary>
@@ -88,27 +92,27 @@ public sealed class BenchmarkConfig
     public CancellationToken CancellationToken { get; init; } = CancellationToken.None;
 
     /// <summary>Default configuration suitable for most benchmarks.</summary>
-    public static BenchmarkConfig Default => _default ??= new BenchmarkConfig();
+    public static BenchmarkConfig Default { get; } = new();
 
     /// <summary>Quick configuration for faster iteration during development.</summary>
-    public static BenchmarkConfig Quick =>
-        _quick ??= new BenchmarkConfig
+    public static BenchmarkConfig Quick { get; } =
+        new()
         {
             WarmupIterations = 100,
             SampleCount = 10,
             IterationsPerSample = 1000,
-            AutoCalibrateIterations = true
+            AutoCalibrateIterations = true,
         };
 
     /// <summary>Precise configuration for final measurements.</summary>
-    public static BenchmarkConfig Precise =>
-        _precise ??= new BenchmarkConfig
+    public static BenchmarkConfig Precise { get; } =
+        new()
         {
             WarmupIterations = 5000,
             SampleCount = 200,
             IterationsPerSample = 50000,
             AutoCalibrateIterations = true,
-            MinSampleTime = TimeSpan.FromMilliseconds(1)
+            MinSampleTime = TimeSpan.FromMilliseconds(1),
         };
 }
 
@@ -121,5 +125,5 @@ public enum AsyncTimingMode
     WallClock = 0,
 
     /// <summary>CPU execution time only (Process.TotalProcessorTime), excluding I/O wait.</summary>
-    CpuOnly = 1
+    CpuOnly = 1,
 }

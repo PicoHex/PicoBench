@@ -227,8 +227,14 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
 
     private static string Escape(string value)
     {
-        // Escape pipe characters in markdown tables
-        return value.Replace("|", "\\|");
+        // Escape special markdown table characters; replace newlines so
+        // they cannot break a table row.
+        return value
+            .Replace("\\", "\\\\")
+            .Replace("|", "\\|")
+            .Replace("\r\n", "<br>")
+            .Replace("\n", "<br>")
+            .Replace("\r", "<br>");
     }
 
     #endregion
@@ -245,7 +251,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     )
     {
         var formatter = new MarkdownFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(result));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(result));
     }
 
     /// <summary>
@@ -258,7 +264,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     )
     {
         var formatter = new MarkdownFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(results));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(results));
     }
 
     /// <summary>
@@ -271,7 +277,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     )
     {
         var formatter = new MarkdownFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(comparisons));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(comparisons));
     }
 
     /// <summary>
@@ -284,7 +290,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     )
     {
         var formatter = new MarkdownFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(suite));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(suite));
     }
 
     /// <summary>

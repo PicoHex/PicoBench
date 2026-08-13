@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace PicoBench;
 
 /// <summary>
@@ -115,7 +117,7 @@ public enum CpuCycleMeasurementKind
     PerfEventCpuCycles,
 
     /// <summary>A monotonic clock proxy is used instead of true CPU cycles.</summary>
-    MonotonicClockProxy
+    MonotonicClockProxy,
 }
 
 /// <summary>
@@ -130,7 +132,7 @@ public enum RuntimeExecutionMode
     Jit,
 
     /// <summary>The benchmark process is running as a Native AOT binary.</summary>
-    NativeAot
+    NativeAot,
 }
 
 /// <summary>
@@ -338,12 +340,12 @@ public sealed class EnvironmentInfo
     public bool IsNativeAot => ExecutionMode == RuntimeExecutionMode.NativeAot;
 
     /// <summary>Build configuration (Debug/Release).</summary>
-    public string Configuration { get; init; } =
-#if DEBUG
-        "Debug";
-#else
-        "Release";
-#endif
+    /// <remarks>
+    /// Detected from the entry assembly's <see cref="DebuggableAttribute"/> so
+    /// NuGet consumers report their own build configuration rather than the
+    /// configuration the library itself was compiled with.
+    /// </remarks>
+    public string Configuration { get; init; } = DetectConfiguration();
 
     /// <summary>How the CPU cycle metric is collected on this runtime.</summary>
     public CpuCycleMeasurementKind CpuCycleMeasurement { get; init; } =
@@ -362,13 +364,46 @@ public sealed class EnvironmentInfo
     public override string ToString() =>
         $"{RuntimeVersion} | {Os} | {Architecture} | {DescribeExecutionMode(ExecutionMode)} | {Configuration} | Cycles: {DescribeCpuCycleMeasurement(CpuCycleMeasurement)}";
 
+    private static string DetectConfiguration()
+    {
+        try
+        {
+            var assembly = Assembly.GetEntryAssembly() ?? typeof(EnvironmentInfo).Assembly;
+            return ClassifyConfiguration(
+                assembly.GetCustomAttribute<DebuggableAttribute>()?.IsJITTrackingEnabled
+            );
+        }
+        catch
+        {
+            // Attribute reflection can fail under aggressive trimming.
+            return ClassifyConfiguration(null);
+        }
+    }
+
+    /// <summary>
+    /// Maps the presence of JIT tracking (DebuggableAttribute) to a
+    /// configuration name. Null means the attribute was unavailable; the
+    /// compile-time configuration of this library is used as a fallback.
+    /// </summary>
+    internal static string ClassifyConfiguration(bool? isJitTrackingEnabled)
+    {
+        if (isJitTrackingEnabled.HasValue)
+            return isJitTrackingEnabled.Value ? "Debug" : "Release";
+
+#if DEBUG
+        return "Debug";
+#else
+        return "Release";
+#endif
+    }
+
     internal static string DescribeExecutionMode(RuntimeExecutionMode mode)
     {
         return mode switch
         {
             RuntimeExecutionMode.Jit => "JIT",
             RuntimeExecutionMode.NativeAot => "Native AOT",
-            _ => "Unknown"
+            _ => "Unknown",
         };
     }
 
@@ -379,7 +414,7 @@ public sealed class EnvironmentInfo
             CpuCycleMeasurementKind.ThreadCycles => "ThreadCycles",
             CpuCycleMeasurementKind.PerfEventCpuCycles => "PerfEventCpuCycles",
             CpuCycleMeasurementKind.MonotonicClockProxy => "MonotonicClockProxy",
-            _ => "Unsupported"
+            _ => "Unsupported",
         };
     }
 }

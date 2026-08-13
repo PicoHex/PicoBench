@@ -173,6 +173,7 @@ public static class SummaryFormatter
     private static void AppendCenteredLine(StringBuilder sb, string text, int width)
     {
         var innerWidth = width - 2;
+        text = Fit(text, innerWidth);
         var padding = (innerWidth - text.Length) / 2;
         sb.Append('║');
         sb.Append(' ', padding);
@@ -184,12 +185,16 @@ public static class SummaryFormatter
     private static void AppendPaddedLine(StringBuilder sb, string text, int width)
     {
         var innerWidth = width - 2;
+        text = Fit(text, innerWidth);
         sb.Append('║');
         sb.Append(text);
         if (text.Length < innerWidth)
             sb.Append(' ', innerWidth - text.Length);
         sb.AppendLine("║");
     }
+
+    private static string Fit(string text, int width) =>
+        text.Length > width ? text.Substring(0, width) : text;
 
     #endregion
 }

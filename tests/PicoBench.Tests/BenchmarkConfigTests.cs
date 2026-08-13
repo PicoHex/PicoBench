@@ -55,6 +55,17 @@ public class BenchmarkConfigTests
 
     [Test]
     [Property("Category", "BenchmarkConfig")]
+    public async Task Default_ReturnsSameInstance_AcrossConcurrentAccess()
+    {
+        var seen = new System.Collections.Concurrent.ConcurrentDictionary<BenchmarkConfig, byte>();
+
+        Parallel.For(0, 2000, _ => seen.TryAdd(BenchmarkConfig.Default, 0));
+
+        await Assert.That(seen.Count).IsEqualTo(1);
+    }
+
+    [Test]
+    [Property("Category", "BenchmarkConfig")]
     public async Task Quick_ReturnsSameInstance()
     {
         var a = BenchmarkConfig.Quick;

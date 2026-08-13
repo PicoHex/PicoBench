@@ -124,6 +124,32 @@ public class SummaryFormatterTests
     [Test]
     [Property("Category", "Formatter")]
     [Property("SubCategory", "Summary")]
+    public async Task LongTitleAndLabels_DoNotOverflowBoxWidth()
+    {
+        var comparisons = ComparisonResultFactory.CreateMultiple(1).ToList();
+        var options = new SummaryOptions
+        {
+            BoxWidth = 20,
+            Title = "An extremely long summary title that overflows the box",
+            CandidateLabel = "A very long candidate label",
+            ShowDetailedTable = false,
+        };
+
+        var summary = SummaryFormatter.Format(comparisons, options: options);
+
+        var boxLines = summary
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(static l => l.StartsWith('╔') || l.StartsWith('║') || l.StartsWith('╚'))
+            .Select(static l => l.TrimEnd('\r'));
+        foreach (var line in boxLines)
+        {
+            await Assert.That(line.Length).IsLessThanOrEqualTo(options.BoxWidth);
+        }
+    }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "Summary")]
     public async Task ShowDetailedTable_WhenDisabled_ExcludesTable()
     {
         var comparisons = ComparisonResultFactory.CreateMultiple(2).ToList();

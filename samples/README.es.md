@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
 
-Tres proyectos de ejemplo demuestran las dos API proporcionadas por PicoBench.
+Cuatro proyectos de ejemplo demuestran las dos API proporcionadas por PicoBench.
 
 ## StringVsStringBuilder (API Imperativa)
 
@@ -58,6 +58,50 @@ public partial class StringBenchmarks
 dotnet run --project samples/AttributeBased -c Release
 ```
 
+## AsyncBenchmarks (API Async + Ciclo de Vida Mixto)
+
+Simula E/S de archivos asíncrona mediante el punto de entrada totalmente asíncrono y una mezcla de métodos de ciclo de vida síncronos y asíncronos.
+
+**Aspectos destacados:**
+
+- `BenchmarkRunner.RunAsync<T>()` — ejecución totalmente asíncrona
+- `[GlobalSetup]` / `[GlobalCleanup]` como métodos síncronos que comparten un fixture de archivo temporal
+- `[IterationSetup]` como método `async Task`
+- `[Benchmark(Baseline = true)]` que devuelve `Task` — lecturas asíncronas secuenciales
+- Un candidato de lectura paralela con `Task.WhenAll` y una lectura síncrona como contraste
+- `SummaryFormatter` para un resumen rápido de ganancias/pérdidas
+- Salida a consola y Markdown
+
+```csharp
+[BenchmarkClass(Description = "Simulating async I/O operations")]
+public partial class FileSimulationBenchmarks
+{
+    private string? _tempPath;
+
+    [GlobalSetup]
+    public void SetupSync() { /* create temp-file fixture */ }
+
+    [GlobalCleanup]
+    public void CleanupSync() { /* delete temp file */ }
+
+    [IterationSetup]
+    public async Task PrepareAsync() => await Task.Delay(1);
+
+    [Benchmark(Baseline = true)]
+    public async Task SequentialReadsAsync() { /* three awaited reads */ }
+
+    [Benchmark]
+    public async Task ParallelReadsAsync() { /* Task.WhenAll */ }
+
+    [Benchmark]
+    public void SyncRead() { /* three sync reads */ }
+}
+```
+
+```bash
+dotnet run --project samples/AsyncBenchmarks -c Release
+```
+
 ## CollectionBenchmarks (Exhibición Completa de Atributos)
 
 Demuestra **la mayoría** de los atributos comparando el rendimiento de búsqueda de List, Dictionary y HashSet.
@@ -101,6 +145,6 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 ## Salida
 
-`StringVsStringBuilder` y `CollectionBenchmarks` guardan los resultados en un subdirectorio `results/` bajo la carpeta de salida en formatos Markdown, HTML y CSV. `AttributeBased` actualmente solo guarda salida Markdown.
+`StringVsStringBuilder` y `CollectionBenchmarks` guardan los resultados en un subdirectorio `results/` bajo la carpeta de salida en formatos Markdown, HTML y CSV. `AttributeBased` y `AsyncBenchmarks` actualmente solo guardan salida Markdown.
 
 Esos informes ahora también incluyen metadatos orientados a la precisión, como error estándar, desviación estándar relativa y notas sobre el contador de CPU cuando están disponibles.

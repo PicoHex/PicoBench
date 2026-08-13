@@ -64,6 +64,11 @@ public static class Benchmark
     /// <summary>
     /// Run a benchmark with state passed to avoid closure allocation.
     /// </summary>
+    /// <param name="name">Name of the benchmark.</param>
+    /// <param name="state">State passed to the action, avoiding closure allocation.</param>
+    /// <param name="action">The action to measure.</param>
+    /// <param name="warmup">Optional warmup action. If null, no warmup is performed.</param>
+    /// <param name="config">Optional configuration (uses <see cref="BenchmarkConfig.Default"/> if null).</param>
     public static BenchmarkResult Run<TState>(
         string name,
         TState state,
@@ -84,11 +89,6 @@ public static class Benchmark
         {
             for (int i = 0; i < config.WarmupIterations; i++)
                 warmup(state);
-        }
-        else if (config.WarmupIterations > 0)
-        {
-            for (var i = 0; i < config.WarmupIterations; i++)
-                action(state);
         }
 
         return CollectAndBuild(name, config, iterations => Runner.Time(iterations, state, action));
@@ -130,6 +130,48 @@ public static class Benchmark
             {
                 using var scope = scopeFactory();
                 return Runner.Time(iterations, scope, action);
+            }
+        );
+    }
+
+    /// <summary>
+    /// Run an async benchmark with a scope factory (creates new scope per
+    /// sample). Useful for DI container benchmarks with async work.
+    /// </summary>
+    public static async Task<BenchmarkResult> RunScopedAsync<TScope>(
+        string name,
+        Func<TScope> scopeFactory,
+        Func<TScope, Task> action,
+        BenchmarkConfig? config = null
+    )
+        where TScope : IDisposable
+    {
+        ValidateName(name, nameof(name));
+        if (scopeFactory == null)
+            throw new ArgumentNullException(nameof(scopeFactory));
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+
+        config ??= BenchmarkConfig.Default;
+        Runner.Initialize();
+
+        // Warmup phase - use a single scope
+        if (config.WarmupIterations > 0)
+        {
+            using var warmupScope = scopeFactory();
+            for (var i = 0; i < config.WarmupIterations; i++)
+                await action(warmupScope);
+        }
+
+        return await CollectAndBuildAsync(
+            name,
+            config,
+            iterations =>
+            {
+                using var scope = scopeFactory();
+                return config.TimingMode == AsyncTimingMode.CpuOnly
+                    ? Runner.TimeCpuAsync(iterations, scope, s => action(s))
+                    : Runner.TimeAsync(iterations, scope, s => action(s));
             }
         );
     }
@@ -203,7 +245,8 @@ public static class Benchmark
         Func<int, TimingSample> sampleFunc
     )
     {
-        ForceGc();
+        if (config.ForceGcBeforeBenchmark)
+            ForceGc();
 
         var iterationsPerSample = ResolveIterationsPerSample(config, sampleFunc);
 
@@ -243,6 +286,10 @@ public static class Benchmark
             config.MinSampleTime.TotalMilliseconds * 1_000_000.0,
             1.0
         );
+
+        // Discard the first probe: it may include JIT compilation of the
+        // measured delegate, which would skew the calibration downwards.
+        _ = sampleFunc(iterations);
 
         while (iterations < config.MaxAutoIterationsPerSample)
         {
@@ -320,6 +367,11 @@ public static class Benchmark
     /// <summary>
     /// Run an async benchmark with state passed.
     /// </summary>
+    /// <param name="name">Name of the benchmark.</param>
+    /// <param name="state">State passed to the action, avoiding closure allocation.</param>
+    /// <param name="action">The action to measure.</param>
+    /// <param name="warmup">Optional warmup action. If null, no warmup is performed.</param>
+    /// <param name="config">Optional configuration (uses <see cref="BenchmarkConfig.Default"/> if null).</param>
     public static async Task<BenchmarkResult> RunAsync<TState>(
         string name,
         TState state,
@@ -339,11 +391,6 @@ public static class Benchmark
         {
             for (int i = 0; i < config.WarmupIterations; i++)
                 await warmup(state);
-        }
-        else if (config.WarmupIterations > 0)
-        {
-            for (int i = 0; i < config.WarmupIterations; i++)
-                await action(state);
         }
 
         return await CollectAndBuildAsync(
@@ -374,7 +421,8 @@ public static class Benchmark
         Func<int, Task<TimingSample>> sampleFuncAsync
     )
     {
-        ForceGc();
+        if (config.ForceGcBeforeBenchmark)
+            ForceGc();
 
         var iterationsPerSample = await ResolveIterationsPerSampleAsync(config, sampleFuncAsync);
 
@@ -416,6 +464,10 @@ public static class Benchmark
             config.MinSampleTime.TotalMilliseconds * 1_000_000.0,
             1.0
         );
+
+        // Discard the first probe: it may include JIT compilation of the
+        // measured delegate, which would skew the calibration downwards.
+        await sampleFuncAsync(iterations);
 
         while (iterations < config.MaxAutoIterationsPerSample)
         {

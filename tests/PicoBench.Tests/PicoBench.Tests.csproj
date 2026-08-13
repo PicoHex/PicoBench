@@ -15,6 +15,13 @@
     
     <!-- Source generator project (as regular library) for testing internals -->
     <ProjectReference Include="..\..\src\PicoBench.Generators\PicoBench.Generators.csproj" />
+
+    <!-- Source generator project (as analyzer) so [BenchmarkClass] test classes
+         get their IBenchmarkClass implementation generated -->
+    <ProjectReference
+      Include="..\..\src\PicoBench.Generators\PicoBench.Generators.csproj"
+      OutputItemType="Analyzer"
+      ReferenceOutputAssembly="false" />
     
     <!-- TUnit testing framework -->
     <PackageReference Include="TUnit" />

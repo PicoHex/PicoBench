@@ -14,13 +14,15 @@ public class BenchmarkRunnerTests
             RunCount++;
             LastConfig = config;
 
-            return ValueTask.FromResult(new BenchmarkSuite(
-                name: "FakeSuite",
-                environment: new EnvironmentInfo(),
-                results: [BenchmarkResultFactory.Create("FakeBenchmark")],
-                duration: TimeSpan.FromMilliseconds(100),
-                description: "Fake suite for testing"
-            ));
+            return ValueTask.FromResult(
+                new BenchmarkSuite(
+                    name: "FakeSuite",
+                    environment: new EnvironmentInfo(),
+                    results: [BenchmarkResultFactory.Create("FakeBenchmark")],
+                    duration: TimeSpan.FromMilliseconds(100),
+                    description: "Fake suite for testing"
+                )
+            );
         }
     }
 
@@ -134,5 +136,75 @@ public class BenchmarkRunnerTests
         BenchmarkRunner.Run(instance);
 
         await Assert.That(instance.RunCount).IsEqualTo(3);
+    }
+
+    // ─── GlobalCleanup robustness (source-generated classes) ───────
+
+    [Test]
+    [Property("Category", "BenchmarkRunner")]
+    public async Task GlobalCleanup_Runs_WhenBenchmarkThrows()
+    {
+        ThrowingBenchmark.GlobalCleanupRan = false;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await BenchmarkRunner.RunAsync<ThrowingBenchmark>(FastBenchmarkConfig)
+        );
+
+        await Assert.That(ThrowingBenchmark.GlobalCleanupRan).IsTrue();
+    }
+
+    [Test]
+    [Property("Category", "BenchmarkRunner")]
+    public async Task GlobalCleanup_Runs_WhenAsyncBenchmarkThrows()
+    {
+        ThrowingAsyncBenchmark.GlobalCleanupRan = false;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await BenchmarkRunner.RunAsync<ThrowingAsyncBenchmark>(FastBenchmarkConfig)
+        );
+
+        await Assert.That(ThrowingAsyncBenchmark.GlobalCleanupRan).IsTrue();
+    }
+
+    private static readonly BenchmarkConfig FastBenchmarkConfig = new()
+    {
+        WarmupIterations = 0,
+        SampleCount = 1,
+        IterationsPerSample = 1,
+    };
+}
+
+// Top-level benchmark classes (the source generator does not support
+// nested [BenchmarkClass] types).
+
+[BenchmarkClass]
+public partial class ThrowingBenchmark
+{
+    public static bool GlobalCleanupRan;
+
+    [Benchmark]
+    public void Throwing() => throw new InvalidOperationException("boom");
+
+    [GlobalCleanup]
+    public void Cleanup() => GlobalCleanupRan = true;
+}
+
+[BenchmarkClass]
+public partial class ThrowingAsyncBenchmark
+{
+    public static bool GlobalCleanupRan;
+
+    [Benchmark]
+    public async Task Throwing()
+    {
+        await Task.Yield();
+        throw new InvalidOperationException("boom");
+    }
+
+    [GlobalCleanup]
+    public async Task Cleanup()
+    {
+        await Task.Yield();
+        GlobalCleanupRan = true;
     }
 }

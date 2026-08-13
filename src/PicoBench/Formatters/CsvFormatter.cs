@@ -112,19 +112,16 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludePercentiles)
         {
-            columns.AddRange(
-
-                [
-                    "P90_ns",
-                    "P95_ns",
-                    "P99_ns",
-                    "Min_ns",
-                    "Max_ns",
-                    "StdDev_ns",
-                    "StdErr_ns",
-                    "RSD_pct"
-                ]
-            );
+            columns.AddRange([
+                "P90_ns",
+                "P95_ns",
+                "P99_ns",
+                "Min_ns",
+                "Max_ns",
+                "StdDev_ns",
+                "StdErr_ns",
+                "RSD_pct",
+            ]);
         }
 
         if (Options.IncludeCpuCycles)
@@ -155,24 +152,21 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
             Escape(result.Name),
             Escape(result.Category ?? ""),
             FormatNumber(s.Avg),
-            FormatNumber(s.P50)
+            FormatNumber(s.P50),
         };
 
         if (Options.IncludePercentiles)
         {
-            values.AddRange(
-
-                [
-                    FormatNumber(s.P90),
-                    FormatNumber(s.P95),
-                    FormatNumber(s.P99),
-                    FormatNumber(s.Min),
-                    FormatNumber(s.Max),
-                    FormatNumber(s.StdDev),
-                    FormatNumber(s.StandardError),
-                    FormatNumber(s.RelativeStdDevPercent)
-                ]
-            );
+            values.AddRange([
+                FormatNumber(s.P90),
+                FormatNumber(s.P95),
+                FormatNumber(s.P99),
+                FormatNumber(s.Min),
+                FormatNumber(s.Max),
+                FormatNumber(s.StdDev),
+                FormatNumber(s.StandardError),
+                FormatNumber(s.RelativeStdDevPercent),
+            ]);
         }
 
         if (Options.IncludeCpuCycles)
@@ -182,14 +176,11 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeGcInfo)
         {
-            values.AddRange(
-
-                [
-                    s.GcInfo?.Gen0.ToString(CultureInfo.InvariantCulture) ?? "0",
-                    s.GcInfo?.Gen1.ToString(CultureInfo.InvariantCulture) ?? "0",
-                    s.GcInfo?.Gen2.ToString(CultureInfo.InvariantCulture) ?? "0"
-                ]
-            );
+            values.AddRange([
+                s.GcInfo?.Gen0.ToString(CultureInfo.InvariantCulture) ?? "0",
+                s.GcInfo?.Gen1.ToString(CultureInfo.InvariantCulture) ?? "0",
+                s.GcInfo?.Gen2.ToString(CultureInfo.InvariantCulture) ?? "0",
+            ]);
         }
 
         values.Add(result.SampleCount.ToString(CultureInfo.InvariantCulture));
@@ -255,21 +246,18 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
             Escape($"{provider} * {testCase}"),
             Escape(provider),
             FormatNumber(stats.Avg),
-            speedup.HasValue ? FormatNumber(speedup.Value) : ""
+            speedup.HasValue ? FormatNumber(speedup.Value) : "",
         };
 
         if (Options.IncludePercentiles)
         {
-            values.AddRange(
-
-                [
-                    FormatNumber(stats.P50),
-                    FormatNumber(stats.P90),
-                    FormatNumber(stats.P99),
-                    FormatNumber(stats.StandardError),
-                    FormatNumber(stats.RelativeStdDevPercent)
-                ]
-            );
+            values.AddRange([
+                FormatNumber(stats.P50),
+                FormatNumber(stats.P90),
+                FormatNumber(stats.P99),
+                FormatNumber(stats.StandardError),
+                FormatNumber(stats.RelativeStdDevPercent),
+            ]);
         }
 
         if (Options.IncludeCpuCycles)
@@ -279,14 +267,11 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeGcInfo)
         {
-            values.AddRange(
-
-                [
-                    stats.GcInfo?.Gen0.ToString(CultureInfo.InvariantCulture) ?? "0",
-                    stats.GcInfo?.Gen1.ToString(CultureInfo.InvariantCulture) ?? "0",
-                    stats.GcInfo?.Gen2.ToString(CultureInfo.InvariantCulture) ?? "0"
-                ]
-            );
+            values.AddRange([
+                stats.GcInfo?.Gen0.ToString(CultureInfo.InvariantCulture) ?? "0",
+                stats.GcInfo?.Gen1.ToString(CultureInfo.InvariantCulture) ?? "0",
+                stats.GcInfo?.Gen2.ToString(CultureInfo.InvariantCulture) ?? "0",
+            ]);
         }
 
         sb.AppendLine(string.Join(Separator, values));
@@ -301,6 +286,8 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         if (string.IsNullOrEmpty(value))
             return "";
 
+        string escaped = value;
+
         // If contains comma, quote, or newline, wrap in quotes and escape internal quotes
         if (
             value.Contains(',')
@@ -309,10 +296,15 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
             || value.Contains('\r')
         )
         {
-            return $"\"{value.Replace("\"", "\"\"")}\"";
+            escaped = $"\"{value.Replace("\"", "\"\"")}\"";
         }
 
-        return value;
+        // Prevent CSV formula injection: cells starting with these characters
+        // would be interpreted as formulas by spreadsheet applications.
+        if (escaped.Length > 0 && escaped[0] is '=' or '+' or '-' or '@')
+            return "'" + escaped;
+
+        return escaped;
     }
 
     private static string FormatNumber(double value)
@@ -334,7 +326,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
     )
     {
         var formatter = new CsvFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(result));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(result));
     }
 
     /// <summary>
@@ -347,7 +339,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
     )
     {
         var formatter = new CsvFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(results));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(results));
     }
 
     /// <summary>
@@ -360,7 +352,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
     )
     {
         var formatter = new CsvFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(comparisons));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(comparisons));
     }
 
     /// <summary>
@@ -373,7 +365,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
     )
     {
         var formatter = new CsvFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(suite));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(suite));
     }
 
     /// <summary>
@@ -399,7 +391,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         }
         else
         {
-            WriteToFileInternal(filePath, content);
+            WriteToFileInternal(formatter.Options.ResolvePath(filePath), content);
         }
     }
 

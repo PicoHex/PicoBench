@@ -89,7 +89,16 @@ internal static class Emitter
             sb.AppendLine();
         }
 
-        // ── Benchmark methods ────────────────────────────────────────
+        // ── Benchmarks + comparisons ─────────────────────────────────
+        // Wrapped in try/finally so [GlobalCleanup] runs even when a
+        // benchmark throws.
+        var contentIndent = bodyIndent + "    ";
+        if (model.GlobalCleanupMethod is not null)
+        {
+            sb.AppendLine($"{bodyIndent}try");
+            sb.AppendLine($"{bodyIndent}{{");
+        }
+
         foreach (var method in model.Methods)
         {
             var nameExpr = hasParams
@@ -102,7 +111,7 @@ internal static class Emitter
                     sb,
                     model,
                     method,
-                    bodyIndent,
+                    contentIndent,
                     nameExpr,
                     hasIterSetup,
                     hasIterCleanup
@@ -114,7 +123,7 @@ internal static class Emitter
                     sb,
                     model,
                     method,
-                    bodyIndent,
+                    contentIndent,
                     nameExpr,
                     hasIterSetup,
                     hasIterCleanup
@@ -123,11 +132,11 @@ internal static class Emitter
             else
             {
                 sb.AppendLine(
-                    $"{bodyIndent}var __r_{method.Name} = {Bench}.Benchmark.Run({nameExpr}, () => this.{method.Name}(), config);"
+                    $"{contentIndent}var __r_{method.Name} = {Bench}.Benchmark.Run({nameExpr}, () => this.{method.Name}(), config);"
                 );
             }
 
-            sb.AppendLine($"{bodyIndent}__results.Add(__r_{method.Name});");
+            sb.AppendLine($"{contentIndent}__results.Add(__r_{method.Name});");
             sb.AppendLine();
         }
 
@@ -146,7 +155,7 @@ internal static class Emitter
                 var categoryExpr = hasParams ? "__paramLabel" : "null";
 
                 sb.AppendLine(
-                    $"{bodyIndent}__comparisons.Add(new {Bench}.ComparisonResult({compNameExpr}, __r_{baselineMethod.Name}, __r_{method.Name}, {categoryExpr}));"
+                    $"{contentIndent}__comparisons.Add(new {Bench}.ComparisonResult({compNameExpr}, __r_{baselineMethod.Name}, __r_{method.Name}, {categoryExpr}));"
                 );
             }
             sb.AppendLine();
@@ -155,8 +164,12 @@ internal static class Emitter
         // ── GlobalCleanup ────────────────────────────────────────────
         if (model.GlobalCleanupMethod is not null)
         {
+            sb.AppendLine($"{bodyIndent}}}");
+            sb.AppendLine($"{bodyIndent}finally");
+            sb.AppendLine($"{bodyIndent}{{");
             var awaitPrefix = model.GlobalCleanupMethod.IsAsync ? "await " : "";
-            sb.AppendLine($"{bodyIndent}{awaitPrefix}this.{model.GlobalCleanupMethod.Name}();");
+            sb.AppendLine($"{contentIndent}{awaitPrefix}this.{model.GlobalCleanupMethod.Name}();");
+            sb.AppendLine($"{bodyIndent}}}");
             sb.AppendLine();
         }
 

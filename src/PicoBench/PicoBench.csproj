@@ -20,6 +20,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="PicoBench.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Bundle the source generator so consumers get it automatically -->
     <ProjectReference
       Include="..\PicoBench.Generators\PicoBench.Generators.csproj"

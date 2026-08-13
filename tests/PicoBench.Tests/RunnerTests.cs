@@ -60,6 +60,36 @@ public class RunnerTests
     }
 
     [Test]
+    [NotInParallel] // reads process-wide GC counters
+    [Property("Category", "Runner")]
+    public async Task Time_SetupForcedCollection_IsNotAttributedToBenchmark()
+    {
+        var sample = Runner.Time(
+            1,
+            () => { },
+            setup: () => GC.Collect(0, GCCollectionMode.Forced),
+            teardown: null
+        );
+
+        await Assert.That(sample.GcInfo!.Gen0).IsEqualTo(0);
+    }
+
+    [Test]
+    [NotInParallel] // reads process-wide GC counters
+    [Property("Category", "Runner")]
+    public async Task Time_TeardownForcedCollection_IsNotAttributedToBenchmark()
+    {
+        var sample = Runner.Time(
+            1,
+            () => { },
+            setup: null,
+            teardown: () => GC.Collect(0, GCCollectionMode.Forced)
+        );
+
+        await Assert.That(sample.GcInfo!.Gen0).IsEqualTo(0);
+    }
+
+    [Test]
     [Property("Category", "Runner")]
     public async Task Time_ZeroIterations_ThrowsArgumentOutOfRangeException()
     {
@@ -201,6 +231,24 @@ public class RunnerTests
     }
 
     // ─── Async timing tests ────────────────────────────────────────
+
+    [Test]
+    [NotInParallel] // reads process-wide GC counters
+    [Property("Category", "Runner")]
+    public async Task TimeAsync_SetupForcedCollection_IsNotAttributedToBenchmark()
+    {
+        var sample = await Runner.TimeAsync(
+            1,
+            () => Task.CompletedTask,
+            setup: () =>
+            {
+                GC.Collect(0, GCCollectionMode.Forced);
+                return Task.CompletedTask;
+            }
+        );
+
+        await Assert.That(sample.GcInfo!.Gen0).IsEqualTo(0);
+    }
 
     [Test]
     [Property("Category", "Runner")]

@@ -19,7 +19,7 @@ public class ModelsTests
         {
             Gen0 = 10,
             Gen1 = 5,
-            Gen2 = 2
+            Gen2 = 2,
         };
         await Assert.That(gc.Total).IsEqualTo(17);
     }
@@ -32,7 +32,7 @@ public class ModelsTests
         {
             Gen0 = 0,
             Gen1 = 0,
-            Gen2 = 0
+            Gen2 = 0,
         };
         await Assert.That(gc.IsZero).IsTrue();
     }
@@ -47,7 +47,7 @@ public class ModelsTests
                 {
                     Gen0 = 1,
                     Gen1 = 0,
-                    Gen2 = 0
+                    Gen2 = 0,
                 }.IsZero
             )
             .IsFalse();
@@ -57,7 +57,7 @@ public class ModelsTests
                 {
                     Gen0 = 0,
                     Gen1 = 1,
-                    Gen2 = 0
+                    Gen2 = 0,
                 }.IsZero
             )
             .IsFalse();
@@ -67,7 +67,7 @@ public class ModelsTests
                 {
                     Gen0 = 0,
                     Gen1 = 0,
-                    Gen2 = 1
+                    Gen2 = 1,
                 }.IsZero
             )
             .IsFalse();
@@ -81,7 +81,7 @@ public class ModelsTests
         {
             Gen0 = 3,
             Gen1 = 2,
-            Gen2 = 1
+            Gen2 = 1,
         };
         await Assert.That(gc.ToString()).IsEqualTo("3/2/1");
     }
@@ -107,7 +107,7 @@ public class ModelsTests
             ElapsedNanoseconds = 1000.0,
             ElapsedMilliseconds = 0.001,
             ElapsedTicks = 100,
-            CpuCycles = 5000
+            CpuCycles = 5000,
         };
 
         await Assert.That(sample.ElapsedNanoseconds).IsEqualTo(1000.0);
@@ -165,14 +165,13 @@ public class ModelsTests
     public async Task BenchmarkResult_NullName_ThrowsArgumentNullException()
     {
         await Assert
-            .That(
-                () =>
-                    new BenchmarkResult(
-                        name: null!,
-                        statistics: StatisticsFactory.Create(),
-                        iterationsPerSample: 1,
-                        sampleCount: 1
-                    )
+            .That(() =>
+                new BenchmarkResult(
+                    name: null!,
+                    statistics: StatisticsFactory.Create(),
+                    iterationsPerSample: 1,
+                    sampleCount: 1
+                )
             )
             .Throws<ArgumentNullException>();
     }
@@ -182,14 +181,13 @@ public class ModelsTests
     public async Task BenchmarkResult_NullStatistics_ThrowsArgumentNullException()
     {
         await Assert
-            .That(
-                () =>
-                    new BenchmarkResult(
-                        name: "Test",
-                        statistics: null!,
-                        iterationsPerSample: 1,
-                        sampleCount: 1
-                    )
+            .That(() =>
+                new BenchmarkResult(
+                    name: "Test",
+                    statistics: null!,
+                    iterationsPerSample: 1,
+                    sampleCount: 1
+                )
             )
             .Throws<ArgumentNullException>();
     }
@@ -199,14 +197,13 @@ public class ModelsTests
     public async Task BenchmarkResult_ZeroIterationsPerSample_ThrowsArgumentOutOfRangeException()
     {
         await Assert
-            .That(
-                () =>
-                    new BenchmarkResult(
-                        name: "Test",
-                        statistics: StatisticsFactory.Create(),
-                        iterationsPerSample: 0,
-                        sampleCount: 1
-                    )
+            .That(() =>
+                new BenchmarkResult(
+                    name: "Test",
+                    statistics: StatisticsFactory.Create(),
+                    iterationsPerSample: 0,
+                    sampleCount: 1
+                )
             )
             .Throws<ArgumentOutOfRangeException>();
     }
@@ -216,14 +213,13 @@ public class ModelsTests
     public async Task BenchmarkResult_NegativeIterationsPerSample_ThrowsArgumentOutOfRangeException()
     {
         await Assert
-            .That(
-                () =>
-                    new BenchmarkResult(
-                        name: "Test",
-                        statistics: StatisticsFactory.Create(),
-                        iterationsPerSample: -1,
-                        sampleCount: 1
-                    )
+            .That(() =>
+                new BenchmarkResult(
+                    name: "Test",
+                    statistics: StatisticsFactory.Create(),
+                    iterationsPerSample: -1,
+                    sampleCount: 1
+                )
             )
             .Throws<ArgumentOutOfRangeException>();
     }
@@ -233,14 +229,13 @@ public class ModelsTests
     public async Task BenchmarkResult_ZeroSampleCount_ThrowsArgumentOutOfRangeException()
     {
         await Assert
-            .That(
-                () =>
-                    new BenchmarkResult(
-                        name: "Test",
-                        statistics: StatisticsFactory.Create(),
-                        iterationsPerSample: 1,
-                        sampleCount: 0
-                    )
+            .That(() =>
+                new BenchmarkResult(
+                    name: "Test",
+                    statistics: StatisticsFactory.Create(),
+                    iterationsPerSample: 1,
+                    sampleCount: 0
+                )
             )
             .Throws<ArgumentOutOfRangeException>();
     }
@@ -250,14 +245,13 @@ public class ModelsTests
     public async Task BenchmarkResult_NegativeSampleCount_ThrowsArgumentOutOfRangeException()
     {
         await Assert
-            .That(
-                () =>
-                    new BenchmarkResult(
-                        name: "Test",
-                        statistics: StatisticsFactory.Create(),
-                        iterationsPerSample: 1,
-                        sampleCount: -1
-                    )
+            .That(() =>
+                new BenchmarkResult(
+                    name: "Test",
+                    statistics: StatisticsFactory.Create(),
+                    iterationsPerSample: 1,
+                    sampleCount: -1
+                )
             )
             .Throws<ArgumentOutOfRangeException>();
     }
@@ -427,14 +421,13 @@ public class ModelsTests
     public async Task BenchmarkSuite_NullName_ThrowsArgumentNullException()
     {
         await Assert
-            .That(
-                () =>
-                    new BenchmarkSuite(
-                        name: null!,
-                        environment: new EnvironmentInfo(),
-                        results: new List<BenchmarkResult>(),
-                        duration: TimeSpan.Zero
-                    )
+            .That(() =>
+                new BenchmarkSuite(
+                    name: null!,
+                    environment: new EnvironmentInfo(),
+                    results: new List<BenchmarkResult>(),
+                    duration: TimeSpan.Zero
+                )
             )
             .Throws<ArgumentNullException>();
     }
@@ -444,14 +437,13 @@ public class ModelsTests
     public async Task BenchmarkSuite_NullEnvironment_ThrowsArgumentNullException()
     {
         await Assert
-            .That(
-                () =>
-                    new BenchmarkSuite(
-                        name: "Suite",
-                        environment: null!,
-                        results: new List<BenchmarkResult>(),
-                        duration: TimeSpan.Zero
-                    )
+            .That(() =>
+                new BenchmarkSuite(
+                    name: "Suite",
+                    environment: null!,
+                    results: new List<BenchmarkResult>(),
+                    duration: TimeSpan.Zero
+                )
             )
             .Throws<ArgumentNullException>();
     }
@@ -461,14 +453,13 @@ public class ModelsTests
     public async Task BenchmarkSuite_NullResults_ThrowsArgumentNullException()
     {
         await Assert
-            .That(
-                () =>
-                    new BenchmarkSuite(
-                        name: "Suite",
-                        environment: new EnvironmentInfo(),
-                        results: null!,
-                        duration: TimeSpan.Zero
-                    )
+            .That(() =>
+                new BenchmarkSuite(
+                    name: "Suite",
+                    environment: new EnvironmentInfo(),
+                    results: null!,
+                    duration: TimeSpan.Zero
+                )
             )
             .Throws<ArgumentNullException>();
     }
@@ -552,10 +543,12 @@ public class ModelsTests
         {
             CpuCycleMeasurement = CpuCycleMeasurementKind.MonotonicClockProxy,
             CpuCyclesAvailable = true,
-            CpuCyclesAreMeaningful = false
+            CpuCyclesAreMeaningful = false,
         };
 
-        await Assert.That(env.CpuCycleMeasurement).IsEqualTo(CpuCycleMeasurementKind.MonotonicClockProxy);
+        await Assert
+            .That(env.CpuCycleMeasurement)
+            .IsEqualTo(CpuCycleMeasurementKind.MonotonicClockProxy);
         await Assert.That(env.CpuCyclesAvailable).IsTrue();
         await Assert.That(env.CpuCyclesAreMeaningful).IsFalse();
     }
@@ -566,9 +559,7 @@ public class ModelsTests
     {
         var env = new EnvironmentInfo();
 
-        await Assert
-            .That(env.CpuCyclesAreMeaningful ? env.CpuCyclesAvailable : true)
-            .IsTrue();
+        await Assert.That(env.CpuCyclesAreMeaningful ? env.CpuCyclesAvailable : true).IsTrue();
 
         if (env.CpuCycleMeasurement == CpuCycleMeasurementKind.Unsupported)
         {
@@ -610,5 +601,41 @@ public class ModelsTests
 
         await Assert.That(env.CustomTags).IsNotNull();
         await Assert.That(env.CustomTags!["CI"]).IsEqualTo("true");
+    }
+
+    [Test]
+    [Property("Category", "Models")]
+    public async Task ClassifyConfiguration_AgreesWithCompileTimeConfig()
+    {
+        // Ground truth: the assembly that runs this test is built in the
+        // same configuration as the test run.
+        var debuggable = typeof(EnvironmentInfo).Assembly.GetCustomAttribute<DebuggableAttribute>();
+        var isJitTrackingEnabled = debuggable?.IsJITTrackingEnabled;
+
+        var classified = EnvironmentInfo.ClassifyConfiguration(isJitTrackingEnabled);
+
+        var expected =
+#if DEBUG
+            "Debug";
+#else
+            "Release";
+#endif
+        await Assert.That(classified).IsEqualTo(expected);
+    }
+
+    [Test]
+    [Property("Category", "Models")]
+    public async Task Configuration_MatchesEntryAssemblyDebuggableState()
+    {
+        // Production code resolves the entry assembly (falling back to the
+        // library assembly) and classifies via DebuggableAttribute.
+        var assembly =
+            System.Reflection.Assembly.GetEntryAssembly() ?? typeof(EnvironmentInfo).Assembly;
+        var debuggable = assembly.GetCustomAttribute<DebuggableAttribute>();
+        var expected = debuggable?.IsJITTrackingEnabled == true ? "Debug" : "Release";
+
+        var actual = new EnvironmentInfo().Configuration;
+
+        await Assert.That(actual).IsEqualTo(expected);
     }
 }

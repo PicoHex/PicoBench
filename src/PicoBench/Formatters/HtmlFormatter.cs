@@ -87,9 +87,13 @@ public sealed class HtmlFormatter(FormatterOptions? options = null) : FormatterB
             );
 
             if (!suite.Environment.CpuCyclesAvailable)
-                sb.AppendLine("<br><strong>CPU Counter Note:</strong> unavailable on this platform/runtime");
+                sb.AppendLine(
+                    "<br><strong>CPU Counter Note:</strong> unavailable on this platform/runtime"
+                );
             else if (!suite.Environment.CpuCyclesAreMeaningful)
-                sb.AppendLine("<br><strong>CPU Counter Note:</strong> proxy timing source, not true CPU cycles");
+                sb.AppendLine(
+                    "<br><strong>CPU Counter Note:</strong> proxy timing source, not true CPU cycles"
+                );
 
             sb.AppendLine("</div>");
         }
@@ -527,7 +531,7 @@ footer {
             >= 3 => "very-fast",
             >= 1.5 => "fast",
             >= 1 => "neutral",
-            _ => "slow"
+            _ => "slow",
         };
     }
 
@@ -559,7 +563,7 @@ footer {
     )
     {
         var formatter = new HtmlFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(result));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(result));
     }
 
     /// <summary>
@@ -572,7 +576,7 @@ footer {
     )
     {
         var formatter = new HtmlFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(results));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(results));
     }
 
     /// <summary>
@@ -585,7 +589,7 @@ footer {
     )
     {
         var formatter = new HtmlFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(comparisons));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(comparisons));
     }
 
     /// <summary>
@@ -598,7 +602,7 @@ footer {
     )
     {
         var formatter = new HtmlFormatter(options);
-        WriteToFileInternal(filePath, formatter.Format(suite));
+        WriteToFileInternal(formatter.Options.ResolvePath(filePath), formatter.Format(suite));
     }
 
     #endregion
