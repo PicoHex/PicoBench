@@ -436,6 +436,94 @@ public class CsvFormatterTests
         );
     }
 
+    // ─── Formula injection hardening ───────────────────────────────
+
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "CSV")]
+    public async Task Format_FormulaInjectionThatAlsoNeedsQuoting_IsPrefixed()
+    {
+        var formatter = new CsvFormatter();
+
+        var csv = formatter.Format(BenchmarkResultFactory.Create("=SUM(A1,A2)"));
+
+        // The apostrophe must be inside the quotes; otherwise spreadsheets
+        // strip the quotes and still evaluate the cell as a formula.
+        await Assert.That(csv).Contains("\"'=SUM(A1,A2)\"");
+    }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "CSV")]
+    public async Task Format_PlainFormulaInjection_IsPrefixed()
+    {
+        var formatter = new CsvFormatter();
+
+        var csv = formatter.Format(BenchmarkResultFactory.Create("=1+1"));
+
+        await Assert.That(csv).Contains("'=1+1");
+    }
+
+    // ─── AppendToFile path and payload fidelity ────────────────────
+
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "CSV")]
+    [Property("FileSystem", "true")]
+    [NotInParallel]
+    public async Task AppendToFile_HonorsOutputDirectory()
+    {
+        var testDir = FileSystemHelper.CreateTestDirectory();
+        try
+        {
+            var outputDir = Path.Combine(testDir, "out");
+            var options = new FormatterOptions { OutputDirectory = outputDir };
+            var result1 = BenchmarkResultFactory.Create("Test1");
+            var result2 = BenchmarkResultFactory.Create("Test2");
+
+            CsvFormatter.AppendToFile("test.csv", result1, options);
+            CsvFormatter.AppendToFile("test.csv", result2, options);
+
+            var resolvedPath = Path.Combine(outputDir, "test.csv");
+            await Assert.That(File.Exists(resolvedPath)).IsTrue();
+
+            var content = await File.ReadAllTextAsync(resolvedPath);
+            await Assert.That(content).Contains("Test1");
+            await Assert.That(content).Contains("Test2");
+            await Assert.That(content.Split("Name,Category,Avg_ns,P50_ns").Length - 1).IsEqualTo(1);
+        }
+        finally
+        {
+            FileSystemHelper.DeleteTestDirectory(testDir);
+        }
+    }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    [Property("SubCategory", "CSV")]
+    [Property("FileSystem", "true")]
+    [NotInParallel]
+    public async Task AppendToFile_PreservesNewlinesInsideQuotedValues()
+    {
+        var testDir = FileSystemHelper.CreateTestDirectory();
+        try
+        {
+            var filePath = Path.Combine(testDir, "test.csv");
+
+            CsvFormatter.WriteToFile(filePath, BenchmarkResultFactory.Create("first"));
+            CsvFormatter.AppendToFile(filePath, BenchmarkResultFactory.Create("multi\nline"));
+
+            var content = await File.ReadAllTextAsync(filePath);
+            // The embedded newline is part of the quoted value and must be
+            // preserved byte-for-byte, not re-normalized.
+            await Assert.That(content).Contains("\"multi\nline\"");
+        }
+        finally
+        {
+            FileSystemHelper.DeleteTestDirectory(testDir);
+        }
+    }
+
     public static IEnumerable<(string input, string expectedPattern)> GetEscapeTestCases()
     {
         yield return ("NormalText", "normal");

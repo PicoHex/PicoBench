@@ -13,10 +13,10 @@ public sealed class BenchmarkGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var provider = context
-            .SyntaxProvider
-            .ForAttributeWithMetadataName(
+            .SyntaxProvider.ForAttributeWithMetadataName(
                 BenchmarkClassAnalyzer.BenchmarkClassAttributeName,
-                predicate: static (node, _) => node is ClassDeclarationSyntax,
+                predicate: static (node, _) =>
+                    node is ClassDeclarationSyntax or RecordDeclarationSyntax,
                 transform: static (ctx, ct) => BenchmarkClassAnalyzer.AnalyzeTarget(ctx, ct)
             )
             .Where(static result => result is not null)

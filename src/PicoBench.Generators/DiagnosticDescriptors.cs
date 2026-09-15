@@ -91,4 +91,67 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+
+    public static readonly DiagnosticDescriptor AsyncVoidBenchmarkMethod = new(
+        id: "PBGEN011",
+        title: "Async void benchmark method",
+        messageFormat: "Benchmark method '{0}' is async void; its work cannot be awaited or measured. Use Task or ValueTask.",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    public static readonly DiagnosticDescriptor GenericBenchmarkClass = new(
+        id: "PBGEN012",
+        title: "Generic benchmark class",
+        messageFormat: "Benchmark class '{0}' must not be generic",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    public static readonly DiagnosticDescriptor NestedBenchmarkClass = new(
+        id: "PBGEN013",
+        title: "Nested benchmark class",
+        messageFormat: "Benchmark class '{0}' must not be nested inside another type",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    public static readonly DiagnosticDescriptor RecordBenchmarkClass = new(
+        id: "PBGEN014",
+        title: "Record benchmark class",
+        messageFormat: "Benchmark class '{0}' must be a plain partial class; record types are not supported",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    public static readonly DiagnosticDescriptor NonInstantiableBenchmarkClass = new(
+        id: "PBGEN015",
+        title: "Benchmark class is not instantiable",
+        messageFormat: "Benchmark class '{0}' must be non-abstract and declare a public parameterless constructor",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    public static readonly DiagnosticDescriptor EmptyParamsValues = new(
+        id: "PBGEN016",
+        title: "Empty [Params] value set",
+        messageFormat: "[Params] member '{0}' has no values; the benchmark will not run",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
+
+    public static readonly DiagnosticDescriptor InheritedBenchmarkMembers = new(
+        id: "PBGEN017",
+        title: "Benchmark attributes on base types are ignored",
+        messageFormat: "Base type '{0}' declares benchmark or lifecycle attributes; only members declared on the benchmark class are discovered",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
 }

@@ -154,4 +154,11 @@ public class BenchmarkConfigTests
             .That(() => new BenchmarkConfig { IterationsPerSample = -10 })
             .Throws<ArgumentOutOfRangeException>();
     }
+
+    [Test]
+    [Property("Category", "BenchmarkConfig")]
+    public async Task BoostPriorities_DefaultIsTrue()
+    {
+        await Assert.That(new BenchmarkConfig().BoostPriorities).IsTrue();
+    }
 }

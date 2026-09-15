@@ -638,4 +638,19 @@ public class ModelsTests
 
         await Assert.That(actual).IsEqualTo(expected);
     }
+
+    [Test]
+    [Property("Category", "Models")]
+    public async Task EnvironmentInfo_CpuCycleDefaults_AreStableAfterRunnerInitialization()
+    {
+        // Defaults must not depend on whether a benchmark has run before the
+        // EnvironmentInfo instance was created (Linux perf initialization).
+        var before = new EnvironmentInfo();
+        Runner.Initialize();
+        var after = new EnvironmentInfo();
+
+        await Assert.That(after.CpuCycleMeasurement).IsEqualTo(before.CpuCycleMeasurement);
+        await Assert.That(after.CpuCyclesAvailable).IsEqualTo(before.CpuCyclesAvailable);
+        await Assert.That(after.CpuCyclesAreMeaningful).IsEqualTo(before.CpuCyclesAreMeaningful);
+    }
 }

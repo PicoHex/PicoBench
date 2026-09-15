@@ -294,4 +294,131 @@ public class RunnerTests
             .Throws<ArgumentOutOfRangeException>();
     }
 #pragma warning restore CS8619
+
+    // ─── Async CPU cycles must stay valid across thread hops ───────
+
+    [Test]
+    [Property("Category", "Runner")]
+    public async Task TimeAsync_CpuCycles_AcrossThreadHops_DoNotUnderflow()
+    {
+        var sample = await Runner.TimeAsync(
+            200,
+            async () =>
+            {
+                await Task.Yield();
+                Thread.SpinWait(500);
+            }
+        );
+
+        // Reading per-thread cycle counters on two different threads and
+        // subtracting them wraps ulong near 2^64. Any plausible count is far
+        // below 2^50.
+        await Assert.That(sample.CpuCycles).IsLessThan(1UL << 50);
+    }
+
+    [Test]
+    [Property("Category", "Runner")]
+    public async Task TimeCpuAsync_CpuCycles_AcrossThreadHops_DoNotUnderflow()
+    {
+        var sample = await Runner.TimeCpuAsync(
+            200,
+            async () =>
+            {
+                await Task.Yield();
+                Thread.SpinWait(500);
+            }
+        );
+
+        await Assert.That(sample.CpuCycles).IsLessThan(1UL << 50);
+    }
+
+    // ─── Linux perf-event guard and attribute flags ─────────────────
+
+    public static IEnumerable<(int? Paranoid, bool Expected)> GetPerfParanoidCases()
+    {
+        yield return (null, true); // unreadable -> attempt the syscall
+        yield return (-1, true);
+        yield return (0, true);
+        yield return (1, true);
+        yield return (2, true); // user-space counting still allowed
+        yield return (3, false);
+        yield return (4, false);
+    }
+
+    [Test]
+    [Property("Category", "Runner")]
+    [MethodDataSource(nameof(GetPerfParanoidCases))]
+    public async Task ShouldEnableLinuxPerf_RespectsParanoidThreshold(int? paranoid, bool expected)
+    {
+        await Assert.That(Runner.ShouldEnableLinuxPerf(paranoid)).IsEqualTo(expected);
+    }
+
+    [Test]
+    [Property("Category", "Runner")]
+    public async Task CreateCyclesPerfEventAttr_ExcludesKernelCycles()
+    {
+        var attr = Runner.CreateCyclesPerfEventAttr();
+
+        await Assert.That((attr.Flags & Runner.PerfAttrExcludeKernel) != 0).IsTrue();
+        await Assert.That(attr.Type).IsEqualTo(0u);
+        await Assert.That(attr.Config).IsEqualTo(0UL);
+    }
+
+    [Test]
+    [Property("Category", "Runner")]
+    public async Task CreateProcessCyclesPerfEventAttr_InheritsThreads()
+    {
+        var attr = Runner.CreateProcessCyclesPerfEventAttr();
+
+        await Assert.That((attr.Flags & Runner.PerfAttrInherit) != 0).IsTrue();
+        await Assert.That((attr.Flags & Runner.PerfAttrExcludeKernel) != 0).IsTrue();
+    }
+
+    // ─── CPU clock granularity for CpuOnly calibration ─────────────
+
+    [Test]
+    [Property("Category", "Runner")]
+    public async Task GetCpuClockGranularity_ReturnsPlausibleValue()
+    {
+        var granularity = Runner.GetCpuClockGranularity();
+
+        await Assert.That(granularity).IsGreaterThan(TimeSpan.Zero);
+        await Assert.That(granularity).IsLessThan(TimeSpan.FromMilliseconds(250));
+    }
+
+    // ─── Priority boost scope ──────────────────────────────────────
+
+    [Test]
+    [NotInParallel]
+    [Property("Category", "Runner")]
+    public async Task BoostPriorities_OnDispose_RestoresProcessAndThreadPriorities()
+    {
+        var originalProcess = Process.GetCurrentProcess().PriorityClass;
+        var originalThread = Thread.CurrentThread.Priority;
+
+        using (Runner.BoostPriorities(enabled: true))
+        {
+            // Scope is active here (or the environment refused the boost).
+        }
+
+        await Assert.That(Process.GetCurrentProcess().PriorityClass).IsEqualTo(originalProcess);
+        await Assert.That(Thread.CurrentThread.Priority).IsEqualTo(originalThread);
+    }
+
+    [Test]
+    [NotInParallel]
+    [Property("Category", "Runner")]
+    public async Task BoostPriorities_Disabled_DoesNotChangePriorities()
+    {
+        var originalProcess = Process.GetCurrentProcess().PriorityClass;
+        var originalThread = Thread.CurrentThread.Priority;
+
+        using (var scope = Runner.BoostPriorities(enabled: false))
+        {
+            await Assert.That(scope.IsActive).IsFalse();
+        }
+
+        await Assert.That(Process.GetCurrentProcess().PriorityClass).IsEqualTo(originalProcess);
+        await Assert.That(Thread.CurrentThread.Priority).IsEqualTo(originalThread);
+    }
 }

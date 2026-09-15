@@ -59,6 +59,13 @@ public sealed class BenchmarkConfig
     public bool ForceGcBeforeBenchmark { get; init; } = true;
 
     /// <summary>
+    /// When true (default), the process and the calling thread are raised to
+    /// high priority for the duration of the run and restored to their previous
+    /// values afterwards. Set to false to leave host scheduling untouched.
+    /// </summary>
+    public bool BoostPriorities { get; init; } = true;
+
+    /// <summary>
     /// When enabled, PicoBench automatically increases iterations per sample until
     /// a minimum timing budget is reached for more stable measurements.
     /// </summary>
@@ -88,7 +95,11 @@ public sealed class BenchmarkConfig
     /// <summary>Timing strategy for async benchmarks. Sync benchmarks ignore this.</summary>
     public AsyncTimingMode TimingMode { get; init; } = AsyncTimingMode.WallClock;
 
-    /// <summary>CancellationToken to allow early termination of a benchmark run.</summary>
+    /// <summary>
+    /// CancellationToken to allow early termination of a benchmark run.
+    /// Checked at sample boundaries by asynchronous benchmarks only;
+    /// synchronous benchmarks ignore it.
+    /// </summary>
     public CancellationToken CancellationToken { get; init; } = CancellationToken.None;
 
     /// <summary>Default configuration suitable for most benchmarks.</summary>

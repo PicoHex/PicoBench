@@ -286,7 +286,12 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         if (string.IsNullOrEmpty(value))
             return "";
 
-        string escaped = value;
+        // Prevent CSV formula injection on the raw content first: cells
+        // starting with these characters would be interpreted as formulas by
+        // spreadsheet applications. Prefixing before quoting keeps the
+        // apostrophe inside the field once the quotes are stripped.
+        if (value[0] is '=' or '+' or '-' or '@' or '\t' or '\r')
+            value = "'" + value;
 
         // If contains comma, quote, or newline, wrap in quotes and escape internal quotes
         if (
@@ -296,15 +301,10 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
             || value.Contains('\r')
         )
         {
-            escaped = $"\"{value.Replace("\"", "\"\"")}\"";
+            return $"\"{value.Replace("\"", "\"\"")}\"";
         }
 
-        // Prevent CSV formula injection: cells starting with these characters
-        // would be interpreted as formulas by spreadsheet applications.
-        if (escaped.Length > 0 && escaped[0] is '=' or '+' or '-' or '@')
-            return "'" + escaped;
-
-        return escaped;
+        return value;
     }
 
     private static string FormatNumber(double value)
@@ -378,21 +378,48 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
     )
     {
         var formatter = new CsvFormatter(options);
+        var resolvedPath = formatter.Options.ResolvePath(filePath);
         var content = formatter.Format(result);
 
-        if (File.Exists(filePath))
+        if (File.Exists(resolvedPath))
         {
-            // Skip header line if file already exists
-            var lines = content.Split(['\n'], StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length > 1)
-            {
-                File.AppendAllLines(filePath, lines.Skip(1));
-            }
+            // Skip the header and append the rest byte-for-byte so embedded
+            // newlines inside quoted values are not re-normalized.
+            File.AppendAllText(resolvedPath, SkipHeaderLine(content));
         }
         else
         {
-            WriteToFileInternal(formatter.Options.ResolvePath(filePath), content);
+            WriteToFileInternal(resolvedPath, content);
         }
+    }
+
+    /// <summary>
+    /// Returns everything after the first newline that is outside a quoted
+    /// field. Naive <c>Split('\n')</c> would cut through quoted values.
+    /// </summary>
+    private static string SkipHeaderLine(string csv)
+    {
+        var inQuotes = false;
+        for (var i = 0; i < csv.Length; i++)
+        {
+            var c = csv[i];
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < csv.Length && csv[i + 1] == '"')
+                {
+                    i++; // escaped quote inside a quoted field
+                    continue;
+                }
+
+                inQuotes = !inQuotes;
+            }
+            else if (c == '\n' && !inQuotes)
+            {
+                return csv.Substring(i + 1);
+            }
+        }
+
+        return string.Empty;
     }
 
     #endregion

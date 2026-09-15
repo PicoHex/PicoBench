@@ -87,7 +87,7 @@ public class FormatterOptionsTests
             TimeDecimalPlaces = 3,
             SpeedupDecimalPlaces = 4,
             BaselineLabel = "Old",
-            CandidateLabel = "New"
+            CandidateLabel = "New",
         };
 
         await Assert.That(options.OutputDirectory).IsEqualTo("custom/output");
@@ -108,8 +108,8 @@ public class FormatterOptionsTests
     {
         var options = FormatterOptions.Default;
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Task.Run(() => options.ResolvePath(null!))
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            Task.Run(() => options.ResolvePath(null!))
         );
     }
 
@@ -160,8 +160,26 @@ public class FormatterOptionsTests
                 TimeDecimalPlaces = env ? 1 : 2, // Vary decimal places
                 SpeedupDecimalPlaces = ts ? 2 : 3,
                 BaselineLabel = gc ? "Baseline" : "Control",
-                CandidateLabel = cpu ? "Candidate" : "Test"
+                CandidateLabel = cpu ? "Candidate" : "Test",
             };
         }
+    }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    public async Task TimeDecimalPlaces_Negative_ThrowsArgumentOutOfRangeException()
+    {
+        await Assert
+            .That(() => new FormatterOptions { TimeDecimalPlaces = -1 })
+            .Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    public async Task SpeedupDecimalPlaces_Negative_ThrowsArgumentOutOfRangeException()
+    {
+        await Assert
+            .That(() => new FormatterOptions { SpeedupDecimalPlaces = -1 })
+            .Throws<ArgumentOutOfRangeException>();
     }
 }

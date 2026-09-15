@@ -45,6 +45,7 @@ public static class Benchmark
             throw new ArgumentNullException(nameof(action));
 
         config ??= BenchmarkConfig.Default;
+        using var __priority = Runner.BoostPriorities(config.BoostPriorities);
         Runner.Initialize();
 
         // Warmup phase
@@ -82,6 +83,7 @@ public static class Benchmark
             throw new ArgumentNullException(nameof(action));
 
         config ??= BenchmarkConfig.Default;
+        using var __priority = Runner.BoostPriorities(config.BoostPriorities);
         Runner.Initialize();
 
         // Warmup phase
@@ -113,6 +115,7 @@ public static class Benchmark
             throw new ArgumentNullException(nameof(action));
 
         config ??= BenchmarkConfig.Default;
+        using var __priority = Runner.BoostPriorities(config.BoostPriorities);
         Runner.Initialize();
 
         // Warmup phase - use a single scope
@@ -153,6 +156,7 @@ public static class Benchmark
             throw new ArgumentNullException(nameof(action));
 
         config ??= BenchmarkConfig.Default;
+        using var __priority = Runner.BoostPriorities(config.BoostPriorities);
         Runner.Initialize();
 
         // Warmup phase - use a single scope
@@ -316,6 +320,26 @@ public static class Benchmark
     }
 
     /// <summary>
+    /// Resolves the minimum per-sample time target for auto-calibration.
+    /// In <see cref="AsyncTimingMode.CpuOnly"/> mode the process CPU clock
+    /// only advances in full timer ticks, so the target is raised to at least
+    /// the measured clock granularity (otherwise calibration probes read zero).
+    /// </summary>
+    internal static double ResolveMinSampleNanoseconds(
+        BenchmarkConfig config,
+        TimeSpan cpuClockGranularity
+    )
+    {
+        var minSampleTime = config.MinSampleTime;
+        if (config.TimingMode == AsyncTimingMode.CpuOnly && cpuClockGranularity > minSampleTime)
+        {
+            minSampleTime = cpuClockGranularity;
+        }
+
+        return Math.Max(minSampleTime.TotalMilliseconds * 1_000_000.0, 1.0);
+    }
+
+    /// <summary>
     /// Run an async benchmark with the given action.
     /// </summary>
     public static Task<BenchmarkResult> RunAsync(
@@ -348,6 +372,7 @@ public static class Benchmark
             throw new ArgumentNullException(nameof(action));
 
         config ??= BenchmarkConfig.Default;
+        using var __priority = Runner.BoostPriorities(config.BoostPriorities);
         Runner.Initialize();
 
         // Warmup phase
@@ -385,6 +410,7 @@ public static class Benchmark
             throw new ArgumentNullException(nameof(action));
 
         config ??= BenchmarkConfig.Default;
+        using var __priority = Runner.BoostPriorities(config.BoostPriorities);
         Runner.Initialize();
 
         if (warmup != null && config.WarmupIterations > 0)
@@ -460,9 +486,9 @@ public static class Benchmark
             return config.IterationsPerSample;
 
         var iterations = config.IterationsPerSample;
-        var minSampleNanoseconds = Math.Max(
-            config.MinSampleTime.TotalMilliseconds * 1_000_000.0,
-            1.0
+        var minSampleNanoseconds = ResolveMinSampleNanoseconds(
+            config,
+            Runner.GetCpuClockGranularity()
         );
 
         // Discard the first probe: it may include JIT compilation of the

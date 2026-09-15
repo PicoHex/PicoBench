@@ -383,4 +383,13 @@ public class SummaryFormatterTests
         yield return () =>
             new List<ComparisonResult> { ComparisonResultFactory.WithBothNearZeroTimes() };
     }
+
+    [Test]
+    [Property("Category", "Formatter")]
+    public async Task SummaryOptions_BoxWidthBelowTwo_ThrowsArgumentOutOfRangeException()
+    {
+        await Assert
+            .That(() => new SummaryOptions { BoxWidth = 1 })
+            .Throws<ArgumentOutOfRangeException>();
+    }
 }

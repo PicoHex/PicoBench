@@ -41,12 +41,19 @@ public sealed class TimingSample
     /// <summary>Elapsed time in milliseconds.</summary>
     public double ElapsedMilliseconds { get; init; }
 
-    /// <summary>Elapsed Stopwatch ticks.</summary>
+    /// <summary>
+    /// Elapsed ticks from the timing source: Stopwatch ticks in wall-clock
+    /// modes, or 100-nanosecond CPU-time ticks in
+    /// <see cref="AsyncTimingMode.CpuOnly"/> mode.
+    /// </summary>
     public long ElapsedTicks { get; init; }
 
     /// <summary>
-    /// CPU cycles consumed (Windows/Linux). On macOS this is a monotonic timestamp
-    /// and should not be compared across platforms. 0 on unsupported platforms.
+    /// CPU cycles consumed. Synchronous benchmarks read per-thread counters;
+    /// asynchronous benchmarks read process-wide counters because the measured
+    /// work may resume on a different thread. On macOS this is a monotonic
+    /// timestamp and should not be compared across platforms. 0 when no cycle
+    /// source is available.
     /// </summary>
     public ulong CpuCycles { get; init; }
 
@@ -92,7 +99,10 @@ public sealed class Statistics
     /// <summary>Relative standard deviation as a percentage of the mean.</summary>
     public double RelativeStdDevPercent { get; init; }
 
-    /// <summary>Average CPU cycles per operation.</summary>
+    /// <summary>
+    /// Average CPU cycles per operation. 0 when no cycle source is available
+    /// on the current platform/runtime.
+    /// </summary>
     public double CpuCyclesPerOp { get; init; }
 
     /// <summary>Aggregated GC info across all samples. Null when not collected.</summary>
@@ -343,7 +353,9 @@ public sealed class EnvironmentInfo
     /// <remarks>
     /// Detected from the entry assembly's <see cref="DebuggableAttribute"/> so
     /// NuGet consumers report their own build configuration rather than the
-    /// configuration the library itself was compiled with.
+    /// configuration the library itself was compiled with. Requires the entry
+    /// assembly's attribute metadata; falls back to this assembly's
+    /// compile-time configuration when unavailable (AOT/trimming).
     /// </remarks>
     public string Configuration { get; init; } = DetectConfiguration();
 
@@ -364,6 +376,9 @@ public sealed class EnvironmentInfo
     public override string ToString() =>
         $"{RuntimeVersion} | {Os} | {Architecture} | {DescribeExecutionMode(ExecutionMode)} | {Configuration} | Cycles: {DescribeCpuCycleMeasurement(CpuCycleMeasurement)}";
 
+    // The only runtime reflection performed by the library. Wrapped in
+    // try/catch so trimming/AOT can fall back to this assembly's compile-time
+    // configuration (see the Configuration property remarks).
     private static string DetectConfiguration()
     {
         try

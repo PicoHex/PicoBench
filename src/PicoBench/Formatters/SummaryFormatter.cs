@@ -8,8 +8,19 @@ public sealed class SummaryOptions
     /// <summary>Title for the summary box.</summary>
     public string Title { get; init; } = "SUMMARY";
 
-    /// <summary>Width of the summary box (in characters).</summary>
-    public int BoxWidth { get; init; } = 111;
+    /// <summary>Width of the summary box (in characters, at least 2).</summary>
+    public int BoxWidth
+    {
+        get;
+        init =>
+            field =
+                value >= 2
+                    ? value
+                    : throw new ArgumentOutOfRangeException(
+                        nameof(BoxWidth),
+                        "BoxWidth must be at least 2."
+                    );
+    } = 111;
 
     /// <summary>Label for the candidate (faster) side in comparisons.</summary>
     public string CandidateLabel { get; init; } = "Candidate";
@@ -47,6 +58,10 @@ public static class SummaryFormatter
     /// <param name="duration">Optional total benchmark duration.</param>
     /// <param name="options">Optional summary display options.</param>
     /// <param name="detailFormatter">Optional formatter for the detailed table. Defaults to <see cref="ConsoleFormatter"/>.</param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="comparisons"/> is <c>null</c>. An empty sequence is not an
+    /// error and returns a "no results" message instead.
+    /// </exception>
     public static string Format(
         IEnumerable<ComparisonResult> comparisons,
         TimeSpan? duration = null,

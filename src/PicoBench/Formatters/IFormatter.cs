@@ -55,10 +55,32 @@ public sealed class FormatterOptions
     public bool IncludePercentiles { get; init; } = true;
 
     /// <summary>Number of decimal places for time values.</summary>
-    public int TimeDecimalPlaces { get; init; } = 1;
+    public int TimeDecimalPlaces
+    {
+        get;
+        init =>
+            field =
+                value >= 0
+                    ? value
+                    : throw new ArgumentOutOfRangeException(
+                        nameof(TimeDecimalPlaces),
+                        "TimeDecimalPlaces must be non-negative."
+                    );
+    } = 1;
 
     /// <summary>Number of decimal places for speedup values.</summary>
-    public int SpeedupDecimalPlaces { get; init; } = 2;
+    public int SpeedupDecimalPlaces
+    {
+        get;
+        init =>
+            field =
+                value >= 0
+                    ? value
+                    : throw new ArgumentOutOfRangeException(
+                        nameof(SpeedupDecimalPlaces),
+                        "SpeedupDecimalPlaces must be non-negative."
+                    );
+    } = 2;
 
     /// <summary>Label for the baseline result in comparisons.</summary>
     public string BaselineLabel { get; init; } = "Baseline";
@@ -81,7 +103,7 @@ public sealed class FormatterOptions
             IncludeTimestamp = false,
             IncludeGcInfo = false,
             IncludeCpuCycles = false,
-            IncludePercentiles = false
+            IncludePercentiles = false,
         };
 
     /// <summary>
@@ -228,7 +250,7 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
             >= 5 => "**",
             >= 2 => "*",
             >= 1 => "",
-            _ => "(!)"
+            _ => "(!)",
         };
     }
 

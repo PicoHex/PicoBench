@@ -105,7 +105,20 @@ internal static class Emitter
                 ? $"$\"{method.Name} [{{__paramLabel}}]\""
                 : $"\"{method.Name}\"";
 
-            if (isAsync)
+            // A synchronous method only needs the async runner path when the
+            // surrounding class awaits something for it: the method itself, or
+            // its per-sample setup/teardown. Otherwise emit the direct sync
+            // path even in a class that has other async members — the async
+            // wrapper adds measurable per-iteration overhead.
+            var needsAsyncPath =
+                isAsync
+                && (
+                    method.IsAsync
+                    || (model.IterationSetupMethod?.IsAsync ?? false)
+                    || (model.IterationCleanupMethod?.IsAsync ?? false)
+                );
+
+            if (needsAsyncPath)
             {
                 EmitAsyncBenchmark(
                     sb,

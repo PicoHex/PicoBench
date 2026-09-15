@@ -533,7 +533,7 @@ public class EmitterTests
 
     [Test]
     [Property("Category", "Emitter")]
-    public async Task Generate_AsyncClassWithSyncBenchmark_WrapsInAsyncLambda()
+    public async Task Generate_AsyncClassWithSyncBenchmark_UsesSynchronousRunPath()
     {
         var methods = ImmutableArray.Create(
             new BenchmarkMethodModel { Name = "SyncWork", IsAsync = false }
@@ -541,6 +541,48 @@ public class EmitterTests
         var model = MinimalModel(methods: methods, isAsync: true);
         var code = Emitter.Generate(model);
 
+        await Assert.That(code).Contains("global::PicoBench.Benchmark.Run(");
+        await Assert.That(code).DoesNotContain("async () => { this.SyncWork(); }");
+        await Assert.That(code).DoesNotContain("await global::PicoBench.Benchmark.RunAsync");
+    }
+
+    [Test]
+    [Property("Category", "Emitter")]
+    public async Task Generate_AsyncClassWithSyncBenchmarkAndSyncIterSetup_UsesSynchronousSetupDelegates()
+    {
+        var methods = ImmutableArray.Create(
+            new BenchmarkMethodModel { Name = "SyncWork", IsAsync = false }
+        );
+        var model = MinimalModel(
+            methods: methods,
+            isAsync: true,
+            iterSetup: new LifecycleMethodInfo { Name = "IterSetup", IsAsync = false },
+            iterCleanup: new LifecycleMethodInfo { Name = "IterCleanup", IsAsync = false }
+        );
+        var code = Emitter.Generate(model);
+
+        await Assert.That(code).Contains("global::PicoBench.Benchmark.Run(");
+        await Assert.That(code).Contains("setup: (global::System.Action)(() => this.IterSetup())");
+        await Assert
+            .That(code)
+            .Contains("teardown: (global::System.Action)(() => this.IterCleanup())");
+    }
+
+    [Test]
+    [Property("Category", "Emitter")]
+    public async Task Generate_AsyncClassWithSyncBenchmarkAndAsyncIterSetup_UsesAsyncPath()
+    {
+        var methods = ImmutableArray.Create(
+            new BenchmarkMethodModel { Name = "SyncWork", IsAsync = false }
+        );
+        var model = MinimalModel(
+            methods: methods,
+            isAsync: true,
+            iterSetup: new LifecycleMethodInfo { Name = "IterSetup", IsAsync = true }
+        );
+        var code = Emitter.Generate(model);
+
+        await Assert.That(code).Contains("await global::PicoBench.Benchmark.RunAsync");
         await Assert.That(code).Contains("async () => { this.SyncWork(); }");
     }
 

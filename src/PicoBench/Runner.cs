@@ -6,14 +6,19 @@ namespace PicoBench;
 /// </summary>
 public static partial class Runner
 {
+    private static readonly Lazy<bool> PlatformInitializer = new(
+        InitializePlatform,
+        LazyThreadSafetyMode.ExecutionAndPublication
+    );
+
     private static readonly Lazy<bool> Initializer = new(
         InitializeCore,
         LazyThreadSafetyMode.ExecutionAndPublication
     );
 
     /// <summary>
-    /// Initialize the runner by setting process/thread priority and warming up timing APIs.
-    /// Call this once at the start of your benchmark session.
+    /// Initialize the runner by preparing platform cycle counters and warming up
+    /// the timing APIs. Call this once at the start of your benchmark session.
     /// Thread-safe: uses <see cref="Lazy{T}"/> to guarantee single initialization.
     /// </summary>
     public static void Initialize()
@@ -21,29 +26,210 @@ public static partial class Runner
         _ = Initializer.Value;
     }
 
-    private static bool InitializeCore()
+    /// <summary>
+    /// Ensures platform-specific cycle counter initialization has run.
+    /// Called by initialization and by the environment metadata factory so
+    /// that reported counter availability does not depend on whether a
+    /// benchmark has already run (see <see cref="EnvironmentInfo"/> defaults).
+    /// </summary>
+    internal static void EnsurePlatformInitialized()
     {
-        try
-        {
-            // Set high priority on all platforms (may require elevated permissions)
-            Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
-            Thread.CurrentThread.Priority = ThreadPriority.Highest;
-        }
-        catch
-        {
-            // Ignore if we can't set priority (e.g., insufficient permissions)
-        }
+        _ = PlatformInitializer.Value;
+    }
 
-        // Initialize Linux perf event for CPU cycle counting
+    private static bool InitializePlatform()
+    {
+        // Initialize Linux perf events for CPU cycle counting.
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             InitializeLinuxPerf();
         }
 
+        return true;
+    }
+
+    private static bool InitializeCore()
+    {
+        EnsurePlatformInitialized();
+
         // Warm-up: touch Stopwatch/GC/cycle APIs once.
         Time(1, static () => { });
 
         return true;
+    }
+
+    // ─── Priority boost scope ────────────────────────────────────────
+
+    private static readonly object PriorityGate = new();
+    private static int _priorityBoostDepth;
+    private static ProcessPriorityClass? _savedProcessPriority;
+    private static Thread? _boostedThread;
+    private static ThreadPriority? _savedThreadPriority;
+
+    /// <summary>
+    /// Enters a scoped process/thread priority boost. The previous priorities
+    /// are restored when the returned scope is disposed, so hosts that run
+    /// benchmarks keep their original scheduling behaviour.
+    /// </summary>
+    internal static PriorityBoostScope BoostPriorities(bool enabled) => new(enabled);
+
+    internal readonly struct PriorityBoostScope : IDisposable
+    {
+        private readonly bool _active;
+
+        internal PriorityBoostScope(bool enabled)
+        {
+            if (enabled && EnterPriorityBoost(out var processBoosted, out var threadBoosted))
+            {
+                _active = true;
+                ProcessBoosted = processBoosted;
+                ThreadBoosted = threadBoosted;
+            }
+        }
+
+        internal bool IsActive => _active;
+
+        internal bool ProcessBoosted { get; }
+
+        internal bool ThreadBoosted { get; }
+
+        public void Dispose()
+        {
+            if (_active)
+                ExitPriorityBoost();
+        }
+    }
+
+    private static bool EnterPriorityBoost(out bool processBoosted, out bool threadBoosted)
+    {
+        processBoosted = false;
+        threadBoosted = false;
+
+        lock (PriorityGate)
+        {
+            // Nested scope: the outermost scope owns the boost and restores it.
+            if (_priorityBoostDepth > 0)
+            {
+                _priorityBoostDepth++;
+                return true;
+            }
+
+            try
+            {
+                var process = Process.GetCurrentProcess();
+                _savedProcessPriority = process.PriorityClass;
+                process.PriorityClass = ProcessPriorityClass.High;
+                processBoosted = true;
+            }
+            catch
+            {
+                _savedProcessPriority = null;
+            }
+
+            try
+            {
+                _boostedThread = Thread.CurrentThread;
+                _savedThreadPriority = _boostedThread.Priority;
+                _boostedThread.Priority = ThreadPriority.Highest;
+                threadBoosted = true;
+            }
+            catch
+            {
+                _boostedThread = null;
+                _savedThreadPriority = null;
+            }
+
+            if (!processBoosted && !threadBoosted)
+                return false;
+
+            _priorityBoostDepth = 1;
+            return true;
+        }
+    }
+
+    private static void ExitPriorityBoost()
+    {
+        lock (PriorityGate)
+        {
+            if (_priorityBoostDepth == 0)
+                return;
+
+            _priorityBoostDepth--;
+            if (_priorityBoostDepth > 0)
+                return;
+
+            try
+            {
+                if (_savedProcessPriority is { } savedProcessPriority)
+                    Process.GetCurrentProcess().PriorityClass = savedProcessPriority;
+            }
+            catch
+            {
+                // Ignore restore failures (permissions may have changed).
+            }
+
+            try
+            {
+                if (
+                    _boostedThread is { } boostedThread
+                    && _savedThreadPriority is { } savedThreadPriority
+                )
+                    boostedThread.Priority = savedThreadPriority;
+            }
+            catch
+            {
+                // Ignore restore failures (the thread may have exited).
+            }
+
+            _savedProcessPriority = null;
+            _boostedThread = null;
+            _savedThreadPriority = null;
+        }
+    }
+
+    // ─── CPU clock granularity ───────────────────────────────────────
+
+    private static readonly Lazy<TimeSpan> CpuClockGranularity = new(
+        MeasureCpuClockGranularity,
+        LazyThreadSafetyMode.ExecutionAndPublication
+    );
+
+    /// <summary>
+    /// Granularity of <see cref="Process.TotalProcessorTime"/> on this machine.
+    /// Used as the minimum sample budget for <see cref="AsyncTimingMode.CpuOnly"/>,
+    /// whose clock can only advance in full timer ticks (typically 10-16 ms).
+    /// </summary>
+    internal static TimeSpan GetCpuClockGranularity() => CpuClockGranularity.Value;
+
+    private static TimeSpan MeasureCpuClockGranularity()
+    {
+        var fallback = TimeSpan.FromMilliseconds(15);
+        const int maxMeasurementMilliseconds = 250;
+
+        try
+        {
+            var process = Process.GetCurrentProcess();
+            var before = process.TotalProcessorTime;
+            var watch = Stopwatch.StartNew();
+
+            while (process.TotalProcessorTime == before)
+            {
+                Thread.SpinWait(200);
+                if (watch.Elapsed > TimeSpan.FromMilliseconds(maxMeasurementMilliseconds))
+                    return fallback;
+            }
+
+            var measured = watch.Elapsed;
+            return
+                measured > TimeSpan.Zero
+                && measured < TimeSpan.FromMilliseconds(maxMeasurementMilliseconds)
+                ? measured
+                : fallback;
+        }
+        catch
+        {
+            return fallback;
+        }
     }
 
     /// <summary>
@@ -78,7 +264,7 @@ public static partial class Runner
         var gcBaseline = GetGcBaselineCounts();
 
         // Start timing
-        var cycleStart = GetCpuCycles();
+        var cycleStart = GetProcessCpuCycles();
         var watch = Stopwatch.StartNew();
 
         // Run the measured work
@@ -87,7 +273,7 @@ public static partial class Runner
 
         // Stop timing
         watch.Stop();
-        var cycleEnd = GetCpuCycles();
+        var cycleEnd = GetProcessCpuCycles();
 
         // GC delta is computed before teardown so teardown allocations
         // are not attributed to the benchmark.
@@ -111,14 +297,14 @@ public static partial class Runner
 
         var gcBaseline = GetGcBaselineCounts();
 
-        var cycleStart = GetCpuCycles();
+        var cycleStart = GetProcessCpuCycles();
         var watch = Stopwatch.StartNew();
 
         for (var i = 0; i < iterations; i++)
             action(state);
 
         watch.Stop();
-        var cycleEnd = GetCpuCycles();
+        var cycleEnd = GetProcessCpuCycles();
 
         return CreateSample(watch, cycleStart, cycleEnd, CalculateGcDelta(gcBaseline));
     }
@@ -192,14 +378,16 @@ public static partial class Runner
         // not attributed to the benchmark.
         var gcBaseline = GetGcBaselineCounts();
 
-        var cycleStart = GetCpuCycles();
+        // Process-wide counters stay valid when an await resumes on a
+        // different thread; per-thread counters do not.
+        var cycleStart = GetProcessCpuCycles();
         var watch = Stopwatch.StartNew();
 
         for (int i = 0; i < iterations; i++)
             await action();
 
         watch.Stop();
-        var cycleEnd = GetCpuCycles();
+        var cycleEnd = GetProcessCpuCycles();
 
         // GC delta is computed before teardown so teardown allocations
         // are not attributed to the benchmark.
@@ -227,14 +415,14 @@ public static partial class Runner
 
         var gcBaseline = GetGcBaselineCounts();
 
-        var cycleStart = GetCpuCycles();
+        var cycleStart = GetProcessCpuCycles();
         var watch = Stopwatch.StartNew();
 
         for (int i = 0; i < iterations; i++)
             await action(state);
 
         watch.Stop();
-        var cycleEnd = GetCpuCycles();
+        var cycleEnd = GetProcessCpuCycles();
 
         return CreateSample(
             watch,
@@ -265,12 +453,12 @@ public static partial class Runner
             await setup();
 
         var cpuBefore = Process.GetCurrentProcess().TotalProcessorTime;
-        var cycleStart = GetCpuCycles();
+        var cycleStart = GetProcessCpuCycles();
 
         for (int i = 0; i < iterations; i++)
             await action();
 
-        var cycleEnd = GetCpuCycles();
+        var cycleEnd = GetProcessCpuCycles();
         var cpuDelta = Process.GetCurrentProcess().TotalProcessorTime - cpuBefore;
 
         if (teardown != null)
@@ -301,12 +489,12 @@ public static partial class Runner
             throw new ArgumentNullException(nameof(action));
 
         var cpuBefore = Process.GetCurrentProcess().TotalProcessorTime;
-        var cycleStart = GetCpuCycles();
+        var cycleStart = GetProcessCpuCycles();
 
         for (int i = 0; i < iterations; i++)
             await action(state);
 
-        var cycleEnd = GetCpuCycles();
+        var cycleEnd = GetProcessCpuCycles();
         var cpuDelta = Process.GetCurrentProcess().TotalProcessorTime - cpuBefore;
 
         return new TimingSample

@@ -899,4 +899,121 @@ public class BenchmarkTests
         // CpuOnly mode should produce null GcInfo (wall-clock should have non-null)
         await Assert.That(result.Statistics.GcInfo).IsNull();
     }
+
+    // ─── Auto-calibration floor for CpuOnly timing ────────────────
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task ResolveMinSampleNanoseconds_WallClock_IgnoresCpuClockGranularity()
+    {
+        var config = new BenchmarkConfig { MinSampleTime = TimeSpan.FromMilliseconds(0.25) };
+
+        var nanoseconds = Benchmark.ResolveMinSampleNanoseconds(
+            config,
+            TimeSpan.FromMilliseconds(15)
+        );
+
+        await Assert.That(nanoseconds).IsEqualTo(250_000.0);
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task ResolveMinSampleNanoseconds_CpuOnly_UsesCpuClockGranularityFloor()
+    {
+        var config = new BenchmarkConfig
+        {
+            MinSampleTime = TimeSpan.FromMilliseconds(0.25),
+            TimingMode = AsyncTimingMode.CpuOnly,
+        };
+
+        var nanoseconds = Benchmark.ResolveMinSampleNanoseconds(
+            config,
+            TimeSpan.FromMilliseconds(15)
+        );
+
+        await Assert.That(nanoseconds).IsEqualTo(15_000_000.0);
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task ResolveMinSampleNanoseconds_CpuOnly_KeepsLargerConfiguredTarget()
+    {
+        var config = new BenchmarkConfig
+        {
+            MinSampleTime = TimeSpan.FromMilliseconds(50),
+            TimingMode = AsyncTimingMode.CpuOnly,
+        };
+
+        var nanoseconds = Benchmark.ResolveMinSampleNanoseconds(
+            config,
+            TimeSpan.FromMilliseconds(15)
+        );
+
+        await Assert.That(nanoseconds).IsEqualTo(50_000_000.0);
+    }
+
+    // ─── Priority boost is scoped to the run ─────────────────────
+
+    [Test]
+    [NotInParallel]
+    [Property("Category", "Benchmark")]
+    public async Task Run_WithBoostPrioritiesDisabled_LeavesPrioritiesUnchanged()
+    {
+        var originalProcess = Process.GetCurrentProcess().PriorityClass;
+        var originalThread = Thread.CurrentThread.Priority;
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 1,
+            SampleCount = 2,
+            IterationsPerSample = 3,
+            BoostPriorities = false,
+        };
+
+        Benchmark.Run("priority-scope", () => { }, config);
+
+        await Assert.That(Process.GetCurrentProcess().PriorityClass).IsEqualTo(originalProcess);
+        await Assert.That(Thread.CurrentThread.Priority).IsEqualTo(originalThread);
+    }
+
+    // ─── Documented cancellation semantics ────────────────────────
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task Run_Synchronous_IgnoresCancellationToken()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 0,
+            SampleCount = 1,
+            IterationsPerSample = 1,
+            CancellationToken = cts.Token,
+        };
+
+        var result = Benchmark.Run("sync-cancel", () => { }, config);
+
+        await Assert.That(result.SampleCount).IsEqualTo(1);
+    }
+
+    [Test]
+    [Property("Category", "Benchmark")]
+    public async Task RunAsync_CanceledToken_ThrowsOperationCanceledException()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var config = new BenchmarkConfig
+        {
+            WarmupIterations = 0,
+            SampleCount = 1,
+            IterationsPerSample = 1,
+            CancellationToken = cts.Token,
+        };
+
+#pragma warning disable CS8619
+        await Assert
+            .That(() => Benchmark.RunAsync("async-cancel", () => Task.CompletedTask, config))
+            .Throws<OperationCanceledException>();
+#pragma warning restore CS8619
+    }
 }

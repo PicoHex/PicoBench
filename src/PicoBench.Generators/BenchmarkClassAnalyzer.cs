@@ -34,6 +34,62 @@ internal static class BenchmarkClassAnalyzer
             );
         }
 
+        if (typeSymbol.IsRecord)
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.RecordBenchmarkClass,
+                    GetTypeLocation(typeSymbol),
+                    typeSymbol.Name
+                )
+            );
+        }
+
+        if (typeSymbol.IsGenericType)
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.GenericBenchmarkClass,
+                    GetTypeLocation(typeSymbol),
+                    typeSymbol.Name
+                )
+            );
+        }
+
+        if (typeSymbol.ContainingType is not null)
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.NestedBenchmarkClass,
+                    GetTypeLocation(typeSymbol),
+                    typeSymbol.Name
+                )
+            );
+        }
+
+        if (!IsInstantiable(typeSymbol))
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.NonInstantiableBenchmarkClass,
+                    GetTypeLocation(typeSymbol),
+                    typeSymbol.Name
+                )
+            );
+        }
+
+        var inheritedAttributesOwner = FindBaseTypeWithBenchmarkMembers(typeSymbol);
+        if (inheritedAttributesOwner is not null)
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.InheritedBenchmarkMembers,
+                    GetTypeLocation(typeSymbol),
+                    inheritedAttributesOwner
+                )
+            );
+        }
+
         var ns = typeSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
             : typeSymbol.ContainingNamespace.ToDisplayString();
@@ -275,6 +331,18 @@ internal static class BenchmarkClassAnalyzer
             return;
         }
 
+        if (method.IsAsync && method.ReturnsVoid)
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.AsyncVoidBenchmarkMethod,
+                    GetAttributeLocation(attr, ct),
+                    method.Name
+                )
+            );
+            return;
+        }
+
         var isBaseline = false;
         string? methodDesc = null;
         foreach (var named in attr.NamedArguments)
@@ -350,10 +418,68 @@ internal static class BenchmarkClassAnalyzer
         foreach (var syntaxRef in typeSymbol.DeclaringSyntaxReferences)
         {
             if (
-                syntaxRef.GetSyntax() is ClassDeclarationSyntax classDecl
-                && classDecl.Modifiers.Any(static modifier =>
+                syntaxRef.GetSyntax() is TypeDeclarationSyntax typeDecl
+                && typeDecl.Modifiers.Any(static modifier =>
                     modifier.IsKind(SyntaxKind.PartialKeyword)
                 )
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsInstantiable(INamedTypeSymbol typeSymbol)
+    {
+        if (typeSymbol.IsAbstract || typeSymbol.IsStatic)
+            return false;
+
+        foreach (var constructor in typeSymbol.InstanceConstructors)
+        {
+            if (
+                constructor.Parameters.Length == 0
+                && constructor.DeclaredAccessibility == Accessibility.Public
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? FindBaseTypeWithBenchmarkMembers(INamedTypeSymbol typeSymbol)
+    {
+        for (
+            var baseType = typeSymbol.BaseType;
+            baseType is not null && baseType.SpecialType != SpecialType.System_Object;
+            baseType = baseType.BaseType
+        )
+        {
+            foreach (var member in baseType.GetMembers())
+            {
+                if (member is IMethodSymbol && HasBenchmarkAttribute(member))
+                    return baseType.Name;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasBenchmarkAttribute(ISymbol member)
+    {
+        foreach (var attr in member.GetAttributes())
+        {
+            var attrName = attr.AttributeClass?.ToDisplayString();
+            if (
+                attrName
+                is BenchmarkAttributeName
+                    or GlobalSetupAttributeName
+                    or GlobalCleanupAttributeName
+                    or IterationSetupAttributeName
+                    or IterationCleanupAttributeName
             )
             {
                 return true;
@@ -377,13 +503,11 @@ internal static class BenchmarkClassAnalyzer
 
     private static bool IsTaskOrValueTask(ITypeSymbol type)
     {
+        // Match by full namespace so a user-defined type named "Task" is not
+        // mistaken for an awaitable.
         return type is INamedTypeSymbol named
-            && (
-                named.Name == "Task"
-                || named.Name == "ValueTask"
-                || named.Name.StartsWith("Task`")
-                || named.Name.StartsWith("ValueTask`")
-            );
+            && named.ContainingNamespace?.ToDisplayString() == "System.Threading.Tasks"
+            && named.Name is "Task" or "ValueTask" or "Task`1" or "ValueTask`1";
     }
 
     private static void RegisterLifecycleMethod(
@@ -471,44 +595,41 @@ internal static class BenchmarkClassAnalyzer
         var typeName = memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var values = ImmutableArray.CreateBuilder<string>();
 
-        if (attr.ConstructorArguments.Length <= 0)
+        if (attr.ConstructorArguments.Length > 0)
         {
-            return new ParamsPropertyModel
+            var arg = attr.ConstructorArguments[0];
+            if (arg.Kind == TypedConstantKind.Array)
             {
-                Name = memberName,
-                TypeFullName = typeName,
-                FormattedValues = values.ToImmutable(),
-            };
-        }
+                foreach (var element in arg.Values)
+                {
+                    if (!IsCompatibleWithTargetType(element, memberType, compilation))
+                    {
+                        diagnostics.Add(
+                            Diagnostic.Create(
+                                DiagnosticDescriptors.IncompatibleParamsValue,
+                                GetAttributeLocation(attr, ct),
+                                element.ToCSharpString(),
+                                memberName,
+                                memberType.ToDisplayString()
+                            )
+                        );
+                        return null;
+                    }
 
-        var arg = attr.ConstructorArguments[0];
-        if (arg.Kind != TypedConstantKind.Array)
-        {
-            return new ParamsPropertyModel
-            {
-                Name = memberName,
-                TypeFullName = typeName,
-                FormattedValues = values.ToImmutable(),
-            };
-        }
-
-        foreach (var element in arg.Values)
-        {
-            if (!IsCompatibleWithTargetType(element, memberType, compilation))
-            {
-                diagnostics.Add(
-                    Diagnostic.Create(
-                        DiagnosticDescriptors.IncompatibleParamsValue,
-                        GetAttributeLocation(attr, ct),
-                        element.ToCSharpString(),
-                        memberName,
-                        memberType.ToDisplayString()
-                    )
-                );
-                return null;
+                    values.Add(CSharpLiteralFormatter.FormatConstant(element, memberType));
+                }
             }
+        }
 
-            values.Add(CSharpLiteralFormatter.FormatConstant(element, memberType));
+        if (values.Count == 0)
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.EmptyParamsValues,
+                    GetAttributeLocation(attr, ct),
+                    memberName
+                )
+            );
         }
 
         return new ParamsPropertyModel

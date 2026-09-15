@@ -397,6 +397,7 @@ public class BenchmarkGeneratorDiagnosticsTests
     {
         var result = RunGenerator(
             """
+            using System.Threading.Tasks;
             using PicoBench;
 
             [BenchmarkClass]
@@ -444,6 +445,7 @@ public class BenchmarkGeneratorDiagnosticsTests
     {
         var result = RunGenerator(
             """
+            using System.Threading.Tasks;
             using PicoBench;
 
             [BenchmarkClass]
@@ -464,6 +466,7 @@ public class BenchmarkGeneratorDiagnosticsTests
     {
         var result = RunGenerator(
             """
+            using System.Threading.Tasks;
             using PicoBench;
 
             [BenchmarkClass]
@@ -523,6 +526,267 @@ public class BenchmarkGeneratorDiagnosticsTests
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.GeneratedSources.Length).IsEqualTo(1);
         await Assert.That(result.GeneratedSources[0]).Contains("null");
+    }
+
+    // ─── Unsupported class shapes ──────────────────────────────────
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task GenericBenchmarkClass_ReportsDiagnostic()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class GenericBench<T>
+            {
+                [Benchmark]
+                public void Work() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN012")).IsTrue();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task NestedBenchmarkClass_ReportsDiagnostic()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            public partial class Outer
+            {
+                [BenchmarkClass]
+                public partial class NestedBench
+                {
+                    [Benchmark]
+                    public void Work() { }
+                }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN013")).IsTrue();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task RecordBenchmarkClass_ReportsDiagnostic()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial record RecordBench
+            {
+                [Benchmark]
+                public void Work() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN014")).IsTrue();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task AbstractBenchmarkClass_ReportsDiagnostic()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public abstract partial class AbstractBench
+            {
+                [Benchmark]
+                public void Work() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN015")).IsTrue();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task BenchmarkClassWithoutPublicParameterlessConstructor_ReportsDiagnostic()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class NoDefaultCtorBench
+            {
+                public NoDefaultCtorBench(int seed) { }
+
+                [Benchmark]
+                public void Work() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN015")).IsTrue();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task AsyncVoidBenchmarkMethod_ReportsDiagnostic()
+    {
+        var result = RunGenerator(
+            """
+            using System.Threading.Tasks;
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class BadBench
+            {
+                [Benchmark]
+                public async void WorkAsync() { await Task.Delay(1); }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN011")).IsTrue();
+        await Assert
+            .That(
+                result.Diagnostics.Any(d =>
+                    d.Id == "PBGEN011" && d.Severity == DiagnosticSeverity.Error
+                )
+            )
+            .IsTrue();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(0);
+    }
+
+    // ─── Params and inheritance completeness ───────────────────────
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task EmptyParamsAttribute_ReportsWarning()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class EmptyParamsBench
+            {
+                [Params]
+                public int N { get; set; }
+
+                [Benchmark]
+                public void Work() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN016")).IsTrue();
+        await Assert
+            .That(
+                result.Diagnostics.Any(d =>
+                    d.Id == "PBGEN016" && d.Severity == DiagnosticSeverity.Warning
+                )
+            )
+            .IsTrue();
+        // Warning only: source is still generated.
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(1);
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task BenchmarkAttributeOnBaseClass_ReportsWarning()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            public class BaseBench
+            {
+                [Benchmark]
+                public void InheritedWork() { }
+            }
+
+            [BenchmarkClass]
+            public partial class DerivedBench : BaseBench
+            {
+                [Benchmark]
+                public void OwnWork() { }
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN017")).IsTrue();
+        await Assert
+            .That(
+                result.Diagnostics.Any(d =>
+                    d.Id == "PBGEN017" && d.Severity == DiagnosticSeverity.Warning
+                )
+            )
+            .IsTrue();
+        // Warning only: the derived class's own benchmarks are still generated.
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(1);
+    }
+
+    // ─── Awaitable type detection must be namespace-qualified ──────
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task CustomTaskLikeType_ReportsInvalidBenchmarkMethod()
+    {
+        var result = RunGenerator(
+            """
+            using PicoBench;
+
+            namespace Custom
+            {
+                public class Task { }
+            }
+
+            [BenchmarkClass]
+            public partial class BadBench
+            {
+                [Benchmark]
+                public Custom.Task Work() => new Custom.Task();
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN003")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Id == "PBGEN002")).IsFalse();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    [Property("Category", "Generators")]
+    public async Task ValueTaskBenchmarkMethod_NoDiagnostic()
+    {
+        var result = RunGenerator(
+            """
+            using System.Threading.Tasks;
+            using PicoBench;
+
+            [BenchmarkClass]
+            public partial class GoodBench
+            {
+                [Benchmark]
+                public ValueTask WorkAsync() => ValueTask.CompletedTask;
+            }
+            """
+        );
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.GeneratedSources.Length).IsEqualTo(1);
     }
 
     private static GeneratorRunResultData RunGenerator(string source)
