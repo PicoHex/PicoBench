@@ -7,9 +7,11 @@
     <Version>0.0.0-dev</Version>
 
     <!--
-      Default to project references for inner-loop development.
-      Release/pack pipelines can switch to PackageReference mode with
-      -p:UseProjectReferences=false to validate and emit real NuGet dependencies.
+      PicoHex baseline: true keeps inner-loop builds on project references,
+      false switches release validation to package references. PicoBench ships a
+      single package (the generator is embedded, never packed standalone), so no
+      project currently has a PackageReference mode; the property is kept for
+      org-wide pipeline consistency and future consumer packages.
     -->
     <UseProjectReferences Condition="'$(UseProjectReferences)' == ''">true</UseProjectReferences>
 
@@ -32,12 +34,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-  </PropertyGroup>
-
-  <!-- Disable AOT for netstandard2.0 projects -->
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <PublishAot>false</PublishAot>
-    <IsAotCompatible>false</IsAotCompatible>
   </PropertyGroup>
 
   <!-- Symbol packages (snupkg) -->

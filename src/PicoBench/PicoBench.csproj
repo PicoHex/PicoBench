@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="PublishAot">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -6,6 +6,14 @@
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- netstandard2.0 assemblies cannot be AOT-published. Kept local (with
+       TreatAsLocalProperty) so a consuming app's -p:PublishAot=true global
+       property does not propagate into this project reference. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PublishAot>false</PublishAot>
+    <IsAotCompatible>false</IsAotCompatible>
   </PropertyGroup>
 
   <!-- NuGet package metadata -->
@@ -47,8 +55,6 @@
       Visible="false"
     />
 
-    <!-- Include MSBuild props file for automatic analyzer loading -->
-
     <!-- Include main package props file to satisfy NuGet warning -->
     <None
       Include="..\buildTransitive\PicoBench.props"
@@ -59,11 +65,5 @@
 
     <!-- Include the root README in the NuGet package -->
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-    <None Include="..\PicoBench.Generators\buildTransitive\PicoBench.Generators.props">
-      <Pack>true</Pack>
-      <PackagePath>buildTransitive/PicoBench.Generators.props</PackagePath>
-      <Visible>false</Visible>
-      <Link>PicoBench.Generators.props</Link>
-    </None>
   </ItemGroup>
 </Project>

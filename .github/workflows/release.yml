@@ -45,7 +45,9 @@ jobs:
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
       - name: Restore dependencies
-        run: dotnet restore PicoBench.slnx -p:UseProjectReferences=true
+        run: |
+          mkdir -p ./artifacts/nupkg
+          dotnet restore PicoBench.slnx -p:Version=${{ steps.version.outputs.version }} -p:UseProjectReferences=true
 
       - name: Build
         run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }} -p:UseProjectReferences=true

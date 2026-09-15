@@ -56,13 +56,20 @@ jobs:
         run: echo Testing ${{ matrix.logical-target }}
 
       - name: Restore dependencies
-        run: dotnet restore PicoBench.slnx -p:UseProjectReferences=true
+        run: |
+          mkdir -p ./artifacts/nupkg
+          dotnet restore PicoBench.slnx -p:UseProjectReferences=true
 
       - name: Build
         run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:UseProjectReferences=true
 
       - name: Run tests
         run: dotnet test --project tests/PicoBench.Tests/PicoBench.Tests.csproj --configuration Release --no-build --verbosity normal --timeout 120s --no-progress --no-ansi -p:UseProjectReferences=true
+
+      - name: Smoke-run samples
+        run: |
+          dotnet run --project samples/AttributeBased/AttributeBased.csproj --configuration Release --no-build
+          dotnet run --project samples/CollectionBenchmarks/CollectionBenchmarks.csproj --configuration Release --no-build
 
   aot-validation:
     name: AOT validation (${{ matrix.logical-target }})
@@ -104,6 +111,10 @@ jobs:
       - name: Show logical target
         run: echo Validating AOT for ${{ matrix.logical-target }}
 
+      - name: Create local feed dir (NuGet.config local source)
+        shell: bash
+        run: mkdir -p ./artifacts/nupkg
+
       - name: Install Linux AOT prerequisites
         if: startsWith(matrix.rid, 'linux-')
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
@@ -134,18 +145,6 @@ jobs:
               public void Candidate() => Thread.SpinWait(16);
           }
           '@ | Set-Content ./artifacts/aot-app/Program.cs
-
-      - name: Ensure package consumers load the bundled generator
-        shell: pwsh
-        run: |
-          $propsPath = "./artifacts/aot-app/Directory.Build.props"
-          @'
-          <Project>
-            <ItemGroup>
-              <Analyzer Include="$(NuGetPackageRoot)picobench/0.0.0-ci.${{ github.run_number }}/buildTransitive/PicoBench.Generators/analyzers/dotnet/cs/PicoBench.Generators.dll" />
-            </ItemGroup>
-          </Project>
-          '@ | Set-Content $propsPath
 
       - name: Publish AOT validation app
         run: dotnet publish ./artifacts/aot-app/aot-app.csproj --configuration Release --framework net10.0 --runtime ${{ matrix.rid }} --self-contained -p:PublishAot=true
