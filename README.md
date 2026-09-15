@@ -1,6 +1,6 @@
 # PicoBench
 
-[English](README.md) | [中文](README.zh-CN.md) | [中文 (Traditional)](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
+[English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
 ![CI](https://github.com/PicoHex/PicoBench/actions/workflows/ci.yml/badge.svg)
 [![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
@@ -16,7 +16,7 @@ A lightweight benchmarking library for .NET with **two complementary APIs**: an 
 - **Cross-Platform** - Full support for Windows, Linux, and macOS
 - **High-Precision Timing** - Uses `Stopwatch` and reports nanosecond-scale per-operation timings
 - **GC Tracking** - Monitors Gen0/Gen1/Gen2 collection counts during benchmarks (setup/teardown excluded)
-- **CPU Cycle Counting** - Hardware cycle counts on Windows/Linux, plus a monotonic proxy on macOS (`mach_absolute_time`)
+- **CPU Cycle Counting** - Hardware cycle counts on Windows/Linux when the OS permits unprivileged counter access, plus a monotonic proxy on macOS (`mach_absolute_time`); async benchmarks read process-wide counters so they stay valid across thread hops
 - **Statistical Analysis** - Mean, Median, P90, P95, P99, Min, Max, StdDev, StdErr, and relative standard deviation
 - **Multiple Output Formats** - Four built-in formatters (Console, Markdown, HTML, CSV) plus programmatic summary output
 - **Parameterised Benchmarks** - `[Params]` attribute with automatic Cartesian product iteration
@@ -158,7 +158,7 @@ Decorate a **partial** class with `[BenchmarkClass]` and its methods/properties 
 | `[IterationSetup]` | Method | Called before **each sample** (not timed). |
 | `[IterationCleanup]` | Method | Called after **each sample** (not timed). |
 
-`[Benchmark]` methods must be instance, non-generic, and parameterless. Lifecycle methods must be instance, non-generic, parameterless, and `void`. `[Params]` targets must be writable instance properties or non-readonly instance fields.
+`[Benchmark]` and lifecycle methods must be instance, non-generic, and parameterless. They may return `void`, `Task`, `ValueTask`, `Task<T>`, or `ValueTask<T>`; async methods are awaited and returned values are discarded. `[Benchmark]` methods may not be `async void` (PBGEN011). `[Params]` targets must be writable instance properties or non-readonly instance fields. Benchmark classes must be non-generic, non-nested, non-abstract, and declare a public parameterless constructor.
 
 ### Full Example
 
@@ -210,6 +210,79 @@ var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 
 ---
 
+## Async Benchmarks
+
+Both APIs support asynchronous work. Async benchmark methods are awaited per iteration; lifecycle methods may mix sync and async in the same class.
+
+```csharp
+// Imperative
+var result = await Benchmark.RunAsync("Http call", async () =>
+{
+    using var response = await httpClient.GetAsync(url);
+});
+
+// Per-sample async setup/teardown
+var result2 = await Benchmark.RunAsync(
+    "With lifecycle",
+    action: async () => await DoWorkAsync(),
+    warmup: async () => await DoWorkAsync(),
+    config: BenchmarkConfig.Quick,
+    setup: async () => await ResetStateAsync(),
+    teardown: async () => await DisposeStateAsync());
+
+// Stateful async (no closure allocation; no setup/teardown overload)
+var result3 = await Benchmark.RunAsync("Stateful", state, async s => await ProcessAsync(s));
+
+// Async scopes (DI-friendly)
+var result4 = await Benchmark.RunScopedAsync("Scoped",
+    () => container.CreateScope(),
+    async scope => await scope.Service.DoWorkAsync());
+```
+
+Attribute-based classes may declare async benchmarks and async lifecycle methods:
+
+```csharp
+[BenchmarkClass]
+public partial class IoBenchmarks
+{
+    private string _path = "";
+
+    [GlobalSetup]
+    public async Task SetupAsync() => await File.WriteAllTextAsync(_path, "data");
+
+    [IterationSetup]
+    public async Task ResetAsync() => await Task.Yield();
+
+    [Benchmark(Baseline = true)]
+    public async Task ReadAsync() => await File.ReadAllTextAsync(_path);
+
+    [Benchmark]
+    public void ReadSync() => File.ReadAllText(_path);
+}
+```
+
+Async semantics worth knowing:
+
+- **Timing modes** — `AsyncTimingMode.WallClock` (default) measures full duration including await suspension; `AsyncTimingMode.CpuOnly` measures `Process.TotalProcessorTime` and excludes I/O wait. The CPU clock advances in OS timer ticks (typically 10-16 ms), so auto-calibration raises its minimum sample budget to the measured clock granularity in this mode. GC data is omitted in CpuOnly mode.
+- **GC attribution** — asynchronous GC counts are marked approximate (`GcInfo.IsApproximate`), because await suspensions may run unrelated work. Setup/teardown allocations are excluded in both modes.
+- **CPU cycles** — async benchmarks use process-wide cycle counters (per-thread counters cannot be subtracted across thread hops).
+- **Cancellation** — `BenchmarkConfig.CancellationToken` is checked at sample boundaries by async benchmarks only; synchronous benchmarks ignore it.
+- **Mixed classes** — a synchronous `[Benchmark]` method keeps the direct synchronous measurement path even when the class has other async members, so it does not pay async-wrapper overhead.
+- **Warmup** — warmup iterations invoke only the warmup delegate; per-sample `setup`/`teardown` (and `[IterationSetup]`/`[IterationCleanup]`) do not run during warmup. Keep warmup actions self-sufficient.
+
+---
+
+## Measurement Fidelity
+
+PicoBench runs in-process for fast startup, which means the CLR's own settings affect absolute numbers. For comparable results:
+
+- Disable tiered JIT so steady-state code is measured: `DOTNET_TieredCompilation=0`, `DOTNET_TieredPGO=0` (or `COMPlus_*` equivalents).
+- For single-threaded micro-benchmarks, workstation GC avoids background server-GC threads adding noise: `DOTNET_gcServer=0`.
+- CPU cycle counts are only available where the OS allows unprivileged counters (Windows `QueryThreadCycleTime`/`QueryProcessCycleTime`; Linux `perf_event` when `perf_event_paranoid` is 2 or lower; macOS exposes a monotonic proxy, not true cycles). `EnvironmentInfo` and every formatter report which source was used.
+- `BenchmarkConfig.BoostPriorities` (default `true`) raises process and thread priority only for the duration of a run and restores the previous values afterwards.
+
+---
+
 ## Configuration
 
 ### Presets
@@ -231,8 +304,11 @@ var config = new BenchmarkConfig
     RetainSamples       = true,  // Keep raw TimingSample data
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
-    MaxAutoIterationsPerSample = 1_000_000
+    MaxAutoIterationsPerSample = 1_000_000,
     ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
+    BoostPriorities     = true,   // raise process/thread priority for the run, then restore
+    TimingMode          = AsyncTimingMode.WallClock, // or CpuOnly (async only)
+    CancellationToken   = default,                   // async only; sync benchmarks ignore it
 };
 
 var result = Benchmark.Run("Test", action, config);
@@ -283,7 +359,7 @@ var options = new FormatterOptions
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
-    CandidateLabel        = "New"
+    CandidateLabel        = "New",
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -358,8 +434,8 @@ src/
 |---------|---------|-------|-------|
 | High-precision timing | Stopwatch | Stopwatch | Stopwatch |
 | GC tracking (Gen0/1/2) | Yes | Yes | Yes |
-| CPU cycle counting | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` (proxy) |
-| Process priority boost | Yes | Yes | Yes |
+| CPU cycle counting | `QueryThreadCycleTime` / `QueryProcessCycleTime` | `perf_event_open` (when `perf_event_paranoid` ≤ 2) | `mach_absolute_time` (proxy) |
+| Process priority boost | Yes (scoped, restored) | Yes (scoped, restored) | Yes (scoped, restored) |
 
 On macOS the exported CPU counter is a high-resolution monotonic proxy rather than architectural cycle counts. `EnvironmentInfo` and formatter output expose this distinction explicitly.
 

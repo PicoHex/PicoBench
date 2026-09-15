@@ -1,6 +1,6 @@
 # PicoBench
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
+[English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
 Легковесная библиотека для бенчмаркинга в .NET без зависимостей с **двумя взаимодополняющими API**: императивным API и API на основе атрибутов, генерируемым из исходного кода, полностью **совместимым с AOT**.
 
@@ -154,7 +154,7 @@ var result = Benchmark.Run(
 | `[IterationSetup]` | Метод | Вызывается перед **каждым образцом** (не учитывается во времени). |
 | `[IterationCleanup]` | Метод | Вызывается после **каждого образца** (не учитывается во времени). |
 
-Методы `[Benchmark]` должны быть методами экземпляра, не быть обобщенными и не иметь параметров. Lifecycle-методы должны быть методами экземпляра, не быть обобщенными, не иметь параметров и возвращать `void`. Целями `[Params]` должны быть записываемые свойства экземпляра или поля экземпляра без `readonly`.
+Методы `[Benchmark]` и lifecycle-методы должны быть методами экземпляра, не быть обобщенными и не иметь параметров. Они могут возвращать `void`, `Task`, `ValueTask`, `Task<T>` или `ValueTask<T>`; асинхронные методы ожидаются (await), а возвращаемые значения отбрасываются. Методы `[Benchmark]` не могут быть `async void` (PBGEN011). Целями `[Params]` должны быть записываемые свойства экземпляра или поля экземпляра без `readonly`. Классы бенчмарков должны быть необобщёнными, не вложенными, не абстрактными и иметь public-конструктор без параметров.
 
 ### Полный пример
 
@@ -204,6 +204,41 @@ var instance = new StringBenchmarks();
 var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 ```
 
+## Асинхронные бенчмарки
+
+Оба API поддерживают асинхронную работу. Асинхронные методы бенчмарков ожидаются на каждой итерации; в одном классе можно сочетать синхронные и асинхронные lifecycle-методы.
+
+```csharp
+var result = await Benchmark.RunAsync("Http call", async () =>
+{
+    using var response = await httpClient.GetAsync(url);
+});
+
+var scoped = await Benchmark.RunScopedAsync("Scoped",
+    () => container.CreateScope(),
+    async scope => await scope.Service.DoWorkAsync());
+```
+
+- **Режимы измерения** – `AsyncTimingMode.WallClock` (по умолчанию) измеряет полное время, включая паузы await; `AsyncTimingMode.CpuOnly` измеряет `Process.TotalProcessorTime` и исключает ожидание ввода-вывода. Часы CPU идут только тиками таймера ОС (обычно 10–16 мс), поэтому автокалибровка поднимает минимальный бюджет выборки до измеренной гранулярности часов. В режиме CpuOnly данные GC не собираются.
+- **Атрибуция GC** – асинхронные счётчики GC помечены как приблизительные (`GcInfo.IsApproximate`). Аллокации setup/teardown исключаются в обоих режимах.
+- **Циклы CPU** – асинхронные бенчмарки используют счётчики всего процесса (поточные счётчики нельзя вычитать при смене потока).
+- **Отмена** – `BenchmarkConfig.CancellationToken` проверяется только на границах выборок асинхронных бенчмарков; синхронные его игнорируют.
+- **Смешанные классы** – синхронный метод `[Benchmark]` сохраняет прямой синхронный путь измерения, даже если в классе есть другие асинхронные члены.
+- **Прогрев** – итерации прогрева вызывают только делегат прогрева; `setup`/`teardown` и `[IterationSetup]`/`[IterationCleanup]` не выполняются во время прогрева. Действия прогрева должны быть самодостаточными.
+
+---
+
+## Точность измерений
+
+PicoBench работает в том же процессе, поэтому настройки CLR влияют на абсолютные значения:
+
+- Отключите многоуровневую компиляцию JIT: `DOTNET_TieredCompilation=0`, `DOTNET_TieredPGO=0` (или `COMPlus_*`).
+- Для однопоточных микробенчмарков используйте workstation GC: `DOTNET_gcServer=0`.
+- Циклы CPU доступны только там, где ОС разрешает непривилегированные счётчики (Windows `QueryThreadCycleTime`/`QueryProcessCycleTime`; Linux `perf_event` при `perf_event_paranoid` ≤ 2; macOS даёт монотонный прокси, а не реальные циклы). `EnvironmentInfo` и все форматтеры сообщают используемый источник.
+- `BenchmarkConfig.BoostPriorities` (по умолчанию `true`) повышает приоритет процесса и потока только на время запуска и возвращает прежние значения после его окончания.
+
+---
+
 ---
 
 ## Конфигурация
@@ -227,7 +262,7 @@ var config = new BenchmarkConfig
     RetainSamples       = true,  // Сохранять сырые данные TimingSample
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
-    MaxAutoIterationsPerSample = 1_000_000
+    MaxAutoIterationsPerSample = 1_000_000,
     ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
 };
 

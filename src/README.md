@@ -1,18 +1,18 @@
 # Source Projects
 
-[English](README.md) | [中文](README.zh-CN.md) | [中文 (Traditional)](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
+[English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
 This directory contains the two library projects that make up PicoBench.
 
 ## PicoBench
 
-The main benchmarking library targeting **netstandard2.0** with zero external dependencies.
+The main benchmarking library targeting **netstandard2.0**. Its only NuGet reference is the `System.Threading.Tasks.Extensions` BCL polyfill that backports `ValueTask<T>` to netstandard2.0.
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| `Benchmark.cs` | Imperative API - `Run()`, `Run<TState>()`, `RunScoped<TScope>()`, `RunScopedAsync<TScope>()`, `Compare()` |
+| `Benchmark.cs` | Imperative API - `Run()`, `RunAsync()`, `Run<TState>()`, `RunAsync<TState>()`, `RunScoped<TScope>()`, `RunScopedAsync<TScope>()`, `Compare()` |
 | `BenchmarkRunner.cs` | Attribute-based entry point - `Run<T>()` |
 | `Attributes.cs` | Seven attributes: `[BenchmarkClass]`, `[Benchmark]`, `[Params]`, `[GlobalSetup]`, `[GlobalCleanup]`, `[IterationSetup]`, `[IterationCleanup]` |
 | `IBenchmarkClass.cs` | Interface implemented by the source generator on decorated classes |
@@ -43,7 +43,7 @@ dotnet add reference ../PicoBench.Generators/PicoBench.Generators.csproj
 An **incremental source generator** (`IIncrementalGenerator`) that turns `[BenchmarkClass]`-decorated partial classes into full `IBenchmarkClass` implementations at compile time.
 
 - **Target**: netstandard2.0
-- **Dependency**: Microsoft.CodeAnalysis.CSharp 5.0.0
+- **Dependency**: Microsoft.CodeAnalysis.CSharp 5.9.0
 - **Output**: AOT-compatible C# with `global::` qualified calls and no reflection
 
 ### Key Files

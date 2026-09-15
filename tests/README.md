@@ -1,10 +1,10 @@
 # Tests
 
-[English](README.md) | [中文](README.zh-CN.md) | [中文 (Traditional)](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
+[English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
 Unit tests for **PicoBench** using the [TUnit](https://github.com/thomhurst/TUnit) testing framework.
 
-**Total: 518 tests**
+**Total: 559 tests**
 
 ## Running
 
@@ -14,7 +14,7 @@ dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
 
 ## Test Categories
 
-### Formatters/ (249 tests)
+### Formatters/ (256 tests)
 
 Tests for the four `IFormatter`-based output formatters, `SummaryFormatter`, and their supporting infrastructure.
 
@@ -23,10 +23,10 @@ Tests for the four `IFormatter`-based output formatters, `SummaryFormatter`, and
 | `ConsoleFormatterTests.cs` | 41 | Box-drawing table generation, alignment, encoding |
 | `MarkdownFormatterTests.cs` | 28 | GitHub Markdown table rendering |
 | `HtmlFormatterTests.cs` | 36 | HTML report generation with styles |
-| `CsvFormatterTests.cs` | 31 | CSV export with proper escaping |
-| `SummaryFormatterTests.cs` | 25 | Win/loss summary text |
+| `CsvFormatterTests.cs` | 35 | CSV export with proper escaping, formula-injection guard, append semantics |
+| `SummaryFormatterTests.cs` | 26 | Win/loss summary text |
 | `FormatterBaseTests.cs` | 37 | Template Method base class behaviour |
-| `FormatterOptionsTests.cs` | 42 | Options defaults, presets, path resolution |
+| `FormatterOptionsTests.cs` | 44 | Options defaults, presets, validation, path resolution |
 | `CrossPlatformTests.cs` | 9 | Line-ending and encoding consistency |
 
 ### Formatters/Integration/ (6 tests)
@@ -47,21 +47,23 @@ Tests for the four `IFormatter`-based output formatters, `SummaryFormatter`, and
 |------|-------|-------------|
 | `BenchmarkRunnerTests.cs` | 11 | `BenchmarkRunner.Run<T>()` with parameterless / pre-configured instance, null checks, config propagation |
 
-### Generators/ (90 tests)
+### Generators/ (102 tests)
 
 | File | Tests | Description |
 |------|-------|-------------|
-| `EmitterTests.cs` | 38 | Source generator code emission: class structure, parameter iteration, setup/teardown hooks, baseline comparisons, `global::` qualification |
-| `ModelsTests.cs` | 30 | `BenchmarkClassModel`, `BenchmarkMethodModel`, `ParamsPropertyModel` equality, hash codes, edge cases |
-| `BenchmarkGeneratorDiagnosticsTests.cs` | 22 | End-to-end generator diagnostics for invalid signatures, duplicate baselines, invalid `[Params]`, and enum parameter emission |
+| `EmitterTests.cs` | 40 | Source generator code emission: class structure, parameter iteration, setup/teardown hooks, sync/async path selection, baseline comparisons, `global::` qualification |
+| `ModelsTests.cs` (Generators) | 30 | `BenchmarkClassModel`, `BenchmarkMethodModel`, `ParamsPropertyModel` equality, hash codes, edge cases |
+| `BenchmarkGeneratorDiagnosticsTests.cs` | 32 | End-to-end generator diagnostics for invalid signatures, unsupported class shapes, async-void methods, empty `[Params]`, inherited attributes, and enum parameter emission |
 
 ### Core runtime coverage
 
 | File | Tests | Description |
 |------|-------|-------------|
-| `BenchmarkTests.cs` | 56 | Imperative API, scoped execution, retained samples, comparisons, and auto-calibration behaviour |
+| `BenchmarkTests.cs` | 62 | Imperative API, scoped execution, retained samples, comparisons, async semantics, cancellation, calibration floor, and priority scoping |
+| `RunnerTests.cs` | 38 | Low-level timing: validation, GC attribution, async cycle validity, Linux perf guard, clock granularity, priority scopes |
 | `StatisticsCalculatorTests.cs` | 12 | Statistical computation including standard error, CPU cycles, and edge cases |
-| `ModelsTests.cs` | 38 | Result model validation, CPU counter metadata, and variance helpers |
+| `ModelsTests.cs` | 39 | Result model validation, CPU counter metadata, and variance helpers |
+| `BenchmarkConfigTests.cs` | 15 | Preset values, immutability, validation, and default priority behaviour |
 
 Formatter tests also cover precision-oriented output such as standard error, relative standard deviation, and CPU counter notes across Console, Markdown, HTML, and CSV.
 

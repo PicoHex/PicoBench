@@ -1,6 +1,6 @@
 # PicoBench
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
+[English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
 軽量で依存関係ゼロの.NETベンチマークライブラリで、**2つの補完的API**を提供します：命令型APIと、属性ベースでソース生成される、完全に**AOT互換**のAPIです。
 
@@ -154,7 +154,7 @@ var result = Benchmark.Run(
 | `[IterationSetup]` | メソッド | 各サンプル**前に呼び出し**（計時対象外）。 |
 | `[IterationCleanup]` | メソッド | 各サンプル**後に呼び出し**（計時対象外）。 |
 
-`[Benchmark]`メソッドは、インスタンスメソッドであり、ジェネリックではなく、引数なしでなければなりません。ライフサイクルメソッドは、インスタンスメソッドであり、ジェネリックではなく、引数なしで、戻り値が`void`である必要があります。`[Params]`の対象は書き込み可能なインスタンスプロパティ、または`readonly`でないインスタンスフィールドでなければなりません。
+`[Benchmark]`とライフサイクルメソッドは、インスタンスメソッドであり、ジェネリックではなく、引数なしでなければなりません。戻り値は`void`、`Task`、`ValueTask`、`Task<T>`、`ValueTask<T>`のいずれかで、非同期メソッドは await され、戻り値は破棄されます。`[Benchmark]`メソッドを`async void`にすることはできません（PBGEN011）。`[Params]`の対象は書き込み可能なインスタンスプロパティ、または`readonly`でないインスタンスフィールドでなければなりません。ベンチマーククラスは非ジェネリック、非ネスト、非抽象で、public な引数なしコンストラクターを持つ必要があります。
 
 ### 完全な例
 
@@ -204,6 +204,41 @@ var instance = new StringBenchmarks();
 var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 ```
 
+## 非同期ベンチマーク
+
+両方の API が非同期処理をサポートします。非同期ベンチマークメソッドはイテレーションごとに await され、ライフサイクルメソッドは同じクラス内で同期と非同期を混在できます。
+
+```csharp
+var result = await Benchmark.RunAsync("Http call", async () =>
+{
+    using var response = await httpClient.GetAsync(url);
+});
+
+var scoped = await Benchmark.RunScopedAsync("Scoped",
+    () => container.CreateScope(),
+    async scope => await scope.Service.DoWorkAsync());
+```
+
+- **計測モード** – `AsyncTimingMode.WallClock`（既定）は await による中断を含む総時間を計測します。`AsyncTimingMode.CpuOnly` は `Process.TotalProcessorTime` を計測し、I/O 待ちを除外します。CPU クロックは OS のタイマーティック（通常 10〜16 ms）単位でしか進まないため、自動キャリブレーションは最小サンプル予算を実測したクロック粒度まで引き上げます。CpuOnly モードでは GC データを収集しません。
+- **GC の帰属** – 非同期の GC カウントは近似値としてマークされます（`GcInfo.IsApproximate`）。setup/teardown の割り当てはどちらのモードでも除外されます。
+- **CPU サイクル** – 非同期ベンチマークはプロセス全体のカウンターを使用します（スレッド単位のカウンターはスレッド遷移をまたいで減算できないため）。
+- **キャンセル** – `BenchmarkConfig.CancellationToken` は非同期ベンチマークのサンプル境界でのみ確認されます。同期ベンチマークは無視します。
+- **混在クラス** – クラスに他の非同期メンバーがあっても、同期 `[Benchmark]` メソッドは直接の同期計測パスを使います。
+- **ウォームアップ** – ウォームアップのイテレーションはウォームアップデリゲートのみを呼び出します。`setup`/`teardown` と `[IterationSetup]`/`[IterationCleanup]` はウォームアップ中には実行されません。ウォームアップ処理は自己完結させてください。
+
+---
+
+## 計測の忠実度
+
+PicoBench はインプロセスで実行されるため、CLR の設定が絶対値に影響します。
+
+- 階層化 JIT を無効化: `DOTNET_TieredCompilation=0`、`DOTNET_TieredPGO=0`（または `COMPlus_*`）。
+- シングルスレッドのマイクロベンチマークではワークステーション GC を使用: `DOTNET_gcServer=0`。
+- CPU サイクルは OS が非特権カウンターを許可する場合のみ利用できます（Windows `QueryThreadCycleTime`/`QueryProcessCycleTime`、Linux は `perf_event_paranoid` ≤ 2 の場合 `perf_event`、macOS は真のサイクルではなく単調プロキシ）。`EnvironmentInfo` とすべてのフォーマッターが使用ソースを報告します。
+- `BenchmarkConfig.BoostPriorities`（既定 `true`）は実行中のみプロセスとスレッドの優先度を上げ、終了後に元の値へ戻します。
+
+---
+
 ---
 
 ## 設定
@@ -227,7 +262,7 @@ var config = new BenchmarkConfig
     RetainSamples       = true,  // 生のTimingSampleデータを保持
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
-    MaxAutoIterationsPerSample = 1_000_000
+    MaxAutoIterationsPerSample = 1_000_000,
     ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
 };
 

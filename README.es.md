@@ -1,6 +1,6 @@
 # PicoBench
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
+[English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
 Una biblioteca de benchmarking ligera y sin dependencias para .NET con **dos API complementarias**: una API imperativa y una API basada en atributos, generada por código fuente, completamente **compatible con AOT**.
 
@@ -154,7 +154,7 @@ Decora una clase **partial** con `[BenchmarkClass]` y sus métodos/propiedades c
 | `[IterationSetup]` | Método | Llamado antes de **cada muestra** (no cronometrado). |
 | `[IterationCleanup]` | Método | Llamado después de **cada muestra** (no cronometrado). |
 
-Los métodos `[Benchmark]` deben ser de instancia, no genéricos y sin parámetros. Los métodos de ciclo de vida deben ser de instancia, no genéricos, sin parámetros y `void`. Los destinos de `[Params]` deben ser propiedades de instancia editables o campos de instancia no `readonly`.
+Los métodos `[Benchmark]` y de ciclo de vida deben ser de instancia, no genéricos y sin parámetros. Pueden devolver `void`, `Task`, `ValueTask`, `Task<T>` o `ValueTask<T>`; los métodos asíncronos se esperan con await y los valores devueltos se descartan. Los métodos `[Benchmark]` no pueden ser `async void` (PBGEN011). Los destinos de `[Params]` deben ser propiedades de instancia editables o campos de instancia no `readonly`. Las clases de benchmark deben ser no genéricas, no anidadas, no abstractas y declarar un constructor público sin parámetros.
 
 ### Ejemplo Completo
 
@@ -204,6 +204,41 @@ var instance = new StringBenchmarks();
 var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 ```
 
+## Benchmarks Asíncronos
+
+Ambas APIs admiten trabajo asíncrono. Los métodos de benchmark asíncronos se esperan por iteración; los métodos de ciclo de vida pueden mezclar sincronía y asincronía en la misma clase.
+
+```csharp
+var result = await Benchmark.RunAsync("Http call", async () =>
+{
+    using var response = await httpClient.GetAsync(url);
+});
+
+var scoped = await Benchmark.RunScopedAsync("Scoped",
+    () => container.CreateScope(),
+    async scope => await scope.Service.DoWorkAsync());
+```
+
+- **Modos de medición** – `AsyncTimingMode.WallClock` (predeterminado) mide la duración total, incluidas las suspensiones await; `AsyncTimingMode.CpuOnly` mide `Process.TotalProcessorTime` y excluye la espera de E/S. El reloj de CPU avanza solo en tics del temporizador (normalmente 10–16 ms), por lo que la autocalibración eleva su presupuesto mínimo de muestra a la granularidad medida del reloj. En CpuOnly no se recopilan datos de GC.
+- **Atribución de GC** – los contadores de GC asíncronos se marcan como aproximados (`GcInfo.IsApproximate`). Las asignaciones de setup/teardown se excluyen en ambos modos.
+- **Ciclos de CPU** – los benchmarks asíncronos usan contadores de todo el proceso (los contadores por hilo no se pueden restar entre cambios de hilo).
+- **Cancelación** – `BenchmarkConfig.CancellationToken` solo se comprueba en los límites de muestra de los benchmarks asíncronos; los síncronos lo ignoran.
+- **Clases mixtas** – un método `[Benchmark]` síncrono conserva la ruta de medición síncrona directa aunque la clase tenga otros miembros asíncronos.
+- **Warmup** – las iteraciones de warmup solo invocan el delegado de warmup; `setup`/`teardown` y `[IterationSetup]`/`[IterationCleanup]` no se ejecutan durante el warmup. Las acciones de warmup deben ser autosuficientes.
+
+---
+
+## Fidelidad de Medición
+
+PicoBench se ejecuta en proceso, por lo que la configuración del CLR afecta a los valores absolutos:
+
+- Desactive el JIT por niveles: `DOTNET_TieredCompilation=0`, `DOTNET_TieredPGO=0` (o `COMPlus_*`).
+- Para microbenchmarks de un solo hilo use GC de estación de trabajo: `DOTNET_gcServer=0`.
+- Los ciclos de CPU solo están disponibles si el sistema operativo permite contadores sin privilegios (Windows `QueryThreadCycleTime`/`QueryProcessCycleTime`; Linux `perf_event` con `perf_event_paranoid` ≤ 2; macOS ofrece un proxy monótono, no ciclos reales). `EnvironmentInfo` y todos los formateadores informan la fuente usada.
+- `BenchmarkConfig.BoostPriorities` (predeterminado `true`) eleva la prioridad del proceso y del hilo solo durante la ejecución y restaura los valores anteriores al terminar.
+
+---
+
 ---
 
 ## Configuración
@@ -227,7 +262,7 @@ var config = new BenchmarkConfig
     RetainSamples       = true,  // Conservar datos brutos de TimingSample
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
-    MaxAutoIterationsPerSample = 1_000_000
+    MaxAutoIterationsPerSample = 1_000_000,
     ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
 };
 

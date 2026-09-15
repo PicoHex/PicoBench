@@ -1,6 +1,6 @@
 # PicoBench
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
+[English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
 一個輕量級、零依賴的 .NET 基準測試庫，提供 **兩種互補的 API**：命令式 API 和基於屬性、源生成的 API，完全 **AOT 相容**。
 
@@ -154,7 +154,7 @@ var result = Benchmark.Run(
 | `[IterationSetup]` | 方法 | 每個樣本**前呼叫**（不計時）。 |
 | `[IterationCleanup]` | 方法 | 每個樣本**後呼叫**（不計時）。 |
 
-`[Benchmark]` 方法必須是實例、非泛型、無參數方法。生命週期方法必須是實例、非泛型、無參數且返回 `void`。`[Params]` 目標必須是可寫實例屬性或非唯讀實例欄位。
+`[Benchmark]` 與生命週期方法必須是實例、非泛型、無參數方法，可返回 `void`、`Task`、`ValueTask`、`Task<T>` 或 `ValueTask<T>`；非同步方法會被 await，返回值被捨棄。`[Benchmark]` 方法不得為 `async void`（PBGEN011）。`[Params]` 目標必須是可寫實例屬性或非唯讀實例欄位。基準類必須是非泛型、非巢狀、非抽象，並聲明公共無參建構子。
 
 ### 完整示例
 
@@ -204,6 +204,41 @@ var instance = new StringBenchmarks();
 var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 ```
 
+## 非同步基準測試
+
+兩種 API 都支援非同步工作。非同步基準方法按迭代 await；同一類中可混用同步與非同步生命週期方法。
+
+```csharp
+var result = await Benchmark.RunAsync("Http call", async () =>
+{
+    using var response = await httpClient.GetAsync(url);
+});
+
+var scoped = await Benchmark.RunScopedAsync("Scoped",
+    () => container.CreateScope(),
+    async scope => await scope.Service.DoWorkAsync());
+```
+
+- **計時模式** —— `AsyncTimingMode.WallClock`（預設）統計包含 await 掛起的完整時長；`AsyncTimingMode.CpuOnly` 統計 `Process.TotalProcessorTime`，排除 I/O 等待。CPU 時鐘以作業系統定時器刻度推進（通常 10–16 ms），因此該模式下自動校準會把最小採樣預算提升到實測時鐘粒度。CpuOnly 模式不收集 GC 資料。
+- **GC 歸因** —— 非同步 GC 計數標記為近似值（`GcInfo.IsApproximate`）。兩種模式都會排除 setup/teardown 的配置。
+- **CPU 周期** —— 非同步基準使用進程級計數器（線程級計數器無法跨線程切換相減）。
+- **取消** —— `BenchmarkConfig.CancellationToken` 僅在非同步基準的樣本邊界檢查；同步基準忽略它。
+- **混合類** —— 即使類中存在其他非同步成員，同步 `[Benchmark]` 方法仍走直接同步測量路徑。
+- **預熱** —— 預熱迭代只呼叫預熱委托；`setup`/`teardown` 與 `[IterationSetup]`/`[IterationCleanup]` 在預熱期間不會執行。預熱動作需自給自足。
+
+---
+
+## 測量保真度
+
+PicoBench 採用進程內執行，CLR 設定會影響絕對值：
+
+- 關閉分層 JIT：`DOTNET_TieredCompilation=0`、`DOTNET_TieredPGO=0`（或 `COMPlus_*`）。
+- 單線程微基準建議使用工作站 GC：`DOTNET_gcServer=0`。
+- 僅當作業系統允許非特權計數器時才可取得 CPU 周期（Windows `QueryThreadCycleTime`/`QueryProcessCycleTime`；Linux 在 `perf_event_paranoid` ≤ 2 時使用 `perf_event`；macOS 提供單調代理而非真實周期）。`EnvironmentInfo` 與所有格式化器都會報告所用來源。
+- `BenchmarkConfig.BoostPriorities`（預設 `true`）僅在執行期間提升進程與線程優先級，結束後恢復原值。
+
+---
+
 ---
 
 ## 配置
@@ -227,7 +262,7 @@ var config = new BenchmarkConfig
     RetainSamples       = true,  // 保留原始 TimingSample 數據
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
-    MaxAutoIterationsPerSample = 1_000_000
+    MaxAutoIterationsPerSample = 1_000_000,
     ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
 };
 

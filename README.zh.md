@@ -1,6 +1,6 @@
 # PicoBench
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [Español](README.es.md) | [Русский](README.ru.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md)
+[English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
 ![CI](https://github.com/PicoHex/PicoBench/actions/workflows/ci.yml/badge.svg)
 [![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
@@ -158,7 +158,7 @@ var result = Benchmark.Run(
 | `[IterationSetup]` | 方法 | 每个样本**前调用**（不计时）。 |
 | `[IterationCleanup]` | 方法 | 每个样本**后调用**（不计时）。 |
 
-`[Benchmark]` 方法必须是实例、非泛型、无参数方法。生命周期方法必须是实例、非泛型、无参数且返回 `void`。`[Params]` 目标必须是可写实例属性或非只读实例字段。
+`[Benchmark]` 与生命周期方法必须是实例、非泛型、无参数方法，可返回 `void`、`Task`、`ValueTask`、`Task<T>` 或 `ValueTask<T>`；异步方法会被 await，返回值被丢弃。`[Benchmark]` 方法不得为 `async void`（PBGEN011）。`[Params]` 目标必须是可写实例属性或非只读实例字段。基准类必须是非泛型、非嵌套、非抽象，并声明公共无参构造函数。
 
 ### 完整示例
 
@@ -208,6 +208,41 @@ var instance = new StringBenchmarks();
 var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 ```
 
+## 异步基准测试
+
+两种 API 都支持异步工作。异步基准方法按迭代 await；同一类中可混用同步与异步生命周期方法。
+
+```csharp
+var result = await Benchmark.RunAsync("Http call", async () =>
+{
+    using var response = await httpClient.GetAsync(url);
+});
+
+var scoped = await Benchmark.RunScopedAsync("Scoped",
+    () => container.CreateScope(),
+    async scope => await scope.Service.DoWorkAsync());
+```
+
+- **计时模式** —— `AsyncTimingMode.WallClock`（默认）统计包含 await 挂起的完整时长；`AsyncTimingMode.CpuOnly` 统计 `Process.TotalProcessorTime`，排除 I/O 等待。CPU 时钟以操作系统定时器刻度推进（通常 10–16 ms），因此该模式下自动校准会把最小采样预算提升到实测时钟粒度。CpuOnly 模式不收集 GC 数据。
+- **GC 归因** —— 异步 GC 计数标记为近似值（`GcInfo.IsApproximate`）。两种模式都会排除 setup/teardown 的分配。
+- **CPU 周期** —— 异步基准使用进程级计数器（线程级计数器无法跨线程切换相减）。
+- **取消** —— `BenchmarkConfig.CancellationToken` 仅在异步基准的样本边界检查；同步基准忽略它。
+- **混合类** —— 即使类中存在其他异步成员，同步 `[Benchmark]` 方法仍走直接同步测量路径。
+- **预热** —— 预热迭代只调用预热委托；`setup`/`teardown` 与 `[IterationSetup]`/`[IterationCleanup]` 在预热期间不会执行。预热动作需自给自足。
+
+---
+
+## 测量保真度
+
+PicoBench 采用进程内运行，CLR 配置会影响绝对值：
+
+- 关闭分层 JIT：`DOTNET_TieredCompilation=0`、`DOTNET_TieredPGO=0`（或 `COMPlus_*`）。
+- 单线程微基准建议使用工作站 GC：`DOTNET_gcServer=0`。
+- 仅当操作系统允许非特权计数器时才可获取 CPU 周期（Windows `QueryThreadCycleTime`/`QueryProcessCycleTime`；Linux 在 `perf_event_paranoid` ≤ 2 时使用 `perf_event`；macOS 提供单调代理而非真实周期）。`EnvironmentInfo` 与所有格式化器都会报告所用来源。
+- `BenchmarkConfig.BoostPriorities`（默认 `true`）仅在运行期间提升进程与线程优先级，结束后恢复原值。
+
+---
+
 ---
 
 ## 配置
@@ -231,7 +266,7 @@ var config = new BenchmarkConfig
     RetainSamples       = true,  // 保留原始 TimingSample 数据
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
-    MaxAutoIterationsPerSample = 1_000_000
+    MaxAutoIterationsPerSample = 1_000_000,
     ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
 };
 
