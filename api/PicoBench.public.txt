@@ -1,0 +1,262 @@
+B:PicoBench.BenchmarkAttribute : System.Attribute
+B:PicoBench.BenchmarkClassAttribute : System.Attribute
+B:PicoBench.Formatters.ConsoleFormatter : PicoBench.Formatters.FormatterBase
+B:PicoBench.Formatters.CsvFormatter : PicoBench.Formatters.FormatterBase
+B:PicoBench.Formatters.HtmlFormatter : PicoBench.Formatters.FormatterBase
+B:PicoBench.Formatters.MarkdownFormatter : PicoBench.Formatters.FormatterBase
+B:PicoBench.GlobalCleanupAttribute : System.Attribute
+B:PicoBench.GlobalSetupAttribute : System.Attribute
+B:PicoBench.IterationCleanupAttribute : System.Attribute
+B:PicoBench.IterationSetupAttribute : System.Attribute
+B:PicoBench.ParamsAttribute : System.Attribute
+F:PicoBench.AsyncTimingMode.CpuOnly : PicoBench.AsyncTimingMode = 1 const
+F:PicoBench.AsyncTimingMode.WallClock : PicoBench.AsyncTimingMode = 0 const
+F:PicoBench.AsyncTimingMode.value__ : int
+F:PicoBench.CpuCycleMeasurementKind.MonotonicClockProxy : PicoBench.CpuCycleMeasurementKind = 3 const
+F:PicoBench.CpuCycleMeasurementKind.PerfEventCpuCycles : PicoBench.CpuCycleMeasurementKind = 2 const
+F:PicoBench.CpuCycleMeasurementKind.ThreadCycles : PicoBench.CpuCycleMeasurementKind = 1 const
+F:PicoBench.CpuCycleMeasurementKind.Unsupported : PicoBench.CpuCycleMeasurementKind = 0 const
+F:PicoBench.CpuCycleMeasurementKind.value__ : int
+F:PicoBench.RuntimeExecutionMode.Jit : PicoBench.RuntimeExecutionMode = 1 const
+F:PicoBench.RuntimeExecutionMode.NativeAot : PicoBench.RuntimeExecutionMode = 2 const
+F:PicoBench.RuntimeExecutionMode.Unknown : PicoBench.RuntimeExecutionMode = 0 const
+F:PicoBench.RuntimeExecutionMode.value__ : int
+I:PicoBench.Formatters.FormatterBase : PicoBench.Formatters.IFormatter
+M:PicoBench.Benchmark.Compare(string name, PicoBench.BenchmarkResult baseline, PicoBench.BenchmarkResult candidate) : PicoBench.ComparisonResult static
+M:PicoBench.Benchmark.Compare(string name, string baselineName, System.Action baselineAction, string candidateName, System.Action candidateAction, PicoBench.BenchmarkConfig config = null) : PicoBench.ComparisonResult static
+M:PicoBench.Benchmark.Run(string name, System.Action action, PicoBench.BenchmarkConfig config = null) : PicoBench.BenchmarkResult static
+M:PicoBench.Benchmark.Run(string name, System.Action action, System.Action warmup, PicoBench.BenchmarkConfig config = null, System.Action setup = null, System.Action teardown = null) : PicoBench.BenchmarkResult static
+M:PicoBench.Benchmark.RunAsync(string name, System.Func`1<System.Threading.Tasks.Task> action, PicoBench.BenchmarkConfig config = null) : System.Threading.Tasks.Task`1<PicoBench.BenchmarkResult> static
+M:PicoBench.Benchmark.RunAsync(string name, System.Func`1<System.Threading.Tasks.Task> action, System.Func`1<System.Threading.Tasks.Task> warmup, PicoBench.BenchmarkConfig config = null, System.Func`1<System.Threading.Tasks.Task> setup = null, System.Func`1<System.Threading.Tasks.Task> teardown = null) : System.Threading.Tasks.Task`1<PicoBench.BenchmarkResult> static
+M:PicoBench.Benchmark.RunAsync``1(string name, TState state, System.Func`2<TState, System.Threading.Tasks.Task> action, System.Func`2<TState, System.Threading.Tasks.Task> warmup = null, PicoBench.BenchmarkConfig config = null) : System.Threading.Tasks.Task`1<PicoBench.BenchmarkResult> static
+M:PicoBench.Benchmark.RunScopedAsync``1(string name, System.Func`1<TScope> scopeFactory, System.Func`2<TScope, System.Threading.Tasks.Task> action, PicoBench.BenchmarkConfig config = null) : System.Threading.Tasks.Task`1<PicoBench.BenchmarkResult> static
+M:PicoBench.Benchmark.RunScoped``1(string name, System.Func`1<TScope> scopeFactory, System.Action`1<TScope> action, PicoBench.BenchmarkConfig config = null) : PicoBench.BenchmarkResult static
+M:PicoBench.Benchmark.Run``1(string name, TState state, System.Action`1<TState> action, System.Action`1<TState> warmup = null, PicoBench.BenchmarkConfig config = null) : PicoBench.BenchmarkResult static
+M:PicoBench.BenchmarkAttribute..ctor() : void
+M:PicoBench.BenchmarkClassAttribute..ctor() : void
+M:PicoBench.BenchmarkConfig..ctor() : void
+M:PicoBench.BenchmarkResult..ctor(string name, PicoBench.Statistics statistics, int iterationsPerSample, int sampleCount, string category = null, System.Collections.Generic.IReadOnlyDictionary`2<string, string> tags = null, System.Collections.Generic.IReadOnlyList`1<PicoBench.TimingSample> samples = null, System.Nullable`1<System.DateTime> timestamp = null) : void
+M:PicoBench.BenchmarkRunner.RunAsync``1(PicoBench.BenchmarkConfig config = null) : System.Threading.Tasks.Task`1<PicoBench.BenchmarkSuite> static
+M:PicoBench.BenchmarkRunner.RunAsync``1(T instance, PicoBench.BenchmarkConfig config = null) : System.Threading.Tasks.Task`1<PicoBench.BenchmarkSuite> static
+M:PicoBench.BenchmarkRunner.Run``1(PicoBench.BenchmarkConfig config = null) : PicoBench.BenchmarkSuite static
+M:PicoBench.BenchmarkRunner.Run``1(T instance, PicoBench.BenchmarkConfig config = null) : PicoBench.BenchmarkSuite static
+M:PicoBench.BenchmarkSuite..ctor(string name, PicoBench.EnvironmentInfo environment, System.Collections.Generic.IReadOnlyList`1<PicoBench.BenchmarkResult> results, System.TimeSpan duration, string description = null, System.Collections.Generic.IReadOnlyList`1<PicoBench.ComparisonResult> comparisons = null, System.Nullable`1<System.DateTime> timestamp = null) : void
+M:PicoBench.ComparisonResult..ctor(string name, PicoBench.BenchmarkResult baseline, PicoBench.BenchmarkResult candidate, string category = null, System.Collections.Generic.IReadOnlyDictionary`2<string, string> tags = null) : void
+M:PicoBench.EnvironmentInfo..ctor() : void
+M:PicoBench.EnvironmentInfo.ToString() : string virtual
+M:PicoBench.Formatters.ConsoleFormatter..ctor(PicoBench.Formatters.FormatterOptions options = null) : void
+M:PicoBench.Formatters.ConsoleFormatter.FormatCore(PicoBench.BenchmarkResult result) : string virtual
+M:PicoBench.Formatters.ConsoleFormatter.FormatCore(PicoBench.BenchmarkSuite suite) : string virtual
+M:PicoBench.Formatters.ConsoleFormatter.FormatCore(PicoBench.ComparisonResult comparison) : string virtual
+M:PicoBench.Formatters.ConsoleFormatter.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results) : string virtual
+M:PicoBench.Formatters.ConsoleFormatter.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons) : string virtual
+M:PicoBench.Formatters.ConsoleFormatter.FormatTableWithTitle(string title, System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons) : string
+M:PicoBench.Formatters.ConsoleFormatter.Write(PicoBench.BenchmarkResult result, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.ConsoleFormatter.Write(PicoBench.BenchmarkSuite suite, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.ConsoleFormatter.Write(PicoBench.ComparisonResult comparison, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.ConsoleFormatter.Write(System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.ConsoleFormatter.Write(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.ConsoleFormatter.WriteEnvironment(PicoBench.EnvironmentInfo env, PicoBench.BenchmarkConfig config) : void static
+M:PicoBench.Formatters.ConsoleFormatter.WriteFileSaved(string format, string path) : void static
+M:PicoBench.Formatters.ConsoleFormatter.WriteHeader(string title, int width = 111) : void static
+M:PicoBench.Formatters.ConsoleFormatter.WriteTableWithTitle(string title, System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.CsvFormatter..ctor(PicoBench.Formatters.FormatterOptions options = null) : void
+M:PicoBench.Formatters.CsvFormatter.AppendToFile(string filePath, PicoBench.BenchmarkResult result, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.CsvFormatter.FormatCore(PicoBench.BenchmarkSuite suite) : string virtual
+M:PicoBench.Formatters.CsvFormatter.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results) : string virtual
+M:PicoBench.Formatters.CsvFormatter.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons) : string virtual
+M:PicoBench.Formatters.CsvFormatter.WriteToFile(string filePath, PicoBench.BenchmarkResult result, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.CsvFormatter.WriteToFile(string filePath, PicoBench.BenchmarkSuite suite, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.CsvFormatter.WriteToFile(string filePath, System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.CsvFormatter.WriteToFile(string filePath, System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.FormatterBase..ctor(PicoBench.Formatters.FormatterOptions options = null) : void
+M:PicoBench.Formatters.FormatterBase.Format(PicoBench.BenchmarkResult result) : string override
+M:PicoBench.Formatters.FormatterBase.Format(PicoBench.BenchmarkSuite suite) : string override
+M:PicoBench.Formatters.FormatterBase.Format(PicoBench.ComparisonResult comparison) : string override
+M:PicoBench.Formatters.FormatterBase.Format(System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results) : string override
+M:PicoBench.Formatters.FormatterBase.Format(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons) : string override
+M:PicoBench.Formatters.FormatterBase.FormatCore(PicoBench.BenchmarkResult result) : string virtual
+M:PicoBench.Formatters.FormatterBase.FormatCore(PicoBench.BenchmarkSuite suite) : string abstract
+M:PicoBench.Formatters.FormatterBase.FormatCore(PicoBench.ComparisonResult comparison) : string virtual
+M:PicoBench.Formatters.FormatterBase.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results) : string abstract
+M:PicoBench.Formatters.FormatterBase.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons) : string abstract
+M:PicoBench.Formatters.FormatterBase.FormatGcInfo(PicoBench.GcInfo gc) : string static
+M:PicoBench.Formatters.FormatterBase.FormatSpeedup(double speedup) : string
+M:PicoBench.Formatters.FormatterBase.FormatTime(double nanoseconds) : string
+M:PicoBench.Formatters.FormatterBase.GetSpeedupIndicator(double speedup) : string static
+M:PicoBench.Formatters.FormatterBase.WriteToFileInternal(string filePath, string content) : void static
+M:PicoBench.Formatters.FormatterOptions..ctor() : void
+M:PicoBench.Formatters.FormatterOptions.ResolvePath(string fileName) : string
+M:PicoBench.Formatters.HtmlFormatter..ctor(PicoBench.Formatters.FormatterOptions options = null) : void
+M:PicoBench.Formatters.HtmlFormatter.FormatCore(PicoBench.BenchmarkSuite suite) : string virtual
+M:PicoBench.Formatters.HtmlFormatter.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results) : string virtual
+M:PicoBench.Formatters.HtmlFormatter.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons) : string virtual
+M:PicoBench.Formatters.HtmlFormatter.WriteToFile(string filePath, PicoBench.BenchmarkResult result, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.HtmlFormatter.WriteToFile(string filePath, PicoBench.BenchmarkSuite suite, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.HtmlFormatter.WriteToFile(string filePath, System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.HtmlFormatter.WriteToFile(string filePath, System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.IFormatter.Format(PicoBench.BenchmarkResult result) : string abstract
+M:PicoBench.Formatters.IFormatter.Format(PicoBench.BenchmarkSuite suite) : string abstract
+M:PicoBench.Formatters.IFormatter.Format(PicoBench.ComparisonResult comparison) : string abstract
+M:PicoBench.Formatters.IFormatter.Format(System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results) : string abstract
+M:PicoBench.Formatters.IFormatter.Format(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons) : string abstract
+M:PicoBench.Formatters.MarkdownFormatter..ctor(PicoBench.Formatters.FormatterOptions options = null) : void
+M:PicoBench.Formatters.MarkdownFormatter.FormatCore(PicoBench.BenchmarkSuite suite) : string virtual
+M:PicoBench.Formatters.MarkdownFormatter.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results) : string virtual
+M:PicoBench.Formatters.MarkdownFormatter.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons) : string virtual
+M:PicoBench.Formatters.MarkdownFormatter.FormatGroupedComparisons(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons, System.Func`2<PicoBench.ComparisonResult, string> groupBy, PicoBench.Formatters.FormatterOptions options = null) : string static
+M:PicoBench.Formatters.MarkdownFormatter.WriteToFile(string filePath, PicoBench.BenchmarkResult result, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.MarkdownFormatter.WriteToFile(string filePath, PicoBench.BenchmarkSuite suite, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.MarkdownFormatter.WriteToFile(string filePath, System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.MarkdownFormatter.WriteToFile(string filePath, System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons, PicoBench.Formatters.FormatterOptions options = null) : void static
+M:PicoBench.Formatters.SummaryFormatter.Format(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons, System.Nullable`1<System.TimeSpan> duration = null, PicoBench.Formatters.SummaryOptions options = null, PicoBench.Formatters.IFormatter detailFormatter = null) : string static
+M:PicoBench.Formatters.SummaryFormatter.Write(PicoBench.BenchmarkSuite suite, PicoBench.Formatters.SummaryOptions options = null) : void static
+M:PicoBench.Formatters.SummaryFormatter.Write(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons, System.Nullable`1<System.TimeSpan> duration = null, PicoBench.Formatters.SummaryOptions options = null) : void static
+M:PicoBench.Formatters.SummaryOptions..ctor() : void
+M:PicoBench.GcInfo..ctor() : void
+M:PicoBench.GcInfo.ToString() : string virtual
+M:PicoBench.GlobalCleanupAttribute..ctor() : void
+M:PicoBench.GlobalSetupAttribute..ctor() : void
+M:PicoBench.IBenchmarkClass.RunBenchmarksAsync(PicoBench.BenchmarkConfig config = null) : System.Threading.Tasks.ValueTask`1<PicoBench.BenchmarkSuite> abstract
+M:PicoBench.IterationCleanupAttribute..ctor() : void
+M:PicoBench.IterationSetupAttribute..ctor() : void
+M:PicoBench.ParamsAttribute..ctor(params object[] values) : void
+M:PicoBench.Runner.Initialize() : void static
+M:PicoBench.Runner.Time(int iterations, System.Action action) : PicoBench.TimingSample static
+M:PicoBench.Runner.Time(int iterations, System.Action action, System.Action setup, System.Action teardown) : PicoBench.TimingSample static
+M:PicoBench.Runner.TimeAsync(int iterations, System.Func`1<System.Threading.Tasks.Task> action, System.Func`1<System.Threading.Tasks.Task> setup = null, System.Func`1<System.Threading.Tasks.Task> teardown = null) : System.Threading.Tasks.Task`1<PicoBench.TimingSample> static
+M:PicoBench.Runner.TimeAsync``1(int iterations, TState state, System.Func`2<TState, System.Threading.Tasks.Task> action) : System.Threading.Tasks.Task`1<PicoBench.TimingSample> static
+M:PicoBench.Runner.TimeCpuAsync(int iterations, System.Func`1<System.Threading.Tasks.Task> action, System.Func`1<System.Threading.Tasks.Task> setup = null, System.Func`1<System.Threading.Tasks.Task> teardown = null) : System.Threading.Tasks.Task`1<PicoBench.TimingSample> static
+M:PicoBench.Runner.TimeCpuAsync``1(int iterations, TState state, System.Func`2<TState, System.Threading.Tasks.Task> action) : System.Threading.Tasks.Task`1<PicoBench.TimingSample> static
+M:PicoBench.Runner.Time``1(int iterations, TState state, System.Action`1<TState> action) : PicoBench.TimingSample static
+M:PicoBench.Statistics..ctor() : void
+M:PicoBench.TimingSample..ctor() : void
+P:PicoBench.BenchmarkAttribute.Baseline : bool { get; set; }
+P:PicoBench.BenchmarkAttribute.Description : string { get; set; }
+P:PicoBench.BenchmarkClassAttribute.Description : string { get; set; }
+P:PicoBench.BenchmarkConfig.AutoCalibrateIterations : bool { get; init; }
+P:PicoBench.BenchmarkConfig.CancellationToken : System.Threading.CancellationToken { get; init; }
+P:PicoBench.BenchmarkConfig.Default : PicoBench.BenchmarkConfig { get; }
+P:PicoBench.BenchmarkConfig.ForceGcBeforeBenchmark : bool { get; init; }
+P:PicoBench.BenchmarkConfig.IterationsPerSample : int { get; init; }
+P:PicoBench.BenchmarkConfig.MaxAutoIterationsPerSample : int { get; init; }
+P:PicoBench.BenchmarkConfig.MinSampleTime : System.TimeSpan { get; init; }
+P:PicoBench.BenchmarkConfig.Precise : PicoBench.BenchmarkConfig { get; }
+P:PicoBench.BenchmarkConfig.Quick : PicoBench.BenchmarkConfig { get; }
+P:PicoBench.BenchmarkConfig.RetainSamples : bool { get; init; }
+P:PicoBench.BenchmarkConfig.SampleCount : int { get; init; }
+P:PicoBench.BenchmarkConfig.TimingMode : PicoBench.AsyncTimingMode { get; init; }
+P:PicoBench.BenchmarkConfig.WarmupIterations : int { get; init; }
+P:PicoBench.BenchmarkResult.Category : string { get; }
+P:PicoBench.BenchmarkResult.IterationsPerSample : int { get; }
+P:PicoBench.BenchmarkResult.Name : string { get; }
+P:PicoBench.BenchmarkResult.SampleCount : int { get; }
+P:PicoBench.BenchmarkResult.Samples : System.Collections.Generic.IReadOnlyList`1<PicoBench.TimingSample> { get; }
+P:PicoBench.BenchmarkResult.Statistics : PicoBench.Statistics { get; }
+P:PicoBench.BenchmarkResult.Tags : System.Collections.Generic.IReadOnlyDictionary`2<string, string> { get; }
+P:PicoBench.BenchmarkResult.Timestamp : System.DateTime { get; }
+P:PicoBench.BenchmarkSuite.Comparisons : System.Collections.Generic.IReadOnlyList`1<PicoBench.ComparisonResult> { get; }
+P:PicoBench.BenchmarkSuite.Description : string { get; }
+P:PicoBench.BenchmarkSuite.Duration : System.TimeSpan { get; }
+P:PicoBench.BenchmarkSuite.Environment : PicoBench.EnvironmentInfo { get; }
+P:PicoBench.BenchmarkSuite.Name : string { get; }
+P:PicoBench.BenchmarkSuite.Results : System.Collections.Generic.IReadOnlyList`1<PicoBench.BenchmarkResult> { get; }
+P:PicoBench.BenchmarkSuite.Timestamp : System.DateTime { get; }
+P:PicoBench.ComparisonResult.Baseline : PicoBench.BenchmarkResult { get; }
+P:PicoBench.ComparisonResult.Candidate : PicoBench.BenchmarkResult { get; }
+P:PicoBench.ComparisonResult.Category : string { get; }
+P:PicoBench.ComparisonResult.ImprovementPercent : double { get; }
+P:PicoBench.ComparisonResult.IsFaster : bool { get; }
+P:PicoBench.ComparisonResult.Name : string { get; }
+P:PicoBench.ComparisonResult.Speedup : double { get; }
+P:PicoBench.ComparisonResult.Tags : System.Collections.Generic.IReadOnlyDictionary`2<string, string> { get; }
+P:PicoBench.EnvironmentInfo.Architecture : string { get; init; }
+P:PicoBench.EnvironmentInfo.Configuration : string { get; init; }
+P:PicoBench.EnvironmentInfo.CpuCycleMeasurement : PicoBench.CpuCycleMeasurementKind { get; init; }
+P:PicoBench.EnvironmentInfo.CpuCyclesAreMeaningful : bool { get; init; }
+P:PicoBench.EnvironmentInfo.CpuCyclesAvailable : bool { get; init; }
+P:PicoBench.EnvironmentInfo.CustomTags : System.Collections.Generic.IReadOnlyDictionary`2<string, string> { get; init; }
+P:PicoBench.EnvironmentInfo.ExecutionMode : PicoBench.RuntimeExecutionMode { get; init; }
+P:PicoBench.EnvironmentInfo.IsNativeAot : bool { get; }
+P:PicoBench.EnvironmentInfo.Os : string { get; init; }
+P:PicoBench.EnvironmentInfo.ProcessorCount : int { get; init; }
+P:PicoBench.EnvironmentInfo.RuntimeVersion : string { get; init; }
+P:PicoBench.Formatters.FormatterBase.Options : PicoBench.Formatters.FormatterOptions { get; }
+P:PicoBench.Formatters.FormatterOptions.BaselineLabel : string { get; init; }
+P:PicoBench.Formatters.FormatterOptions.CandidateLabel : string { get; init; }
+P:PicoBench.Formatters.FormatterOptions.Compact : PicoBench.Formatters.FormatterOptions { get; }
+P:PicoBench.Formatters.FormatterOptions.Default : PicoBench.Formatters.FormatterOptions { get; }
+P:PicoBench.Formatters.FormatterOptions.IncludeCpuCycles : bool { get; init; }
+P:PicoBench.Formatters.FormatterOptions.IncludeEnvironment : bool { get; init; }
+P:PicoBench.Formatters.FormatterOptions.IncludeGcInfo : bool { get; init; }
+P:PicoBench.Formatters.FormatterOptions.IncludePercentiles : bool { get; init; }
+P:PicoBench.Formatters.FormatterOptions.IncludeTimestamp : bool { get; init; }
+P:PicoBench.Formatters.FormatterOptions.Minimal : PicoBench.Formatters.FormatterOptions { get; }
+P:PicoBench.Formatters.FormatterOptions.OutputDirectory : string { get; init; }
+P:PicoBench.Formatters.FormatterOptions.SpeedupDecimalPlaces : int { get; init; }
+P:PicoBench.Formatters.FormatterOptions.TimeDecimalPlaces : int { get; init; }
+P:PicoBench.Formatters.SummaryOptions.BoxWidth : int { get; init; }
+P:PicoBench.Formatters.SummaryOptions.CandidateLabel : string { get; init; }
+P:PicoBench.Formatters.SummaryOptions.Default : PicoBench.Formatters.SummaryOptions { get; }
+P:PicoBench.Formatters.SummaryOptions.GroupByCategory : bool { get; init; }
+P:PicoBench.Formatters.SummaryOptions.ShowDetailedTable : bool { get; init; }
+P:PicoBench.Formatters.SummaryOptions.ShowDuration : bool { get; init; }
+P:PicoBench.Formatters.SummaryOptions.TableOptions : PicoBench.Formatters.FormatterOptions { get; init; }
+P:PicoBench.Formatters.SummaryOptions.Title : string { get; init; }
+P:PicoBench.Formatters.SummaryOptions.WinsLabel : string { get; init; }
+P:PicoBench.GcInfo.Gen0 : int { get; init; }
+P:PicoBench.GcInfo.Gen1 : int { get; init; }
+P:PicoBench.GcInfo.Gen2 : int { get; init; }
+P:PicoBench.GcInfo.IsApproximate : bool { get; init; }
+P:PicoBench.GcInfo.IsZero : bool { get; }
+P:PicoBench.GcInfo.Total : int { get; }
+P:PicoBench.ParamsAttribute.Values : object[] { get; }
+P:PicoBench.Statistics.Avg : double { get; init; }
+P:PicoBench.Statistics.CpuCyclesPerOp : double { get; init; }
+P:PicoBench.Statistics.GcInfo : PicoBench.GcInfo { get; init; }
+P:PicoBench.Statistics.HasHighVariance : bool { get; }
+P:PicoBench.Statistics.Max : double { get; init; }
+P:PicoBench.Statistics.Min : double { get; init; }
+P:PicoBench.Statistics.P50 : double { get; init; }
+P:PicoBench.Statistics.P90 : double { get; init; }
+P:PicoBench.Statistics.P95 : double { get; init; }
+P:PicoBench.Statistics.P99 : double { get; init; }
+P:PicoBench.Statistics.RelativeStdDevPercent : double { get; init; }
+P:PicoBench.Statistics.StandardError : double { get; init; }
+P:PicoBench.Statistics.StdDev : double { get; init; }
+P:PicoBench.TimingSample.CpuCycles : ulong { get; init; }
+P:PicoBench.TimingSample.ElapsedMilliseconds : double { get; init; }
+P:PicoBench.TimingSample.ElapsedNanoseconds : double { get; init; }
+P:PicoBench.TimingSample.ElapsedTicks : long { get; init; }
+P:PicoBench.TimingSample.GcInfo : PicoBench.GcInfo { get; init; }
+T:class PicoBench.Benchmark
+T:class PicoBench.BenchmarkAttribute
+T:class PicoBench.BenchmarkClassAttribute
+T:class PicoBench.BenchmarkConfig
+T:class PicoBench.BenchmarkResult
+T:class PicoBench.BenchmarkRunner
+T:class PicoBench.BenchmarkSuite
+T:class PicoBench.ComparisonResult
+T:class PicoBench.EnvironmentInfo
+T:class PicoBench.Formatters.ConsoleFormatter
+T:class PicoBench.Formatters.CsvFormatter
+T:class PicoBench.Formatters.FormatterBase
+T:class PicoBench.Formatters.FormatterOptions
+T:class PicoBench.Formatters.HtmlFormatter
+T:class PicoBench.Formatters.MarkdownFormatter
+T:class PicoBench.Formatters.SummaryFormatter
+T:class PicoBench.Formatters.SummaryOptions
+T:class PicoBench.GcInfo
+T:class PicoBench.GlobalCleanupAttribute
+T:class PicoBench.GlobalSetupAttribute
+T:class PicoBench.IterationCleanupAttribute
+T:class PicoBench.IterationSetupAttribute
+T:class PicoBench.ParamsAttribute
+T:class PicoBench.Runner
+T:class PicoBench.Statistics
+T:class PicoBench.TimingSample
+T:enum PicoBench.AsyncTimingMode
+T:enum PicoBench.CpuCycleMeasurementKind
+T:enum PicoBench.RuntimeExecutionMode
+T:interface PicoBench.Formatters.IFormatter
+T:interface PicoBench.IBenchmarkClass
