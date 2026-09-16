@@ -68,7 +68,7 @@ public partial class MyBenchmarks
 
 > The class **must** be `partial`. The source generator emits an `IBenchmarkClass` implementation at compile time - no reflection, fully AOT-safe.
 
-> Invalid attribute usage now produces generator diagnostics for common mistakes such as non-`partial` classes, duplicate baselines, invalid lifecycle signatures, and incompatible `[Params]` values.
+> Invalid attribute usage now produces generator diagnostics for common mistakes such as non-`partial` classes, duplicate baselines, invalid lifecycle signatures, and incompatible `[Params]` values. The generator also rejects `async void` benchmarks (PBGEN011) and generic, nested, record, or non-instantiable benchmark classes (PBGEN012-015), and warns about empty `[Params]` (PBGEN016) and benchmark attributes on base types (PBGEN017).
 
 ---
 
@@ -482,10 +482,23 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ```bash
 dotnet build --configuration Release
 dotnet test --configuration Release
-dotnet pack src/PicoBench/PicoBench.csproj --configuration Release --include-symbols --output ./nupkg
 ```
 
-Releases are **tag-driven** — push a version tag (e.g. `git tag v2026.2.0 && git push origin v2026.2.0`) and the GitHub Actions pipeline will test, pack, and publish to [NuGet.org](https://www.nuget.org/packages/PicoBench) automatically.
+Releases follow the PicoHex version rule `<year>.<x>.<y>`: **x** increments when the public API changed, **y** when it did not. The decision is based on the committed API baseline `api/PicoBench.public.txt`, which always holds the surface of the last release. If the baseline is missing, seed it once with `pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>`.
+
+```bash
+# inspect the API delta and the next version
+pwsh ./scripts/release.ps1 -DryRun
+
+# cut the release: refresh api/, commit chore(release): v<version>, tag, push
+pwsh ./scripts/release.ps1 -Push
+```
+
+The pushed tag triggers the GitHub Actions release pipeline, which runs the tests, packs every package at the tag version, and publishes to [NuGet.org](https://www.nuget.org/packages/PicoBench) automatically. To bridge the indexing gap for sibling PicoHex repositories, pack the same version into the local feed declared in `NuGet.config`:
+
+```bash
+dotnet pack src/PicoBench/PicoBench.csproj -c Release -o artifacts/nupkg -p:Version=<version>
+```
 
 ## Contributing
 

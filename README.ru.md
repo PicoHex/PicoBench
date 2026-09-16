@@ -64,7 +64,7 @@ public partial class MyBenchmarks
 
 > Класс **должен** быть `partial`. Генератор исходного кода создает реализацию `IBenchmarkClass` во время компиляции - без рефлексии, полностью безопасно для AOT.
 
-> Некорректное использование атрибутов теперь дает диагностику генератора для типичных ошибок: класс не `partial`, дублирующиеся baseline, неверные сигнатуры lifecycle-методов и несовместимые значения `[Params]`.
+> Некорректное использование атрибутов теперь дает диагностику генератора для типичных ошибок: класс не `partial`, дублирующиеся baseline, неверные сигнатуры lifecycle-методов и несовместимые значения `[Params]`. Генератор также отклоняет `async void`-бенчмарки (PBGEN011) и обобщённые, вложенные, record-или неинстанцируемые классы бенчмарков (PBGEN012-015), предупреждает о пустых `[Params]` (PBGEN016) и атрибутах бенчмарков в базовых типах (PBGEN017).
 
 ---
 
@@ -431,6 +431,29 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 ## Лицензия
 
 Лицензия MIT - подробности см. в файле [LICENSE](LICENSE).
+
+## Сборка и публикация
+
+```bash
+dotnet build --configuration Release
+dotnet test --configuration Release
+```
+
+Релизы следуют правилу PicoHex `<year>.<x>.<y>`: **x** увеличивается при изменении публичного API, **y** — когда API не менялся. Решение основано на коммитнутом базисе API `api/PicoBench.public.txt`, который всегда содержит поверхность последнего релиза.
+
+```bash
+# показать дельту API и следующую версию
+pwsh ./scripts/release.ps1 -DryRun
+
+# сделать релиз: обновить api/, коммит chore(release): v<version>, тег, push
+pwsh ./scripts/release.ps1 -Push
+```
+
+Пуш тега запускает release-конвейер GitHub Actions: тесты, упаковка всех пакетов с версией тега и публикация на [NuGet.org](https://www.nuget.org/packages/PicoBench). Чтобы перекрыть задержку индексации для сестринских репозиториев, ту же версию можно упаковать в локальный источник из `NuGet.config`:
+
+```bash
+dotnet pack src/PicoBench/PicoBench.csproj -c Release -o artifacts/nupkg -p:Version=<version>
+```
 
 ## Вклад
 

@@ -64,7 +64,7 @@ public partial class MyBenchmarks
 
 > Die Klasse **muss** `partial` sein. Der Quellgenerator erzeugt zur Kompilierzeit eine `IBenchmarkClass`-Implementierung - ohne Reflection, vollständig AOT-sicher.
 
-> Ungültige Attributverwendung erzeugt jetzt Generator-Diagnosen für häufige Fehler wie nicht-`partial` Klassen, doppelte Baselines, ungültige Lifecycle-Signaturen und inkompatible `[Params]`-Werte.
+> Ungültige Attributverwendung erzeugt jetzt Generator-Diagnosen für häufige Fehler wie nicht-`partial` Klassen, doppelte Baselines, ungültige Lifecycle-Signaturen und inkompatible `[Params]`-Werte. Der Generator lehnt außerdem `async void`-Benchmarks (PBGEN011) sowie generische, verschachtelte, Record- und nicht instanziierbare Benchmark-Klassen (PBGEN012-015) ab und warnt bei leeren `[Params]` (PBGEN016) und bei Benchmark-Attributen auf Basistypen (PBGEN017).
 
 ---
 
@@ -431,6 +431,29 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 ## Lizenz
 
 MIT-Lizenz - siehe [LICENSE](LICENSE)-Datei für Details.
+
+## Erstellen und Veröffentlichen
+
+```bash
+dotnet build --configuration Release
+dotnet test --configuration Release
+```
+
+Releases folgen der PicoHex-Versionsregel `<Jahr>.<x>.<y>`: **x** erhöht sich, wenn sich die öffentliche API geändert hat, **y**, wenn nicht. Die Entscheidung stammt aus der committeten API-Baseline `api/PicoBench.public.txt`, die immer die Oberfläche des letzten Releases enthält.
+
+```bash
+# API-Delta und nächste Version anzeigen
+pwsh ./scripts/release.ps1 -DryRun
+
+# Release schneiden: api/ aktualisieren, chore(release): v<version> committen, taggen, pushen
+pwsh ./scripts/release.ps1 -Push
+```
+
+Der gepushte Tag startet die GitHub-Actions-Release-Pipeline: Tests, Pack aller Pakete mit der Tag-Version, Veröffentlichung auf [NuGet.org](https://www.nuget.org/packages/PicoBench). Um die Indexierungslücke für Schwester-Repositories zu überbrücken, kann dieselbe Version in den in `NuGet.config` deklarierten lokalen Feed gepackt werden:
+
+```bash
+dotnet pack src/PicoBench/PicoBench.csproj -c Release -o artifacts/nupkg -p:Version=<version>
+```
 
 ## Beitragen
 

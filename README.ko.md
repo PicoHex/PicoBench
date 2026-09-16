@@ -68,7 +68,7 @@ public partial class MyBenchmarks
 
 > 클래스는 반드시 `partial`이어야 합니다. 소스 생성기가 컴파일 시점에 `IBenchmarkClass` 구현을 생성합니다. 리플렉션이 없으며 완전히 AOT 안전합니다.
 
-> 잘못된 특성 사용은 partial 누락, 중복 기준선, 잘못된 수명 주기 시그니처, 호환되지 않는 `[Params]` 값 등 일반적인 실수에 대해 생성기 진단을 발생시킵니다.
+> 잘못된 특성 사용은 partial 누락, 중복 기준선, 잘못된 수명 주기 시그니처, 호환되지 않는 `[Params]` 값 등 일반적인 실수에 대해 생성기 진단을 발생시킵니다. 또한 `async void` 벤치마크(PBGEN011), 제네릭/중첩/레코드/인스턴스화 불가 벤치마크 클래스(PBGEN012-015)를 거부하고, 빈 `[Params]`(PBGEN016)와 기본 형식의 벤치마크 특성(PBGEN017)에 대해 경고합니다.
 
 ---
 
@@ -482,10 +482,23 @@ MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 ```bash
 dotnet build --configuration Release
 dotnet test --configuration Release
-dotnet pack src/PicoBench/PicoBench.csproj --configuration Release --include-symbols --output ./nupkg
 ```
 
-릴리스는 **태그 기반**입니다. 버전 태그(예: `git tag v2026.2.0 && git push origin v2026.2.0`)를 푸시하면 GitHub Actions 파이프라인이 테스트, 패키징, [NuGet.org](https://www.nuget.org/packages/PicoBench) 게시를 자동으로 수행합니다.
+릴리스는 PicoHex 버전 규칙 `<year>.<x>.<y>`를 따릅니다. 공개 API가 변경되면 **x**를, 변경되지 않으면 **y**를 올립니다. 판단은 저장소의 API 베이스라인 `api/PicoBench.public.txt`를 기준으로 하며, 이 파일은 항상 마지막 릴리스의 공개 표면을 담습니다. 베이스라인이 없으면 한 번 시드합니다: `pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>`.
+
+```bash
+# API 델타와 다음 버전 확인
+pwsh ./scripts/release.ps1 -DryRun
+
+# 릴리스: api/ 갱신, chore(release): v<version> 커밋, 태그, push
+pwsh ./scripts/release.ps1 -Push
+```
+
+푸시된 태그가 GitHub Actions 릴리스 파이프라인을 트리거하면 테스트 실행, 태그 버전으로 모든 패키지 pack, [NuGet.org](https://www.nuget.org/packages/PicoBench) 게시가 자동으로 수행됩니다. 형제 PicoHex 저장소의 인덱싱 공백을 메우려면 같은 버전을 `NuGet.config`에 선언된 로컬 피드로 pack할 수 있습니다:
+
+```bash
+dotnet pack src/PicoBench/PicoBench.csproj -c Release -o artifacts/nupkg -p:Version=<version>
+```
 
 ## 기여
 

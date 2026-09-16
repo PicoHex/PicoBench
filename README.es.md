@@ -64,7 +64,7 @@ public partial class MyBenchmarks
 
 > La clase **debe** ser `partial`. El generador de código fuente emite una implementación `IBenchmarkClass` en tiempo de compilación - sin reflexión, completamente segura para AOT.
 
-> El uso inválido de atributos ahora produce diagnósticos del generador para errores comunes como clases no `partial`, baselines duplicadas, firmas de ciclo de vida no válidas y valores `[Params]` incompatibles.
+> El uso inválido de atributos ahora produce diagnósticos del generador para errores comunes como clases no `partial`, baselines duplicadas, firmas de ciclo de vida no válidas y valores `[Params]` incompatibles. El generador también rechaza benchmarks `async void` (PBGEN011) y clases de benchmark genéricas, anidadas, record o no instanciables (PBGEN012-015), y advierte sobre `[Params]` vacíos (PBGEN016) y atributos de benchmark en tipos base (PBGEN017).
 
 ---
 
@@ -431,6 +431,29 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 ## Licencia
 
 Licencia MIT - consulte el archivo [LICENSE](LICENSE) para más detalles.
+
+## Compilación y Publicación
+
+```bash
+dotnet build --configuration Release
+dotnet test --configuration Release
+```
+
+Las versiones siguen la regla PicoHex `<año>.<x>.<y>`: **x** aumenta cuando cambió la API pública, **y** cuando no. La decisión proviene de la baseline de API comprometida en `api/PicoBench.public.txt`, que siempre contiene la superficie del último release.
+
+```bash
+# ver el delta de API y la próxima versión
+pwsh ./scripts/release.ps1 -DryRun
+
+# cortar el release: refrescar api/, commit chore(release): v<version>, etiquetar, push
+pwsh ./scripts/release.ps1 -Push
+```
+
+La etiqueta empujada activa la pipeline de release de GitHub Actions, que ejecuta las pruebas, empaqueta cada paquete con la versión de la etiqueta y publica en [NuGet.org](https://www.nuget.org/packages/PicoBench). Para cubrir la brecha de indexación de los repositorios hermanos, la misma versión puede empaquetarse en el feed local declarado en `NuGet.config`:
+
+```bash
+dotnet pack src/PicoBench/PicoBench.csproj -c Release -o artifacts/nupkg -p:Version=<version>
+```
 
 ## Contribuir
 

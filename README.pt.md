@@ -64,7 +64,7 @@ public partial class MyBenchmarks
 
 > A classe **deve** ser `partial`. O gerador de código fonte emite uma implementação `IBenchmarkClass` em tempo de compilação - sem reflexão, totalmente segura para AOT.
 
-> Uso inválido de atributos agora produz diagnósticos do gerador para erros comuns como classes não `partial`, baselines duplicados, assinaturas de ciclo de vida inválidas e valores `[Params]` incompatíveis.
+> Uso inválido de atributos agora produz diagnósticos do gerador para erros comuns como classes não `partial`, baselines duplicados, assinaturas de ciclo de vida inválidas e valores `[Params]` incompatíveis. O gerador também rejeita benchmarks `async void` (PBGEN011) e classes de benchmark genéricas, aninhadas, record ou não instanciáveis (PBGEN012-015), e avisa sobre `[Params]` vazios (PBGEN016) e atributos de benchmark em tipos base (PBGEN017).
 
 ---
 
@@ -431,6 +431,29 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 ## Licença
 
 Licença MIT - consulte o arquivo [LICENSE](LICENSE) para detalhes.
+
+## Compilação e Publicação
+
+```bash
+dotnet build --configuration Release
+dotnet test --configuration Release
+```
+
+As versões seguem a regra PicoHex `<ano>.<x>.<y>`: **x** aumenta quando a API pública mudou, **y** quando não mudou. A decisão vem da baseline de API commitada em `api/PicoBench.public.txt`, que sempre contém a superfície do último release.
+
+```bash
+# ver o delta da API e a próxima versão
+pwsh ./scripts/release.ps1 -DryRun
+
+# cortar o release: atualizar api/, commit chore(release): v<version>, tag, push
+pwsh ./scripts/release.ps1 -Push
+```
+
+A tag enviada dispara a pipeline de release do GitHub Actions, que executa os testes, empacota cada pacote na versão da tag e publica em [NuGet.org](https://www.nuget.org/packages/PicoBench). Para cobrir a lacuna de indexação dos repositórios irmãos, a mesma versão pode ser empacotada no feed local declarado em `NuGet.config`:
+
+```bash
+dotnet pack src/PicoBench/PicoBench.csproj -c Release -o artifacts/nupkg -p:Version=<version>
+```
 
 ## Contribuindo
 

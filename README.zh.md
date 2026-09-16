@@ -68,7 +68,7 @@ public partial class MyBenchmarks
 
 > 类 **必须** 是 `partial`。源生成器在编译时生成 `IBenchmarkClass` 实现 - 无反射，完全 AOT 安全。
 
-> 常见错误用法现在会得到源生成器诊断，例如非 `partial` 类、重复 baseline、非法生命周期方法签名，以及不兼容的 `[Params]` 值。
+> 常见错误用法现在会得到源生成器诊断，例如非 `partial` 类、重复 baseline、非法生命周期方法签名，以及不兼容的 `[Params]` 值。 生成器还会拒绝 `async void` 基准方法（PBGEN011）以及泛型/嵌套/record/不可实例化的基准类（PBGEN012-015），并对空 `[Params]`（PBGEN016）和基类型上的基准属性（PBGEN017）发出警告。
 
 ---
 
@@ -435,6 +435,29 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 ## 许可证
 
 MIT 许可证 - 详情见 [LICENSE](LICENSE) 文件。
+
+## 构建与发布
+
+```bash
+dotnet build --configuration Release
+dotnet test --configuration Release
+```
+
+发布遵循 PicoHex 版本规则 `<year>.<x>.<y>`：公共 API 发生变化时 **x** 加一，未变化时 **y** 加一。判定依据仓库内的 API 基线 `api/PicoBench.public.txt`，它始终保存上一个发布版本的公共表面。
+
+```bash
+# 查看 API 差异与下一个版本
+pwsh ./scripts/release.ps1 -DryRun
+
+# 发布：刷新 api/、提交 chore(release): v<version>、打 tag、push
+pwsh ./scripts/release.ps1 -Push
+```
+
+推送 tag 后，GitHub Actions 发布流水线会运行测试、按 tag 版本打包并发布到 [NuGet.org](https://www.nuget.org/packages/PicoBench)。为弥补兄弟仓库的索引空窗，可将同一版本打包到 `NuGet.config` 声明的本地源：
+
+```bash
+dotnet pack src/PicoBench/PicoBench.csproj -c Release -o artifacts/nupkg -p:Version=<version>
+```
 
 ## 贡献
 

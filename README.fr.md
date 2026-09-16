@@ -64,7 +64,7 @@ public partial class MyBenchmarks
 
 > La classe **doit** être `partial`. Le générateur de source émet une implémentation `IBenchmarkClass` au moment de la compilation - sans réflexion, entièrement sûr pour AOT.
 
-> Une utilisation invalide des attributs produit désormais des diagnostics du générateur pour les erreurs courantes comme les classes non `partial`, les baselines dupliquées, les signatures de cycle de vie invalides et les valeurs `[Params]` incompatibles.
+> Une utilisation invalide des attributs produit désormais des diagnostics du générateur pour les erreurs courantes comme les classes non `partial`, les baselines dupliquées, les signatures de cycle de vie invalides et les valeurs `[Params]` incompatibles. Le générateur rejette aussi les benchmarks `async void` (PBGEN011) et les classes de benchmark génériques, imbriquées, record ou non instanciables (PBGEN012-015), et avertit pour les `[Params]` vides (PBGEN016) et les attributs de benchmark sur les types de base (PBGEN017).
 
 ---
 
@@ -431,6 +431,29 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 ## Licence
 
 Licence MIT - voir le fichier [LICENSE](LICENSE) pour plus de détails.
+
+## Compilation et Publication
+
+```bash
+dotnet build --configuration Release
+dotnet test --configuration Release
+```
+
+Les versions suivent la règle PicoHex `<année>.<x>.<y>` : **x** augmente quand l'API publique change, **y** sinon. La décision vient de la baseline d'API commitée dans `api/PicoBench.public.txt`, qui contient toujours la surface du dernier release.
+
+```bash
+# afficher le delta d'API et la prochaine version
+pwsh ./scripts/release.ps1 -DryRun
+
+# couper le release : rafraîchir api/, commit chore(release): v<version>, taguer, push
+pwsh ./scripts/release.ps1 -Push
+```
+
+Le tag poussé déclenche la pipeline de release GitHub Actions : tests, pack de chaque paquet à la version du tag, publication sur [NuGet.org](https://www.nuget.org/packages/PicoBench). Pour combler le délai d'indexation des dépôts frères, la même version peut être empaquetée dans le feed local déclaré dans `NuGet.config` :
+
+```bash
+dotnet pack src/PicoBench/PicoBench.csproj -c Release -o artifacts/nupkg -p:Version=<version>
+```
 
 ## Contribution
 

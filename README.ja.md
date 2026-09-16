@@ -64,7 +64,7 @@ public partial class MyBenchmarks
 
 > クラスは`partial`で**なければなりません**。ソースジェネレーターはコンパイル時に`IBenchmarkClass`実装を生成します - リフレクションなし、完全AOT安全。
 
-> 不正な属性の使い方に対しては、非`partial`クラス、重複した baseline、無効なライフサイクルシグネチャ、互換性のない`[Params]`値などの一般的なミスをジェネレーター診断として報告します。
+> 不正な属性の使い方に対しては、非`partial`クラス、重複した baseline、無効なライフサイクルシグネチャ、互換性のない`[Params]`値などの一般的なミスをジェネレーター診断として報告します。 さらに、`async void`ベンチマーク（PBGEN011）、ジェネリック/ネスト/record/インスタンス化不可のベンチマーククラス（PBGEN012-015）を拒否し、空の`[Params]`（PBGEN016）と基底型のベンチマーク属性（PBGEN017）について警告します。
 
 ---
 
@@ -431,6 +431,29 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 ## ライセンス
 
 MITライセンス - 詳細は[LICENSE](LICENSE)ファイルを参照してください。
+
+## ビルドと公開
+
+```bash
+dotnet build --configuration Release
+dotnet test --configuration Release
+```
+
+リリースは PicoHex のバージョンルール `<year>.<x>.<y>` に従います。公開 API が変わった場合は **x** を、変わらない場合は **y** を進めます。判定は、直前のリリースの表面を保持する `api/PicoBench.public.txt` の API ベースラインに基づきます。
+
+```bash
+# API 差分と次バージョンを確認
+pwsh ./scripts/release.ps1 -DryRun
+
+# リリース: api/ を更新し、chore(release): v<version> をコミットし、タグを付けて push
+pwsh ./scripts/release.ps1 -Push
+```
+
+push されたタグが GitHub Actions のリリースパイプラインを起動し、テスト、タグバージョンでの全パッケージの pack、[NuGet.org](https://www.nuget.org/packages/PicoBench) への公開を行います。兄弟リポジトリのインデックス待ちを埋めるには、同じバージョンを `NuGet.config` で宣言したローカルフィードに pack できます:
+
+```bash
+dotnet pack src/PicoBench/PicoBench.csproj -c Release -o artifacts/nupkg -p:Version=<version>
+```
 
 ## 貢献
 
