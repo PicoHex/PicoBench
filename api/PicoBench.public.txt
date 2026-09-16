@@ -135,6 +135,7 @@ P:PicoBench.BenchmarkAttribute.Baseline : bool { get; set; }
 P:PicoBench.BenchmarkAttribute.Description : string { get; set; }
 P:PicoBench.BenchmarkClassAttribute.Description : string { get; set; }
 P:PicoBench.BenchmarkConfig.AutoCalibrateIterations : bool { get; init; }
+P:PicoBench.BenchmarkConfig.BoostPriorities : bool { get; init; }
 P:PicoBench.BenchmarkConfig.CancellationToken : System.Threading.CancellationToken { get; init; }
 P:PicoBench.BenchmarkConfig.Default : PicoBench.BenchmarkConfig { get; }
 P:PicoBench.BenchmarkConfig.ForceGcBeforeBenchmark : bool { get; init; }
