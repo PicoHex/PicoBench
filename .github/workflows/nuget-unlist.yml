@@ -1,0 +1,55 @@
+name: NuGet Unlist
+
+# Operational escape hatch: unlist (soft-hide) a published version on
+# nuget.org, e.g. when a version was cut with the wrong counter. NuGet
+# versions are immutable; unlisting hides the version from search and from
+# the default package listing without deleting it. Reversible via nuget.org.
+#
+# Run: gh workflow run nuget-unlist.yml -f version=2026.2.6
+#      (or Actions -> NuGet Unlist -> Run workflow)
+
+on:
+  workflow_dispatch:
+    inputs:
+      package-id:
+        description: Package ID to unlist
+        required: true
+        default: PicoBench
+      version:
+        description: Version to unlist (e.g. 2026.2.6)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nuget-unlist-${{ inputs.package-id }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  unlist:
+    name: Unlist ${{ inputs.package-id }} ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Unlist on NuGet.org
+        shell: bash
+        env:
+          PACKAGE_ID: ${{ inputs.package-id }}
+          PACKAGE_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.].+)?$ ]]; then
+            echo "error: refusing to unlist malformed version '$PACKAGE_VERSION'" >&2
+            exit 1
+          fi
+          dotnet nuget delete "$PACKAGE_ID" "$PACKAGE_VERSION" \
+            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --non-interactive \
+            --force-english-output
