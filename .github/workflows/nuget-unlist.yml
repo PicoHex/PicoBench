@@ -7,6 +7,11 @@ name: NuGet Unlist
 #
 # Run: gh workflow run nuget-unlist.yml -f version=2026.2.6
 #      (or Actions -> NuGet Unlist -> Run workflow)
+#
+# Requires the NUGET_UNLIST_API_KEY secret. The regular NUGET_API_KEY is
+# Push-scoped and returns 403 on delete; create an unlist-scoped key at
+# nuget.org (Account -> API keys -> scopes: Unlist for package PicoBench) and
+# add it as NUGET_UNLIST_API_KEY (Settings -> Secrets and variables -> Actions).
 
 on:
   workflow_dispatch:
@@ -49,7 +54,7 @@ jobs:
             exit 1
           fi
           dotnet nuget delete "$PACKAGE_ID" "$PACKAGE_VERSION" \
-            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --api-key "${{ secrets.NUGET_UNLIST_API_KEY }}" \
             --source https://api.nuget.org/v3/index.json \
             --non-interactive \
             --force-english-output
