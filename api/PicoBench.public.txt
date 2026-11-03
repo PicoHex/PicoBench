@@ -12,6 +12,11 @@ B:PicoBench.ParamsAttribute : System.Attribute
 F:PicoBench.AsyncTimingMode.CpuOnly : PicoBench.AsyncTimingMode = 1 const
 F:PicoBench.AsyncTimingMode.WallClock : PicoBench.AsyncTimingMode = 0 const
 F:PicoBench.AsyncTimingMode.value__ : int
+F:PicoBench.ComparisonOutcome.Faster : PicoBench.ComparisonOutcome = 2 const
+F:PicoBench.ComparisonOutcome.Inconclusive : PicoBench.ComparisonOutcome = 1 const
+F:PicoBench.ComparisonOutcome.Slower : PicoBench.ComparisonOutcome = 3 const
+F:PicoBench.ComparisonOutcome.Unknown : PicoBench.ComparisonOutcome = 0 const
+F:PicoBench.ComparisonOutcome.value__ : int
 F:PicoBench.CpuCycleMeasurementKind.MonotonicClockProxy : PicoBench.CpuCycleMeasurementKind = 3 const
 F:PicoBench.CpuCycleMeasurementKind.PerfEventCpuCycles : PicoBench.CpuCycleMeasurementKind = 2 const
 F:PicoBench.CpuCycleMeasurementKind.ThreadCycles : PicoBench.CpuCycleMeasurementKind = 1 const
@@ -41,6 +46,9 @@ M:PicoBench.BenchmarkRunner.RunAsync``1(T instance, PicoBench.BenchmarkConfig co
 M:PicoBench.BenchmarkRunner.Run``1(PicoBench.BenchmarkConfig config = null) : PicoBench.BenchmarkSuite static
 M:PicoBench.BenchmarkRunner.Run``1(T instance, PicoBench.BenchmarkConfig config = null) : PicoBench.BenchmarkSuite static
 M:PicoBench.BenchmarkSuite..ctor(string name, PicoBench.EnvironmentInfo environment, System.Collections.Generic.IReadOnlyList`1<PicoBench.BenchmarkResult> results, System.TimeSpan duration, string description = null, System.Collections.Generic.IReadOnlyList`1<PicoBench.ComparisonResult> comparisons = null, System.Nullable`1<System.DateTime> timestamp = null) : void
+M:PicoBench.ComparisonInterval..ctor(double low, double high) : void
+M:PicoBench.ComparisonInterval.Contains(double value) : bool
+M:PicoBench.ComparisonInterval.ToString() : string virtual
 M:PicoBench.ComparisonResult..ctor(string name, PicoBench.BenchmarkResult baseline, PicoBench.BenchmarkResult candidate, string category = null, System.Collections.Generic.IReadOnlyDictionary`2<string, string> tags = null) : void
 M:PicoBench.EnvironmentInfo..ctor() : void
 M:PicoBench.EnvironmentInfo.ToString() : string virtual
@@ -163,12 +171,17 @@ P:PicoBench.BenchmarkSuite.Environment : PicoBench.EnvironmentInfo { get; }
 P:PicoBench.BenchmarkSuite.Name : string { get; }
 P:PicoBench.BenchmarkSuite.Results : System.Collections.Generic.IReadOnlyList`1<PicoBench.BenchmarkResult> { get; }
 P:PicoBench.BenchmarkSuite.Timestamp : System.DateTime { get; }
+P:PicoBench.ComparisonInterval.High : double { get; }
+P:PicoBench.ComparisonInterval.Low : double { get; }
 P:PicoBench.ComparisonResult.Baseline : PicoBench.BenchmarkResult { get; }
 P:PicoBench.ComparisonResult.Candidate : PicoBench.BenchmarkResult { get; }
 P:PicoBench.ComparisonResult.Category : string { get; }
 P:PicoBench.ComparisonResult.ImprovementPercent : double { get; }
+P:PicoBench.ComparisonResult.Interval : System.Nullable`1<PicoBench.ComparisonInterval> { get; }
 P:PicoBench.ComparisonResult.IsFaster : bool { get; }
+P:PicoBench.ComparisonResult.IsFasterKnown : bool { get; }
 P:PicoBench.ComparisonResult.Name : string { get; }
+P:PicoBench.ComparisonResult.Outcome : PicoBench.ComparisonOutcome { get; }
 P:PicoBench.ComparisonResult.Speedup : double { get; }
 P:PicoBench.ComparisonResult.Tags : System.Collections.Generic.IReadOnlyDictionary`2<string, string> { get; }
 P:PicoBench.EnvironmentInfo.Architecture : string { get; init; }
@@ -264,7 +277,9 @@ T:class PicoBench.Runner
 T:class PicoBench.Statistics
 T:class PicoBench.TimingSample
 T:enum PicoBench.AsyncTimingMode
+T:enum PicoBench.ComparisonOutcome
 T:enum PicoBench.CpuCycleMeasurementKind
 T:enum PicoBench.RuntimeExecutionMode
 T:interface PicoBench.Formatters.IFormatter
 T:interface PicoBench.IBenchmarkClass
+T:struct PicoBench.ComparisonInterval

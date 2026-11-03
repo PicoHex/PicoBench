@@ -366,10 +366,27 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             $"  Candidate ({comparison.Candidate.Name}): {FormatTime(comparison.Candidate.Statistics.Avg)} ns"
         );
         sb.AppendLine($"  Speedup: {FormatSpeedup(comparison.Speedup)} {indicator}");
-        sb.AppendLine(
-            $"  Winner: {(comparison.IsFaster ? comparison.Candidate.Name : comparison.Baseline.Name)}"
-        );
+        if (comparison.Interval is { } interval)
+        {
+            sb.AppendLine($"  Interval: {interval} (95% CI of the paired-round median)");
+        }
+
+        sb.AppendLine($"  Winner: {DescribeWinner(comparison)}");
     }
+
+    /// <summary>
+    /// Names the winner of a comparison, or says why there is none: a difference
+    /// inside the dead band (or whose interval still contains parity) is not a win.
+    /// </summary>
+    private static string DescribeWinner(ComparisonResult comparison) =>
+        comparison.Outcome switch
+        {
+            ComparisonOutcome.Faster => comparison.Candidate.Name,
+            ComparisonOutcome.Slower => comparison.Baseline.Name,
+            ComparisonOutcome.Inconclusive =>
+                $"none (within the {ComparisonResult.DeadBand * 100:F0}% dead band — indistinguishable)",
+            _ => "unknown (not measurable)",
+        };
 
     #endregion
 

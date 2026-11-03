@@ -195,6 +195,14 @@ public static class Benchmark
 
     /// <summary>
     /// Compare two actions directly and return a comparison result.
+    /// <para>
+    /// Both lanes are measured in <see cref="ComparisonMeasurement.Rounds"/>
+    /// interleaved rounds (the lane that goes first alternates every round), the
+    /// verdict is the median of the per-round paired ratios, and a difference is only
+    /// reported when it is outside a 5% dead band and its interval excludes parity —
+    /// see <see cref="ComparisonResult.Outcome"/>. A single sequential baseline-then-
+    /// candidate run used to turn noise into a conclusion (Batch 0 · 0.2, B1-C1).
+    /// </para>
     /// </summary>
     public static ComparisonResult Compare(
         string name,
@@ -213,10 +221,71 @@ public static class Benchmark
         if (candidateAction == null)
             throw new ArgumentNullException(nameof(candidateAction));
 
-        var baseline = Run(baselineName, baselineAction, config);
-        var candidate = Run(candidateName, candidateAction, config);
+        var baselineRounds = new List<BenchmarkResult>(ComparisonMeasurement.Rounds);
+        var candidateRounds = new List<BenchmarkResult>(ComparisonMeasurement.Rounds);
 
-        return new ComparisonResult(name: name, baseline: baseline, candidate: candidate);
+        for (var round = 0; round < ComparisonMeasurement.Rounds; round++)
+        {
+            // Alternate which lane runs first: otherwise the second lane always
+            // inherits a warm process and wins on that alone.
+            if ((round & 1) == 1)
+            {
+                candidateRounds.Add(Run(candidateName, candidateAction, config));
+                baselineRounds.Add(Run(baselineName, baselineAction, config));
+            }
+            else
+            {
+                baselineRounds.Add(Run(baselineName, baselineAction, config));
+                candidateRounds.Add(Run(candidateName, candidateAction, config));
+            }
+        }
+
+        var pairedRatios = new double[ComparisonMeasurement.Rounds];
+        for (var round = 0; round < ComparisonMeasurement.Rounds; round++)
+        {
+            pairedRatios[round] = ComparisonMeasurement.Ratio(
+                baselineRounds[round].Statistics.Avg,
+                candidateRounds[round].Statistics.Avg
+            );
+        }
+
+        var (speedup, interval) = ComparisonMeasurement.PairedSpeedup(pairedRatios);
+
+        return new ComparisonResult(
+            name: name,
+            baseline: MergeRounds(baselineName, baselineRounds),
+            candidate: MergeRounds(candidateName, candidateRounds),
+            category: null,
+            tags: null,
+            speedup: speedup,
+            interval: interval
+        );
+    }
+
+    /// <summary>
+    /// Merges the rounds of one lane into a single result (median point estimates,
+    /// run extremes, summed GC counts) so a caller still gets one
+    /// <see cref="BenchmarkResult"/> per lane.
+    /// </summary>
+    private static BenchmarkResult MergeRounds(string name, List<BenchmarkResult> rounds)
+    {
+        var statistics = ComparisonMeasurement.Merge([.. rounds.Select(r => r.Statistics)]);
+
+        List<TimingSample>? samples = null;
+        if (rounds.TrueForAll(static r => r.Samples is not null))
+        {
+            samples = new List<TimingSample>();
+            foreach (var round in rounds)
+                samples.AddRange(round.Samples!);
+        }
+
+        return new BenchmarkResult(
+            name: name,
+            statistics: statistics,
+            iterationsPerSample: rounds[0].IterationsPerSample,
+            sampleCount: rounds.Sum(static r => r.SampleCount),
+            samples: samples
+        );
     }
 
     #region Private Helpers
@@ -488,11 +557,11 @@ public static class Benchmark
     }
 
     /// <summary>
-    /// Per-operation nanoseconds of a sample, never a "measured zero": a sample whose
-    /// clock did not advance is reported as one quantum of the timing source, the
-    /// smallest value that source can express. The sample itself stays flagged as
-    /// unmeasured (<see cref="Statistics.Unmeasured"/>), so the value is disclosed as
-    /// "not measured" rather than published as a fast operation.
+    /// Per-operation nanoseconds of a sample, never a "measured zero": a sample
+    /// whose clock did not advance is reported as one quantum of the timing
+    /// source, the smallest value that source can express. The sample itself stays
+    /// flagged as unmeasured (<see cref="Statistics.Unmeasured"/>), so the value is
+    /// disclosed as "not measured" rather than published as a fast operation.
     /// </summary>
     private static double PerOpNanosecondsWithFloor(
         TimingSample sample,
@@ -505,8 +574,8 @@ public static class Benchmark
     }
 
     /// <summary>
-    /// Smallest time span the asynchronous timing source can express, in nanoseconds:
-    /// the measured granularity of the process CPU clock in
+    /// Smallest time span the asynchronous timing source can express, in
+    /// nanoseconds: the measured granularity of the process CPU clock in
     /// <see cref="AsyncTimingMode.CpuOnly"/> mode (0 elsewhere, where the source
     /// already resolves nanoseconds).
     /// </summary>
