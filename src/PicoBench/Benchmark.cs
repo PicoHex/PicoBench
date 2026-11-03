@@ -241,6 +241,12 @@ public static class Benchmark
     }
 
     /// <summary>
+    /// How many empty delegates are timed to estimate the harness overhead of a
+    /// run. The minimum is used, so extra repetitions only cost time.
+    /// </summary>
+    private const int HarnessOverheadRepetitions = 5;
+
+    /// <summary>
     /// Run the collection phase, compute statistics, and build the result.
     /// </summary>
     private static BenchmarkResult CollectAndBuild(
@@ -253,6 +259,7 @@ public static class Benchmark
             ForceGc();
 
         var iterationsPerSample = ResolveIterationsPerSample(config, sampleFunc);
+        var overhead = MeasureOverhead(iterationsPerSample);
 
         var samples = new TimingSample[config.SampleCount];
         var perOpTimes = new double[config.SampleCount];
@@ -262,11 +269,17 @@ public static class Benchmark
         {
             var sample = sampleFunc(iterationsPerSample);
             samples[s] = sample;
-            perOpTimes[s] = sample.ElapsedNanoseconds / iterationsPerSample;
+            perOpTimes[s] = PerOpNanoseconds(sample, iterationsPerSample, overhead.Nanoseconds);
             perOpCycles[s] = (double)sample.CpuCycles / iterationsPerSample;
         }
 
-        var stats = StatisticsCalculator.Compute(perOpTimes, perOpCycles, samples);
+        var stats = StatisticsCalculator.Compute(
+            perOpTimes,
+            perOpCycles,
+            samples,
+            overhead.Nanoseconds / iterationsPerSample,
+            overhead.ResolutionLimitNanoseconds
+        );
 
         return new BenchmarkResult(
             name: name,
@@ -275,6 +288,39 @@ public static class Benchmark
             sampleCount: config.SampleCount,
             samples: config.RetainSamples ? samples : null
         );
+    }
+
+    /// <summary>
+    /// Measures the fixed cost a sample carries regardless of the measured
+    /// action, using the same iteration count as the run itself, and turns it
+    /// into the two numbers the statistics need: the total to deduct and the
+    /// smallest per-operation value this run can still resolve.
+    /// </summary>
+    private static (double Nanoseconds, double ResolutionLimitNanoseconds) MeasureOverhead(
+        int iterationsPerSample
+    )
+    {
+        var harness = Runner.MeasureHarnessOverhead(iterationsPerSample, HarnessOverheadRepetitions);
+        var spreadPerOp =
+            Math.Max(0.0, harness.MaxNanoseconds - harness.MinNanoseconds) / iterationsPerSample;
+        var clockTickPerOp =
+            1_000_000_000.0 / Stopwatch.Frequency / iterationsPerSample;
+
+        return (harness.MinNanoseconds, Math.Max(clockTickPerOp, spreadPerOp));
+    }
+
+    /// <summary>
+    /// Per-operation nanoseconds of a sample with the harness overhead removed.
+    /// A measurement can never be negative, so the residual is clamped at zero.
+    /// </summary>
+    private static double PerOpNanoseconds(
+        TimingSample sample,
+        int iterationsPerSample,
+        double overheadNanoseconds
+    )
+    {
+        var net = sample.ElapsedNanoseconds - overheadNanoseconds;
+        return (net > 0 ? net : 0.0) / iterationsPerSample;
     }
 
     private static int ResolveIterationsPerSample(

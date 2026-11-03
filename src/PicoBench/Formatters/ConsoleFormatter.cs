@@ -158,15 +158,32 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
     private void AppendSingleResult(StringBuilder sb, BenchmarkResult result)
     {
-        sb.AppendLine($"Benchmark: {result.Name}");
-        sb.AppendLine($"  Avg: {FormatTime(result.Statistics.Avg)} ns");
-        sb.AppendLine($"  P50: {FormatTime(result.Statistics.P50)} ns");
+        sb.AppendLine(
+            $"Benchmark: {result.Name}{(result.Statistics.ResolutionLimited ? " [below resolution]" : "")}"
+        );
+        sb.AppendLine($"  Avg: {FormatPerOp(result.Statistics, result.Statistics.Avg)} ns");
+        sb.AppendLine($"  P50: {FormatPerOp(result.Statistics, result.Statistics.P50)} ns");
+
+        if (result.Statistics.ResolutionLimited)
+        {
+            sb.AppendLine(
+                $"  Resolution: below the measurement floor (resolution limit "
+                    + $"~{result.Statistics.ResolutionLimitNanoseconds:F3} ns/op, "
+                    + $"harness overhead {result.Statistics.OverheadNs:F3} ns/op deducted)"
+            );
+        }
+        else if (result.Statistics.OverheadNs > 0)
+        {
+            sb.AppendLine(
+                $"  Overhead: {result.Statistics.OverheadNs:F3} ns/op deducted (delegate/loop floor)"
+            );
+        }
 
         if (Options.IncludePercentiles)
         {
-            sb.AppendLine($"  P90: {FormatTime(result.Statistics.P90)} ns");
-            sb.AppendLine($"  P95: {FormatTime(result.Statistics.P95)} ns");
-            sb.AppendLine($"  P99: {FormatTime(result.Statistics.P99)} ns");
+            sb.AppendLine($"  P90: {FormatPerOp(result.Statistics, result.Statistics.P90)} ns");
+            sb.AppendLine($"  P95: {FormatPerOp(result.Statistics, result.Statistics.P95)} ns");
+            sb.AppendLine($"  P99: {FormatPerOp(result.Statistics, result.Statistics.P99)} ns");
         }
 
         if (Options.IncludeCpuCycles)
@@ -200,20 +217,29 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         var nameWidth = Math.Max("Name".Length, results.Max(r => r.Name.Length));
         var avgWidth = Math.Max(
             "Avg (ns)".Length,
-            results.Max(r => FormatTime(r.Statistics.Avg).Length)
+            results.Max(r => FormatPerOp(r.Statistics, r.Statistics.Avg).Length)
         );
         var p50Width = Math.Max(
             "P50 (ns)".Length,
-            results.Max(r => FormatTime(r.Statistics.P50).Length)
+            results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P50).Length)
         );
         var p90Width = Options.IncludePercentiles
-            ? Math.Max("P90 (ns)".Length, results.Max(r => FormatTime(r.Statistics.P90).Length))
+            ? Math.Max(
+                "P90 (ns)".Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P90).Length)
+            )
             : 0;
         var p95Width = Options.IncludePercentiles
-            ? Math.Max("P95 (ns)".Length, results.Max(r => FormatTime(r.Statistics.P95).Length))
+            ? Math.Max(
+                "P95 (ns)".Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P95).Length)
+            )
             : 0;
         var p99Width = Options.IncludePercentiles
-            ? Math.Max("P99 (ns)".Length, results.Max(r => FormatTime(r.Statistics.P99).Length))
+            ? Math.Max(
+                "P99 (ns)".Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P99).Length)
+            )
             : 0;
         var cpuWidth = Options.IncludeCpuCycles
             ? Math.Max(
@@ -232,15 +258,21 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         var columns = new List<TableColumn<BenchmarkResult>>
         {
             new("Name", nameWidth, r => r.Name, leftAlign: true),
-            new("Avg (ns)", avgWidth, r => FormatTime(r.Statistics.Avg)),
-            new("P50 (ns)", p50Width, r => FormatTime(r.Statistics.P50))
+            new("Avg (ns)", avgWidth, r => FormatPerOp(r.Statistics, r.Statistics.Avg)),
+            new("P50 (ns)", p50Width, r => FormatPerOp(r.Statistics, r.Statistics.P50))
         };
 
         if (Options.IncludePercentiles)
         {
-            columns.Add(new("P90 (ns)", p90Width, r => FormatTime(r.Statistics.P90)));
-            columns.Add(new("P95 (ns)", p95Width, r => FormatTime(r.Statistics.P95)));
-            columns.Add(new("P99 (ns)", p99Width, r => FormatTime(r.Statistics.P99)));
+            columns.Add(
+                new("P90 (ns)", p90Width, r => FormatPerOp(r.Statistics, r.Statistics.P90))
+            );
+            columns.Add(
+                new("P95 (ns)", p95Width, r => FormatPerOp(r.Statistics, r.Statistics.P95))
+            );
+            columns.Add(
+                new("P99 (ns)", p99Width, r => FormatPerOp(r.Statistics, r.Statistics.P99))
+            );
         }
 
         if (Options.IncludeCpuCycles)
@@ -254,7 +286,25 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
 
         AppendTable(sb, columns, results);
+
+        if (results.Exists(static r => r.Statistics.ResolutionLimited))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "below resolution: the value is at the measurement harness' own floor, only an upper bound is shown"
+            );
+        }
     }
+
+    /// <summary>
+    /// Renders a per-operation cell. A value the run could not resolve above
+    /// the harness floor is printed as an upper bound (<c>&lt;limit</c>) rather
+    /// than as a number that would look like a real measurement.
+    /// </summary>
+    private string FormatPerOp(Statistics statistics, double nanoseconds) =>
+        statistics.ResolutionLimited
+            ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
+            : FormatTime(nanoseconds);
 
     #endregion
 

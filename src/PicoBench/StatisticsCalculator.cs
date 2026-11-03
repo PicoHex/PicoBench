@@ -8,10 +8,19 @@ internal static class StatisticsCalculator
     /// <summary>
     /// Compute statistics from timing data.
     /// </summary>
+    /// <param name="perOpTimes">Per-operation nanoseconds, with the harness overhead already deducted.</param>
+    /// <param name="perOpCycles">Per-operation CPU cycles.</param>
+    /// <param name="samples">The raw samples the per-operation values were derived from.</param>
+    /// <param name="harnessOverheadNanoseconds">Per-operation harness overhead that was deducted.</param>
+    /// <param name="resolutionLimitNanoseconds">
+    /// Smallest per-operation value this run can resolve; 0 when unknown.
+    /// </param>
     public static Statistics Compute(
         double[] perOpTimes,
         double[] perOpCycles,
-        TimingSample[] samples
+        TimingSample[] samples,
+        double harnessOverheadNanoseconds = 0,
+        double resolutionLimitNanoseconds = 0
     )
     {
         // Sort for percentile calculation
@@ -102,6 +111,9 @@ internal static class StatisticsCalculator
             StandardError = standardError,
             RelativeStdDevPercent = relativeStdDevPercent,
             CpuCyclesPerOp = cpuCyclesAvg,
+            OverheadNs = harnessOverheadNanoseconds,
+            ResolutionLimitNanoseconds = resolutionLimitNanoseconds,
+            ResolutionLimited = resolutionLimitNanoseconds > 0 && avg <= resolutionLimitNanoseconds,
             GcInfo = aggregatedGcInfo,
         };
     }

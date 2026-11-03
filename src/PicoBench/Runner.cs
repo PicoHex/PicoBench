@@ -11,6 +11,14 @@ public static partial class Runner
         LazyThreadSafetyMode.ExecutionAndPublication
     );
 
+    /// <summary>
+    /// <c>MethodImplOptions.AggressiveOptimization</c> (value 512) was introduced
+    /// after .NET Standard 2.0, so the netstandard2.0 reference assembly this
+    /// library compiles against does not declare it. The flag is honoured by the
+    /// JIT of every supported runtime and ignored where unknown.
+    /// </summary>
+    private const MethodImplOptions AggressiveOptimization = (MethodImplOptions)512;
+
     private static readonly Lazy<bool> Initializer = new(
         InitializeCore,
         LazyThreadSafetyMode.ExecutionAndPublication
@@ -233,6 +241,61 @@ public static partial class Runner
     }
 
     /// <summary>
+    /// Fixed per-sample cost of the timing harness itself: one empty delegate
+    /// timed through exactly the same path (GC baseline, cycle-counter reads,
+    /// stopwatch, loop bookkeeping) as a real sample. The minimum over several
+    /// repetitions is the best estimate of the additive cost, because noise can
+    /// only inflate a measurement; the maximum doubles as the run-to-run spread
+    /// used to report how small a per-operation value is still resolvable.
+    /// </summary>
+    internal readonly struct HarnessOverhead(double minNanoseconds, double maxNanoseconds)
+    {
+        /// <summary>Smallest measured harness cost (nanoseconds per sample).</summary>
+        internal double MinNanoseconds { get; } = minNanoseconds;
+
+        /// <summary>Largest measured harness cost (nanoseconds per sample).</summary>
+        internal double MaxNanoseconds { get; } = maxNanoseconds > minNanoseconds ? maxNanoseconds : minNanoseconds;
+    }
+
+    /// <summary>
+    /// Measures the fixed per-sample overhead of the harness with
+    /// <paramref name="iterations"/> iterations, i.e. the cost a caller would
+    /// otherwise see attributed to the measured action (delegate dispatch plus
+    /// loop bookkeeping plus the clock/counter reads around it).
+    /// </summary>
+    /// <param name="iterations">Iterations per sample used by the run being corrected.</param>
+    /// <param name="repetitions">Number of probes to keep; the minimum is reported.</param>
+    internal static HarnessOverhead MeasureHarnessOverhead(int iterations, int repetitions)
+    {
+        if (iterations <= 0 || repetitions <= 0)
+            return new HarnessOverhead(0, 0);
+
+        Action empty = static () => { };
+        var min = double.MaxValue;
+        var max = 0.0;
+
+        // The first probe is discarded: it carries first-call warm-up (the
+        // delegate, the counters and the loop are all cold) and would otherwise
+        // widen the reported spread without telling anything about the steady
+        // state this run is measured in.
+        for (var r = 0; r <= repetitions; r++)
+        {
+            var sample = Time(iterations, empty);
+            if (r == 0)
+                continue;
+
+            if (sample.ElapsedNanoseconds < min)
+                min = sample.ElapsedNanoseconds;
+            if (sample.ElapsedNanoseconds > max)
+                max = sample.ElapsedNanoseconds;
+        }
+
+        return min is double.MaxValue
+            ? new HarnessOverhead(0, 0)
+            : new HarnessOverhead(min, max);
+    }
+
+    /// <summary>
     /// Run a timed measurement of the given action.
     /// </summary>
     /// <param name="iterations">Number of times to invoke the action.</param>
@@ -250,6 +313,12 @@ public static partial class Runner
     /// <param name="setup">Optional setup action (not timed).</param>
     /// <param name="teardown">Optional teardown action (not timed).</param>
     /// <returns>A <see cref="TimingSample"/> containing timing and GC data.</returns>
+    // The timed loop must run in fully optimised code. Left to tiered compilation
+    // it executes in tier-0 for the first ~1000 iterations of *every* call (OSR
+    // only partially recovers), which added a fixed 20-45 µs per sample — the
+    // dominant part of the "+2 to +3 ns/op" floor below 5 ns and of the per-op
+    // drift between 100 and 10000 iterations (Batch 0 · 0.1, B1-C2).
+    [MethodImpl(AggressiveOptimization)]
     public static TimingSample Time(int iterations, Action action, Action? setup, Action? teardown)
     {
         ValidateIterations(iterations);
@@ -288,7 +357,7 @@ public static partial class Runner
     /// <summary>
     /// Run a timed measurement with state passed to the action (avoids closure allocation).
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining | AggressiveOptimization)]
     public static TimingSample Time<TState>(int iterations, TState state, Action<TState> action)
     {
         ValidateIterations(iterations);
@@ -297,7 +366,8 @@ public static partial class Runner
 
         var gcBaseline = GetGcBaselineCounts();
 
-        var cycleStart = GetProcessCpuCycles();
+        // Thread-scoped counter: see Time(int, Action, Action?, Action?).
+        var cycleStart = GetCpuCycles();
         var watch = Stopwatch.StartNew();
 
         for (var i = 0; i < iterations; i++)
@@ -396,7 +466,13 @@ public static partial class Runner
         if (teardown != null)
             await teardown();
 
-        return CreateSample(watch, cycleStart, cycleEnd, gcInfo, isGcApproximate: true);
+        return CreateSample(
+            watch,
+            cycleStart,
+            cycleEnd,
+            gcInfo,
+            isGcApproximate: true
+        );
     }
 
     /// <summary>

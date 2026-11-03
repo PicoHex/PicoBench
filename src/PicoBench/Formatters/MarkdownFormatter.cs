@@ -135,10 +135,13 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         foreach (var result in results)
         {
             var s = result.Statistics;
-            sb.Append($"| {Escape(result.Name)} | {FormatTime(s.Avg)} | {FormatTime(s.P50)} ");
+            var below = s.ResolutionLimited ? " (below resolution)" : "";
+            sb.Append(
+                $"| {Escape(result.Name)} | {FormatPerOp(s, s.Avg)}{below} | {FormatPerOp(s, s.P50)}{below} "
+            );
             if (Options.IncludePercentiles)
                 sb.Append(
-                    $"| {FormatTime(s.P90)} | {FormatTime(s.P95)} | {FormatTime(s.P99)} | {FormatTime(s.StandardError)} | {s.RelativeStdDevPercent:F1} "
+                    $"| {FormatPerOp(s, s.P90)}{below} | {FormatPerOp(s, s.P95)}{below} | {FormatPerOp(s, s.P99)}{below} | {FormatPerOp(s, s.StandardError)}{below} | {s.RelativeStdDevPercent:F1} "
                 );
             if (Options.IncludeCpuCycles)
                 sb.Append($"| {s.CpuCyclesPerOp:F0} ");
@@ -146,7 +149,24 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                 sb.Append($"| {FormatGcInfo(s.GcInfo)} ");
             sb.AppendLine("|");
         }
+
+        if (results.Exists(static r => r.Statistics.ResolutionLimited))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "> **below resolution** — the value is at the measurement harness' own floor, so only an upper bound is shown."
+            );
+        }
     }
+
+    /// <summary>
+    /// Renders a per-operation cell. A value the run could not resolve above the
+    /// harness floor is written as an upper bound (<c>&lt;limit</c>).
+    /// </summary>
+    private string FormatPerOp(Statistics statistics, double nanoseconds) =>
+        statistics.ResolutionLimited
+            ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
+            : FormatTime(nanoseconds);
 
     #endregion
 

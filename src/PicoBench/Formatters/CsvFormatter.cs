@@ -154,20 +154,20 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         {
             Escape(result.Name),
             Escape(result.Category ?? ""),
-            FormatNumber(s.Avg),
-            FormatNumber(s.P50),
+            FormatPerOp(s, s.Avg),
+            FormatPerOp(s, s.P50),
         };
 
         if (Options.IncludePercentiles)
         {
             values.AddRange([
-                FormatNumber(s.P90),
-                FormatNumber(s.P95),
-                FormatNumber(s.P99),
-                FormatNumber(s.Min),
-                FormatNumber(s.Max),
-                FormatNumber(s.StdDev),
-                FormatNumber(s.StandardError),
+                FormatPerOp(s, s.P90),
+                FormatPerOp(s, s.P95),
+                FormatPerOp(s, s.P99),
+                FormatPerOp(s, s.Min),
+                FormatPerOp(s, s.Max),
+                FormatPerOp(s, s.StdDev),
+                FormatPerOp(s, s.StandardError),
                 FormatNumber(s.RelativeStdDevPercent),
             ]);
         }
@@ -277,6 +277,16 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
     #endregion
 
     #region Helpers
+
+    /// <summary>
+    /// Renders a per-operation cell. A value the run could not resolve above the
+    /// harness floor is written as an upper bound (<c>&lt;limit</c>) instead of a
+    /// number a consumer would mistake for a real measurement.
+    /// </summary>
+    private static string FormatPerOp(Statistics statistics, double nanoseconds) =>
+        statistics.ResolutionLimited
+            ? "<" + FormatNumber(statistics.ResolutionLimitNanoseconds)
+            : FormatNumber(nanoseconds);
 
     /// <summary>
     /// Header of the boolean column that carries <see cref="GcInfo.IsApproximate"/>,

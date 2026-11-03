@@ -381,16 +381,18 @@ footer {
         {
             var s = result.Statistics;
             sb.AppendLine("<tr>");
-            sb.AppendLine($"<td>{Escape(result.Name)}</td>");
-            sb.AppendLine($"<td class=\"number\">{FormatTime(s.Avg)}</td>");
-            sb.AppendLine($"<td class=\"number\">{FormatTime(s.P50)}</td>");
+            sb.AppendLine(
+                $"<td>{Escape(result.Name)}{(s.ResolutionLimited ? " <span class=\"note\">(below resolution)</span>" : "")}</td>"
+            );
+            sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.Avg)}</td>");
+            sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P50)}</td>");
 
             if (Options.IncludePercentiles)
             {
-                sb.AppendLine($"<td class=\"number\">{FormatTime(s.P90)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatTime(s.P95)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatTime(s.P99)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatTime(s.StandardError)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P90)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P95)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P99)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.StandardError)}</td>");
                 sb.AppendLine($"<td class=\"number\">{s.RelativeStdDevPercent:F1}</td>");
             }
 
@@ -410,6 +412,15 @@ footer {
         sb.AppendLine("</tbody>");
         sb.AppendLine("</table>");
     }
+
+    /// <summary>
+    /// Renders a per-operation cell. A value the run could not resolve above the
+    /// harness floor is written as an upper bound (<c>&lt;limit</c>).
+    /// </summary>
+    private string FormatPerOp(Statistics statistics, double nanoseconds) =>
+        statistics.ResolutionLimited
+            ? $"&lt;{FormatTime(statistics.ResolutionLimitNanoseconds)}"
+            : FormatTime(nanoseconds);
 
     #endregion
 

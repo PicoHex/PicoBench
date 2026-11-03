@@ -105,6 +105,31 @@ public sealed class Statistics
     /// </summary>
     public double CpuCyclesPerOp { get; init; }
 
+    /// <summary>
+    /// Fixed per-operation overhead of the measurement harness itself (delegate
+    /// dispatch, loop bookkeeping, clock and counter reads) that was measured
+    /// with the same iteration count and deducted from the per-operation values.
+    /// 0 when no overhead was measured (asynchronous benchmarks).
+    /// </summary>
+    public double OverheadNs { get; init; }
+
+    /// <summary>
+    /// Smallest per-operation value this run can resolve: the larger of one
+    /// timing-clock tick spread over the iterations and the run-to-run spread of
+    /// the deducted harness overhead. Values at or below this limit are
+    /// indistinguishable from the harness floor.
+    /// </summary>
+    public double ResolutionLimitNanoseconds { get; init; }
+
+    /// <summary>
+    /// True when <see cref="Avg"/> is at or below
+    /// <see cref="ResolutionLimitNanoseconds"/>, i.e. the workload could not be
+    /// distinguished from the measurement harness' own overhead (sub-nanosecond
+    /// operations). Formatters print such a value as an upper bound
+    /// (<c>&lt;limit</c>) or as "below resolution" instead of a plain number.
+    /// </summary>
+    public bool ResolutionLimited { get; init; }
+
     /// <summary>Aggregated GC info across all samples. Null when not collected.</summary>
     public GcInfo? GcInfo { get; init; }
 

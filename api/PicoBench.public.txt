@@ -218,11 +218,14 @@ P:PicoBench.Statistics.GcInfo : PicoBench.GcInfo { get; init; }
 P:PicoBench.Statistics.HasHighVariance : bool { get; }
 P:PicoBench.Statistics.Max : double { get; init; }
 P:PicoBench.Statistics.Min : double { get; init; }
+P:PicoBench.Statistics.OverheadNs : double { get; init; }
 P:PicoBench.Statistics.P50 : double { get; init; }
 P:PicoBench.Statistics.P90 : double { get; init; }
 P:PicoBench.Statistics.P95 : double { get; init; }
 P:PicoBench.Statistics.P99 : double { get; init; }
 P:PicoBench.Statistics.RelativeStdDevPercent : double { get; init; }
+P:PicoBench.Statistics.ResolutionLimitNanoseconds : double { get; init; }
+P:PicoBench.Statistics.ResolutionLimited : bool { get; init; }
 P:PicoBench.Statistics.StandardError : double { get; init; }
 P:PicoBench.Statistics.StdDev : double { get; init; }
 P:PicoBench.TimingSample.CpuCycles : ulong { get; init; }
