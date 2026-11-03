@@ -216,42 +216,77 @@ public class KnownCostOverheadTests
         // the clock resolution (≈100 ns) for a per-op ratio to mean something.
         Action work = static () => Thread.SpinWait(200);
 
-        var smallAvgs = new List<double>();
-        var largeAvgs = new List<double>();
+        // Discarded warm-up: with WarmupIterations = 0 the first timed block would
+        // otherwise measure partly tier-0 code, biasing the 100-iteration block
+        // upward (measured ratio drift 1.04-1.15, i.e. only 9% below the 1.25
+        // bound) — that would be a JIT artefact, not a normalisation signal. A
+        // prefaced run of the same delegate leaves the assertion's meaning intact
+        // (it stays green here and red under the M4 mutation).
+        var warmupSample = Runner.Time(5_000, work);
+        Batch0Support.Log(
+            $"discarded warm-up: {warmupSample.ElapsedNanoseconds / 5_000:F0} ns/op"
+        );
 
-        for (var trial = 0; trial < 3; trial++)
+        const int trials = 5;
+        var smallAvgs = new List<double>(trials);
+        var largeAvgs = new List<double>(trials);
+        var perTrialRatios = new List<double>(trials);
+
+        for (var trial = 0; trial < trials; trial++)
         {
-            var small = Benchmark.Run(
-                "same-lambda",
-                work,
-                warmup: null,
-                Batch0Support.UncalibratedConfig(sampleCount: 10, iterationsPerSample: 100)
-            );
-            var large = Benchmark.Run(
-                "same-lambda",
-                work,
-                warmup: null,
-                Batch0Support.UncalibratedConfig(sampleCount: 10, iterationsPerSample: 10_000)
-            );
+            BenchmarkResult small;
+            BenchmarkResult large;
+
+            // Alternate the order so a monotone drift (CPU frequency, background
+            // load) is not systematically attributed to one iteration count.
+            if (trial % 2 == 0)
+            {
+                small = Measure(100);
+                large = Measure(10_000);
+            }
+            else
+            {
+                large = Measure(10_000);
+                small = Measure(100);
+            }
 
             smallAvgs.Add(small.Statistics.Avg);
             largeAvgs.Add(large.Statistics.Avg);
+            perTrialRatios.Add(
+                large.Statistics.Avg <= 0 ? double.PositiveInfinity : small.Statistics.Avg / large.Statistics.Avg
+            );
 
             Batch0Support.Log(
-                $"trial {trial}: iters={small.IterationsPerSample,6} per-op={small.Statistics.Avg,10:F3} ns | "
-                    + $"iters={large.IterationsPerSample,6} per-op={large.Statistics.Avg,10:F3} ns"
+                $"trial {trial} ({(trial % 2 == 0 ? "small-first" : "large-first")}): "
+                    + $"iters={small.IterationsPerSample,6} per-op={small.Statistics.Avg,10:F3} ns | "
+                    + $"iters={large.IterationsPerSample,6} per-op={large.Statistics.Avg,10:F3} ns | "
+                    + $"ratio={perTrialRatios[^1]:F3}"
             );
         }
 
         var smallPerOp = Batch0Support.Median(smallAvgs);
         var largePerOp = Batch0Support.Median(largeAvgs);
-        var ratio = largePerOp <= 0 ? double.PositiveInfinity : smallPerOp / largePerOp;
+        var ratioOfMedians = largePerOp <= 0 ? double.PositiveInfinity : smallPerOp / largePerOp;
+
+        // The paired median is the quantity under assertion: a ratio per trial
+        // cancels drift between the two moments of measurement, whereas a ratio
+        // of separately pooled medians does not.
+        var ratio = Batch0Support.Median(perTrialRatios);
 
         Batch0Support.Log(
-            $"median per-op: iters=100 {smallPerOp:F3} ns, iters=10000 {largePerOp:F3} ns, ratio={ratio:F3} (allowed 0.80-1.25)"
+            $"median per-op: iters=100 {smallPerOp:F3} ns, iters=10000 {largePerOp:F3} ns, "
+                + $"ratio-of-medians={ratioOfMedians:F3}; paired median ratio={ratio:F3} (allowed 0.80-1.25)"
         );
 
         await Assert.That(ratio).IsGreaterThanOrEqualTo(0.8);
         await Assert.That(ratio).IsLessThanOrEqualTo(1.25);
+
+        BenchmarkResult Measure(int iterationsPerSample) =>
+            Benchmark.Run(
+                "same-lambda",
+                work,
+                warmup: null,
+                Batch0Support.UncalibratedConfig(sampleCount: 10, iterationsPerSample: iterationsPerSample)
+            );
     }
 }
