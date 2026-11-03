@@ -142,10 +142,35 @@ public sealed class Statistics
     /// True when <see cref="Avg"/> is at or below
     /// <see cref="ResolutionLimitNanoseconds"/>, i.e. the workload could not be
     /// distinguished from the measurement harness' own overhead (sub-nanosecond
-    /// operations). Formatters print such a value as an upper bound
-    /// (<c>&lt;limit</c>) or as "below resolution" instead of a plain number.
+    /// operations), or when the timing source could not advance at all for at
+    /// least one sample (see <see cref="Unmeasured"/>). Formatters print such a
+    /// value as an upper bound (<c>&lt;limit</c>) or as "below resolution"
+    /// instead of a plain number.
     /// </summary>
     public bool ResolutionLimited { get; init; }
+
+    /// <summary>
+    /// Number of samples whose timing source did not advance at all, i.e.
+    /// samples that carry no measurement of the measured work. In
+    /// <see cref="AsyncTimingMode.CpuOnly"/> mode the process CPU clock only
+    /// advances in whole timer ticks (typically 10-16 ms on Windows), so any
+    /// workload shorter than one tick reads as exactly zero CPU time.
+    /// </summary>
+    public int UnmeasuredSampleCount { get; init; }
+
+    /// <summary>
+    /// True when at least one sample could not be measured at all
+    /// (<see cref="UnmeasuredSampleCount"/> &gt; 0, a zero clock delta).
+    /// <para>
+    /// The per-operation values of such a run are <b>not</b> measurements of the
+    /// work: a zero-delta sample is reported as one timing quantum (the smallest
+    /// value the clock can express, so no quantile can claim a measured zero).
+    /// Formatters therefore print the per-operation cells as "not measured"
+    /// (<c>N/A</c>) instead of a number, and <see cref="ResolutionLimited"/> is
+    /// true as well.
+    /// </para>
+    /// </summary>
+    public bool Unmeasured => UnmeasuredSampleCount > 0;
 
     /// <summary>Aggregated GC info across all samples. Null when not collected.</summary>
     public GcInfo? GcInfo { get; init; }

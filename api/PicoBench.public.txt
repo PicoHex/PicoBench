@@ -229,6 +229,8 @@ P:PicoBench.Statistics.ResolutionLimitNanoseconds : double { get; init; }
 P:PicoBench.Statistics.ResolutionLimited : bool { get; init; }
 P:PicoBench.Statistics.StandardError : double { get; init; }
 P:PicoBench.Statistics.StdDev : double { get; init; }
+P:PicoBench.Statistics.Unmeasured : bool { get; }
+P:PicoBench.Statistics.UnmeasuredSampleCount : int { get; init; }
 P:PicoBench.TimingSample.CpuCycles : ulong { get; init; }
 P:PicoBench.TimingSample.CpuCyclesAreApproximate : bool { get; init; }
 P:PicoBench.TimingSample.ElapsedMilliseconds : double { get; init; }

@@ -487,6 +487,34 @@ public static class Benchmark
             : Runner.TimeAsync(iterations, action, setup, teardown);
     }
 
+    /// <summary>
+    /// Per-operation nanoseconds of a sample, never a "measured zero": a sample whose
+    /// clock did not advance is reported as one quantum of the timing source, the
+    /// smallest value that source can express. The sample itself stays flagged as
+    /// unmeasured (<see cref="Statistics.Unmeasured"/>), so the value is disclosed as
+    /// "not measured" rather than published as a fast operation.
+    /// </summary>
+    private static double PerOpNanosecondsWithFloor(
+        TimingSample sample,
+        int iterationsPerSample,
+        double quantumPerOp
+    )
+    {
+        var perOp = sample.ElapsedNanoseconds / iterationsPerSample;
+        return quantumPerOp > 0 && !(perOp > 0) ? quantumPerOp : perOp;
+    }
+
+    /// <summary>
+    /// Smallest time span the asynchronous timing source can express, in nanoseconds:
+    /// the measured granularity of the process CPU clock in
+    /// <see cref="AsyncTimingMode.CpuOnly"/> mode (0 elsewhere, where the source
+    /// already resolves nanoseconds).
+    /// </summary>
+    internal static double ResolveTimingQuantumNanoseconds(BenchmarkConfig config) =>
+        config.TimingMode == AsyncTimingMode.CpuOnly
+            ? Runner.GetCpuClockGranularity().Ticks * 100.0
+            : 0.0;
+
     private static async Task<BenchmarkResult> CollectAndBuildAsync(
         string name,
         BenchmarkConfig config,
@@ -498,6 +526,12 @@ public static class Benchmark
 
         var iterationsPerSample = await ResolveIterationsPerSampleAsync(config, sampleFuncAsync);
 
+        // Floor of the timing source this run uses. CpuOnly reads the process CPU
+        // clock, which advances in whole timer ticks: one sample can never be
+        // resolved below one tick, and a sub-tick sample reads as exactly zero.
+        // WallClock reads Stopwatch, whose tick is already the nanosecond scale.
+        var quantumPerOp = ResolveTimingQuantumNanoseconds(config) / iterationsPerSample;
+
         var samples = new TimingSample[config.SampleCount];
         var perOpTimes = new double[config.SampleCount];
         var perOpCycles = new double[config.SampleCount];
@@ -508,11 +542,17 @@ public static class Benchmark
 
             var sample = await sampleFuncAsync(iterationsPerSample);
             samples[s] = sample;
-            perOpTimes[s] = sample.ElapsedNanoseconds / iterationsPerSample;
+            perOpTimes[s] = PerOpNanosecondsWithFloor(sample, iterationsPerSample, quantumPerOp);
             perOpCycles[s] = (double)sample.CpuCycles / iterationsPerSample;
         }
 
-        var stats = StatisticsCalculator.Compute(perOpTimes, perOpCycles, samples);
+        var stats = StatisticsCalculator.Compute(
+            perOpTimes,
+            perOpCycles,
+            samples,
+            harnessOverheadNanoseconds: 0,
+            resolutionLimitNanoseconds: quantumPerOp
+        );
 
         return new BenchmarkResult(
             name: name,

@@ -34,8 +34,16 @@ internal static class StatisticsCalculator
         bool anyApproximate = false;
         int gcInfoCount = 0;
 
+        // A sample whose timing source did not advance carries no measurement:
+        // CpuOnly reads Process.TotalProcessorTime, which only moves in whole
+        // timer ticks, so every sub-tick workload reads as exactly zero.
+        var unmeasuredCount = 0;
+
         for (int i = 0; i < samples.Length; i++)
         {
+            if (!(samples[i].ElapsedNanoseconds > 0))
+                unmeasuredCount++;
+
             var gc = samples[i].GcInfo;
             if (gc == null)
                 continue;
@@ -114,7 +122,10 @@ internal static class StatisticsCalculator
             CpuCyclesAreApproximate = Array.Exists(samples, static s => s.CpuCyclesAreApproximate),
             OverheadNs = harnessOverheadNanoseconds,
             ResolutionLimitNanoseconds = resolutionLimitNanoseconds,
-            ResolutionLimited = resolutionLimitNanoseconds > 0 && avg <= resolutionLimitNanoseconds,
+            ResolutionLimited =
+                unmeasuredCount > 0
+                || (resolutionLimitNanoseconds > 0 && avg <= resolutionLimitNanoseconds),
+            UnmeasuredSampleCount = unmeasuredCount,
             GcInfo = aggregatedGcInfo,
         };
     }

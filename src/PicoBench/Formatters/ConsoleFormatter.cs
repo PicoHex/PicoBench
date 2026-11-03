@@ -158,13 +158,19 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
     private void AppendSingleResult(StringBuilder sb, BenchmarkResult result)
     {
-        sb.AppendLine(
-            $"Benchmark: {result.Name}{(result.Statistics.ResolutionLimited ? " [below resolution]" : "")}"
-        );
-        sb.AppendLine($"  Avg: {FormatPerOp(result.Statistics, result.Statistics.Avg)} ns");
-        sb.AppendLine($"  P50: {FormatPerOp(result.Statistics, result.Statistics.P50)} ns");
+        sb.AppendLine($"Benchmark: {result.Name}{DescribeMeasurementLimit(result.Statistics)}");
+        sb.AppendLine($"  Avg: {FormatPerOpLine(result.Statistics, result.Statistics.Avg)}");
+        sb.AppendLine($"  P50: {FormatPerOpLine(result.Statistics, result.Statistics.P50)}");
 
-        if (result.Statistics.ResolutionLimited)
+        if (result.Statistics.Unmeasured)
+        {
+            sb.AppendLine(
+                $"  Unmeasured: the clock did not advance for {result.Statistics.UnmeasuredSampleCount} "
+                    + $"sample(s); no per-operation value is reported (clock granularity "
+                    + $"~{result.Statistics.ResolutionLimitNanoseconds:F0} ns/op)"
+            );
+        }
+        else if (result.Statistics.ResolutionLimited)
         {
             sb.AppendLine(
                 $"  Resolution: below the measurement floor (resolution limit "
@@ -181,9 +187,9 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         if (Options.IncludePercentiles)
         {
-            sb.AppendLine($"  P90: {FormatPerOp(result.Statistics, result.Statistics.P90)} ns");
-            sb.AppendLine($"  P95: {FormatPerOp(result.Statistics, result.Statistics.P95)} ns");
-            sb.AppendLine($"  P99: {FormatPerOp(result.Statistics, result.Statistics.P99)} ns");
+            sb.AppendLine($"  P90: {FormatPerOpLine(result.Statistics, result.Statistics.P90)}");
+            sb.AppendLine($"  P95: {FormatPerOpLine(result.Statistics, result.Statistics.P95)}");
+            sb.AppendLine($"  P99: {FormatPerOpLine(result.Statistics, result.Statistics.P99)}");
         }
 
         if (Options.IncludeCpuCycles)
@@ -196,8 +202,11 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             sb.AppendLine($"  GC (0/1/2): {FormatGcInfo(result.Statistics.GcInfo)}");
         }
 
-        sb.AppendLine($"  StdDev: {FormatTime(result.Statistics.StdDev)} ns");
-        sb.AppendLine($"  StdErr: {FormatTime(result.Statistics.StandardError)} ns");
+        // Per-operation figures like the ones above: the CSV/Markdown/HTML tables
+        // print the same cells through the same rule, so an unmeasured run is "N/A"
+        // in all four formats instead of a number in one of them.
+        sb.AppendLine($"  StdDev: {FormatPerOpLine(result.Statistics, result.Statistics.StdDev)}");
+        sb.AppendLine($"  StdErr: {FormatPerOpLine(result.Statistics, result.Statistics.StandardError)}");
 
         if (result.Statistics.HasHighVariance)
         {
@@ -284,7 +293,14 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         AppendTable(sb, columns, results);
 
-        if (results.Exists(static r => r.Statistics.ResolutionLimited))
+        if (results.Exists(static r => r.Statistics.Unmeasured))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "unmeasured: the clock did not advance for the whole sample — no per-operation value is shown"
+            );
+        }
+        else if (results.Exists(static r => r.Statistics.ResolutionLimited))
         {
             sb.AppendLine();
             sb.AppendLine(
@@ -296,12 +312,34 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     /// <summary>
     /// Renders a per-operation cell. A value the run could not resolve above
     /// the harness floor is printed as an upper bound (<c>&lt;limit</c>) rather
-    /// than as a number that would look like a real measurement.
+    /// than as a number that would look like a real measurement, and a run whose
+    /// clock never advanced is printed as "not measured".
     /// </summary>
     private string FormatPerOp(Statistics statistics, double nanoseconds) =>
-        statistics.ResolutionLimited
-            ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
-            : FormatTime(nanoseconds);
+        statistics.Unmeasured
+            ? "N/A"
+            : statistics.ResolutionLimited
+                ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
+                : FormatTime(nanoseconds);
+
+    /// <summary>
+    /// A per-operation value with its unit, or the "not measured" note when the
+    /// timing source never advanced during the run.
+    /// </summary>
+    private string FormatPerOpLine(Statistics statistics, double nanoseconds) =>
+        statistics.Unmeasured ? "N/A (unmeasured)" : $"{FormatPerOp(statistics, nanoseconds)} ns";
+
+    /// <summary>
+    /// The measurement-quality marker printed next to a benchmark name:
+    /// <c>[unmeasured]</c> when the clock never advanced, <c>[below resolution]</c>
+    /// when the value sits at the harness floor, nothing otherwise.
+    /// </summary>
+    private static string DescribeMeasurementLimit(Statistics statistics) =>
+        statistics.Unmeasured
+            ? " [unmeasured]"
+            : statistics.ResolutionLimited
+                ? " [below resolution]"
+                : "";
 
     /// <summary>
     /// Renders the cycle column. A process-wide counter or a monotonic-clock

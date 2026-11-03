@@ -281,12 +281,16 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
     /// <summary>
     /// Renders a per-operation cell. A value the run could not resolve above the
     /// harness floor is written as an upper bound (<c>&lt;limit</c>) instead of a
-    /// number a consumer would mistake for a real measurement.
+    /// number a consumer would mistake for a real measurement, and a run whose
+    /// clock never advanced is written as <c>N/A</c> (not measured, exactly like a
+    /// GC count that was not collected).
     /// </summary>
     private static string FormatPerOp(Statistics statistics, double nanoseconds) =>
-        statistics.ResolutionLimited
-            ? "<" + FormatNumber(statistics.ResolutionLimitNanoseconds)
-            : FormatNumber(nanoseconds);
+        statistics.Unmeasured
+            ? "N/A"
+            : statistics.ResolutionLimited
+                ? "<" + FormatNumber(statistics.ResolutionLimitNanoseconds)
+                : FormatNumber(nanoseconds);
 
     /// <summary>
     /// Renders the cycle cell. <c>~</c> marks a process-wide counter or a

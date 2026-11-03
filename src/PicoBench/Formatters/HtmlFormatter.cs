@@ -382,7 +382,7 @@ footer {
             var s = result.Statistics;
             sb.AppendLine("<tr>");
             sb.AppendLine(
-                $"<td>{Escape(result.Name)}{(s.ResolutionLimited ? " <span class=\"note\">(below resolution)</span>" : "")}</td>"
+                $"<td>{Escape(result.Name)}{(s.Unmeasured ? " <span class=\"note\">(unmeasured)</span>" : s.ResolutionLimited ? " <span class=\"note\">(below resolution)</span>" : "")}</td>"
             );
             sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.Avg)}</td>");
             sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P50)}</td>");
@@ -415,12 +415,15 @@ footer {
 
     /// <summary>
     /// Renders a per-operation cell. A value the run could not resolve above the
-    /// harness floor is written as an upper bound (<c>&lt;limit</c>).
+    /// harness floor is written as an upper bound (<c>&lt;limit</c>), and a run
+    /// whose clock never advanced is written as "not measured".
     /// </summary>
     private string FormatPerOp(Statistics statistics, double nanoseconds) =>
-        statistics.ResolutionLimited
-            ? $"&lt;{FormatTime(statistics.ResolutionLimitNanoseconds)}"
-            : FormatTime(nanoseconds);
+        statistics.Unmeasured
+            ? "N/A"
+            : statistics.ResolutionLimited
+                ? $"&lt;{FormatTime(statistics.ResolutionLimitNanoseconds)}"
+                : FormatTime(nanoseconds);
 
     /// <summary>
     /// Renders the cycle cell. <c>~</c> marks a process-wide counter or a

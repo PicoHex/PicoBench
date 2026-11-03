@@ -135,7 +135,11 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         foreach (var result in results)
         {
             var s = result.Statistics;
-            var below = s.ResolutionLimited ? " (below resolution)" : "";
+            var below = s.Unmeasured
+                ? " (unmeasured)"
+                : s.ResolutionLimited
+                    ? " (below resolution)"
+                    : "";
             sb.Append(
                 $"| {Escape(result.Name)} | {FormatPerOp(s, s.Avg)}{below} | {FormatPerOp(s, s.P50)}{below} "
             );
@@ -150,7 +154,14 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
             sb.AppendLine("|");
         }
 
-        if (results.Exists(static r => r.Statistics.ResolutionLimited))
+        if (results.Exists(static r => r.Statistics.Unmeasured))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "> **unmeasured** — the clock did not advance for the whole sample, so no per-operation value is shown (the timing source's granularity is coarser than the work)."
+            );
+        }
+        else if (results.Exists(static r => r.Statistics.ResolutionLimited))
         {
             sb.AppendLine();
             sb.AppendLine(
@@ -161,12 +172,15 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
 
     /// <summary>
     /// Renders a per-operation cell. A value the run could not resolve above the
-    /// harness floor is written as an upper bound (<c>&lt;limit</c>).
+    /// harness floor is written as an upper bound (<c>&lt;limit</c>), and a run
+    /// whose clock never advanced is written as "not measured".
     /// </summary>
     private string FormatPerOp(Statistics statistics, double nanoseconds) =>
-        statistics.ResolutionLimited
-            ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
-            : FormatTime(nanoseconds);
+        statistics.Unmeasured
+            ? "N/A"
+            : statistics.ResolutionLimited
+                ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
+                : FormatTime(nanoseconds);
 
     /// <summary>
     /// Renders the cycle cell. <c>~</c> marks a process-wide counter or a
