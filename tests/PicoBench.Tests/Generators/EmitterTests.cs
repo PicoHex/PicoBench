@@ -86,7 +86,12 @@ public class EmitterTests
         var code = Emitter.Generate(MinimalModel());
 
         await Assert.That(code).Contains("var __suite = new global::PicoBench.BenchmarkSuite(");
-        await Assert.That(code).Contains("ValueTask.FromResult(__suite)");
+        // Batch 0 · 0.7 (B3-C5): the pure-sync path returns the suite through the
+        // ValueTask<T> constructor, which exists on netstandard2.0 / net472 too.
+        await Assert.That(code)
+            .Contains(
+                "return new global::System.Threading.Tasks.ValueTask<global::PicoBench.BenchmarkSuite>(__suite);"
+            );
     }
 
     // ─── Namespace handling ─────────────────────────────────────────
@@ -499,11 +504,21 @@ public class EmitterTests
 
     [Test]
     [Property("Category", "Emitter")]
-    public async Task Generate_SyncClass_ReturnsValueTaskFromResult()
+    public async Task Generate_SyncClass_ReturnsValueTaskCtor()
     {
         var code = Emitter.Generate(MinimalModel());
 
-        await Assert.That(code).Contains("ValueTask.FromResult(__suite)");
+        // Batch 0 · 0.7 (B3-C5). Was: Contains("ValueTask.FromResult(__suite)").
+        // The non-generic ValueTask.FromResult is .NET 5+ only, so a
+        // netstandard2.0 / net472 consumer of a purely synchronous
+        // [BenchmarkClass] failed with CS0117. The assertion is the same strength
+        // (an exact emitter-text pin) — it just pins the TFM-portable form now,
+        // and adds the "FromResult must never come back" direction.
+        await Assert.That(code)
+            .Contains(
+                "return new global::System.Threading.Tasks.ValueTask<global::PicoBench.BenchmarkSuite>(__suite);"
+            );
+        await Assert.That(code).DoesNotContain("ValueTask.FromResult");
         await Assert.That(code).DoesNotContain("async ValueTask");
         await Assert.That(code).DoesNotContain("await ");
     }

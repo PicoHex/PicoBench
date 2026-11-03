@@ -226,7 +226,18 @@ internal static class Emitter
         }
         else
         {
-            sb.AppendLine($"{m2}return {ValueTaskType}.FromResult(__suite);");
+            // Batch 0 · 0.7 (B3-C5). A pure-sync class must return the suite through
+            // the ValueTask<T> constructor, not ValueTask.FromResult: the non-generic
+            // ValueTask.FromResult only exists in .NET 5+; netstandard2.0 / net472
+            // consumers get it from System.Threading.Tasks.Extensions 4.6.3, whose
+            // ns2.0 asset has no such method → CS0117. The constructor exists on
+            // every TFM, and for a completed task it is exactly as allocation-free
+            // as FromResult (IValueTaskSource-free, same struct state).
+            // The async path above is unchanged (`return __suite;` already uses the
+            // same constructor through the implicit conversion).
+            sb.AppendLine(
+                $"{m2}return new {ValueTaskType}<{Bench}.BenchmarkSuite>(__suite);"
+            );
         }
 
         // ── Close method / class / namespace ─────────────────────────

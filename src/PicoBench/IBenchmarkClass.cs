@@ -18,8 +18,10 @@ public interface IBenchmarkClass
     /// <returns>
     /// A <see cref="ValueTask{TResult}"/> that completes with the suite
     /// containing individual results and any comparisons.
-    /// For pure sync classes, returns <c>ValueTask.FromResult</c>
-    /// with zero heap allocation.
+    /// For pure sync classes, returns <c>new ValueTask&lt;BenchmarkSuite&gt;(suite)</c>
+    /// (a completed task) with zero heap allocation. The generic constructor is
+    /// used instead of <c>ValueTask.FromResult</c>, which does not exist on
+    /// netstandard2.0 / .NET Framework 4.x.
     /// </returns>
     ValueTask<BenchmarkSuite> RunBenchmarksAsync(BenchmarkConfig? config = null);
 }
