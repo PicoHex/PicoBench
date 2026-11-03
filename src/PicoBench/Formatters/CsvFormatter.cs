@@ -71,6 +71,9 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
                 sb.AppendLine("# CpuCounterNote: proxy-only");
         }
 
+        if (Options.IncludeGcInfo && AnyGcNotCollected(suite))
+            sb.AppendLine($"# GcInfoNote: unavailable ({FormatterBase.NotCollected})");
+
         if (Options.IncludeTimestamp)
         {
             sb.AppendLine($"# Timestamp: {suite.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
@@ -131,7 +134,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeGcInfo)
         {
-            columns.AddRange(["GC0", "GC1", "GC2"]);
+            columns.AddRange(["GC0", "GC1", "GC2", GcApproximateColumn]);
         }
 
         columns.AddRange(["SampleCount", "IterationsPerSample"]);
@@ -176,11 +179,8 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeGcInfo)
         {
-            values.AddRange([
-                s.GcInfo?.Gen0.ToString(CultureInfo.InvariantCulture) ?? "0",
-                s.GcInfo?.Gen1.ToString(CultureInfo.InvariantCulture) ?? "0",
-                s.GcInfo?.Gen2.ToString(CultureInfo.InvariantCulture) ?? "0",
-            ]);
+            values.AddRange(FormatGcCounts(s.GcInfo));
+            values.Add(FormatGcApproximate(s.GcInfo));
         }
 
         values.Add(result.SampleCount.ToString(CultureInfo.InvariantCulture));
@@ -214,7 +214,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeGcInfo)
         {
-            columns.AddRange(["GC0", "GC1", "GC2"]);
+            columns.AddRange(["GC0", "GC1", "GC2", GcApproximateColumn]);
         }
 
         sb.AppendLine(string.Join(Separator, columns));
@@ -267,11 +267,8 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeGcInfo)
         {
-            values.AddRange([
-                stats.GcInfo?.Gen0.ToString(CultureInfo.InvariantCulture) ?? "0",
-                stats.GcInfo?.Gen1.ToString(CultureInfo.InvariantCulture) ?? "0",
-                stats.GcInfo?.Gen2.ToString(CultureInfo.InvariantCulture) ?? "0",
-            ]);
+            values.AddRange(FormatGcCounts(stats.GcInfo));
+            values.Add(FormatGcApproximate(stats.GcInfo));
         }
 
         sb.AppendLine(string.Join(Separator, values));
@@ -280,6 +277,51 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
     #endregion
 
     #region Helpers
+
+    /// <summary>
+    /// Header of the boolean column that carries <see cref="GcInfo.IsApproximate"/>,
+    /// which the three GC counter columns cannot express.
+    /// </summary>
+    private const string GcApproximateColumn = "GCApproximate";
+
+    /// <summary>
+    /// Render the three GC counters. A missing <see cref="GcInfo"/> means "not
+    /// collected" and becomes <see cref="FormatterBase.NotCollected"/> rather
+    /// than <c>0</c>, so a CSV consumer cannot mistake it for "zero collections".
+    /// </summary>
+    private static string[] FormatGcCounts(GcInfo? gc)
+    {
+        if (gc is null)
+            return [
+                FormatterBase.NotCollected,
+                FormatterBase.NotCollected,
+                FormatterBase.NotCollected,
+            ];
+
+        return [
+            gc.Gen0.ToString(CultureInfo.InvariantCulture),
+            gc.Gen1.ToString(CultureInfo.InvariantCulture),
+            gc.Gen2.ToString(CultureInfo.InvariantCulture),
+        ];
+    }
+
+    /// <summary>
+    /// Render the <c>GCApproximate</c> flag: <c>1</c> when the counters are an
+    /// approximation, <c>0</c> when they are exact, "not collected" otherwise.
+    /// </summary>
+    private static string FormatGcApproximate(GcInfo? gc) =>
+        gc is null ? FormatterBase.NotCollected : gc.IsApproximate ? "1" : "0";
+
+    /// <summary>True when any statistics in the suite has no GC counters.</summary>
+    private static bool AnyGcNotCollected(BenchmarkSuite suite)
+    {
+        if (suite.Results.Any(static r => r.Statistics.GcInfo is null))
+            return true;
+
+        return suite.Comparisons?.Any(
+            static c => c.Candidate.Statistics.GcInfo is null || c.Baseline.Statistics.GcInfo is null
+        ) ?? false;
+    }
 
     private static string Escape(string value)
     {

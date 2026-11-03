@@ -230,13 +230,31 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     }
 
     /// <summary>
+    /// Cell text every formatter uses for "this value was not collected".
+    /// Kept in one place so the four output formats cannot drift apart again:
+    /// a <c>null</c> GC counter must never be rendered as <c>0</c>.
+    /// </summary>
+    internal const string NotCollected = "N/A";
+
+    /// <summary>
     /// Format GC generation counts as <c>gen0/gen1/gen2</c>.
+    /// <para>
+    /// <c>null</c> (counters not collected, e.g. <c>CpuOnly</c>) renders as
+    /// <see cref="NotCollected"/> instead of zeros, and an approximate count
+    /// (async / process-wide counters) keeps the <c>~</c> marker that
+    /// <see cref="GcInfo.ToString"/> already defines.
+    /// </para>
     /// </summary>
     protected static string FormatGcInfo(GcInfo? gc)
     {
         if (gc is null)
-            return "N/A";
-        return $"{gc.Gen0}/{gc.Gen1}/{gc.Gen2}";
+            return NotCollected;
+
+        var counts =
+            $"{gc.Gen0.ToString(CultureInfo.InvariantCulture)}/"
+            + $"{gc.Gen1.ToString(CultureInfo.InvariantCulture)}/"
+            + gc.Gen2.ToString(CultureInfo.InvariantCulture);
+        return gc.IsApproximate ? "~" + counts : counts;
     }
 
     /// <summary>
