@@ -51,10 +51,17 @@ public class KnownCostAnchorTests
         // (Windows rounds a 5 ms sleep up to its ~15.6 ms timer tick).
         await Assert.That(independent).IsGreaterThanOrEqualTo(4.0);
 
-        // Same interval, two clocks: a 2x band is generous and still kills any
-        // uniform scale factor applied to the reported value.
+        // Same interval, two clocks. The band is one-sided by physics: the
+        // independent Stopwatch necessarily encloses the library's window (it
+        // also covers the GC baseline, the cycle reads and the Stopwatch start),
+        // so a correct implementation reports ratio structurally <= 1 — R0
+        // measured 0.950-0.972 with CV 0.93% over 6 runs.
+        // The upper bound used to be 2.0, which let a x1.5 scale error through
+        // (R0: ratio 1.391 -> green). 1.10 keeps 1.13x margin over the measured
+        // worst case (0.972) and still reds the M1 mutation (x10 -> 9.9) and the
+        // x1.5 mutation (-> 1.39).
         await Assert.That(ratio).IsGreaterThanOrEqualTo(0.5);
-        await Assert.That(ratio).IsLessThanOrEqualTo(2.0);
+        await Assert.That(ratio).IsLessThanOrEqualTo(1.10);
     }
 
     /// <summary>

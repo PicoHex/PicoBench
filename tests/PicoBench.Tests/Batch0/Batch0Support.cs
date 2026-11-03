@@ -1,5 +1,8 @@
 namespace PicoBench.Tests.Batch0;
 
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
+
 /// <summary>
 /// Shared helpers for the Batch 0 "known cost" regression net
 /// (<c>.review-2026-11/00-FINAL-VERDICT.md</c> §5, item 0.0).
@@ -15,8 +18,16 @@ internal static class Batch0Support
     /// <summary>
     /// The additive per-operation floor Batch 0 · 0.1 promises for an empty
     /// delegate: ≤0.5 ns/op, or an explicitly disclosed overhead.
+    /// <para>
+    /// Relaxed from 0.5 ns to 1.5 ns by R0's review
+    /// (<c>.review-2026-11/08-regression-net-review.md</c> §2.4): the residual of
+    /// two independent empty-delegate measurements has sd ≈ 0.5 ns, so 0.5 ns
+    /// is ≈1 σ and would flag a correct implementation roughly half the time.
+    /// 1.5 ns is still 4.5-9× below what HEAD reports (6.7-13.6 ns/op), so the
+    /// guard keeps its red at HEAD.
+    /// </para>
     /// </summary>
-    internal const double ResolutionFloorNanoseconds = 0.5;
+    internal const double ResolutionFloorNanoseconds = 1.5;
 
     /// <summary>
     /// Configuration for short runs that are *not* auto-calibrated, so the
@@ -59,14 +70,31 @@ internal static class Batch0Support
         return Median(values);
     }
 
-    // Property names a fix would plausibly use to disclose the measured
-    // delegate/loop overhead (Batch 0 · 0.1: "Overhead 与'有效分辨率'进 Statistics").
-    private static readonly string[] OverheadSignalNames =
+    /// <summary>
+    /// Words a formatter may print to say "this is not a genuine measurement"
+    /// (delegate floor disclosed, value below the resolution floor, clock
+    /// granularity reached). Deliberately narrower than "N/A": a bare
+    /// <c>N/A</c> in an unrelated column must never count as a disclosure —
+    /// R0 §2.10 warned that a document-wide <c>Contains("N/A")</c> turns
+    /// tautological as soon as more than one column can be empty.
+    /// </summary>
+    private static readonly Regex ResolutionMarkerPattern = new(
+        "below[ _-]?resolution|resolution[ _-]?limit|overhead|unmeasured|not[ _-]?measured|unmeasurable",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled
+    );
+
+    /// <summary>
+    /// Cell values that mean "this cell holds no number" when found in the
+    /// exact per-operation cell (CSV <c>Avg_ns</c>) of the row.
+    /// </summary>
+    private static readonly string[] NotCollectedCells =
     [
-        "Overhead",
-        "OverheadPerOp",
-        "OverheadNanoseconds",
-        "DelegateOverhead",
+        "N/A",
+        "NA",
+        "null",
+        "-",
+        "unknown",
+        "NaN",
     ];
 
     // Property names a fix would plausibly use for "this number did not reach
@@ -83,38 +111,158 @@ internal static class Batch0Support
     ];
 
     /// <summary>
-    /// True when <see cref="Statistics"/> exposes the measured empty-delegate
-    /// overhead, i.e. the caller can subtract it themselves.
+    /// Reads the per-operation value a <b>user actually sees</b> for
+    /// <paramref name="result"/> and decides whether the library discloses the
+    /// delegate floor / resolution limit <b>in its formatted output</b>.
+    /// <para>
+    /// R0's stub experiment (§2.4) proved that guessing property names on
+    /// <see cref="Statistics"/> is spoofable: adding
+    /// <c>public double OverheadPerOp =&gt; 1.0;</c> — a property nothing reads —
+    /// turned the old assertion green while the user still saw 5.5 ns/op. This
+    /// helper therefore only trusts what a formatter prints: either the exact
+    /// per-operation cell of the row carries a "not a real measurement" marker,
+    /// or it carries a number (returned through
+    /// <paramref name="numericPerOpNanoseconds"/> so the caller can apply the
+    /// absolute floor itself). A decoration property cannot influence either.
+    /// </para>
     /// </summary>
-    internal static bool TryGetDisclosedOverhead(
-        Statistics statistics,
-        out double overheadNanoseconds,
-        out string detail
+    internal static bool FormattedOutputDisclosesResolution(
+        BenchmarkResult result,
+        out double? numericPerOpNanoseconds,
+        out string evidence
     )
     {
-        overheadNanoseconds = 0;
-        var type = typeof(Statistics);
+        numericPerOpNanoseconds = null;
+        var notes = new List<string>(4);
 
-        foreach (var name in OverheadSignalNames)
+        // ── CSV: the one place where a cell can be located exactly ──────
+        var csv = new CsvFormatter().Format(result);
+        var csvCell = ReadCsvPerOpCell(csv, result.Name);
+        notes.Add($"csv Avg_ns='{csvCell}'");
+
+        if (double.TryParse(csvCell, NumberStyles.Float, CultureInfo.InvariantCulture, out var cellValue))
         {
-            var property = type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
-            if (property is null || !IsNumeric(property.PropertyType))
-                continue;
-
-            var raw = property.GetValue(statistics);
-            if (raw is null)
-                continue;
-
-            overheadNanoseconds = Convert.ToDouble(raw, CultureInfo.InvariantCulture);
-            detail =
-                !double.IsNaN(overheadNanoseconds) && overheadNanoseconds > 0
-                    ? $"Statistics.{name} = {overheadNanoseconds:F3} ns"
-                    : $"Statistics.{name} present but {overheadNanoseconds:F3} ns (no usable overhead disclosed)";
-            return !double.IsNaN(overheadNanoseconds) && overheadNanoseconds > 0;
+            numericPerOpNanoseconds = cellValue;
+            evidence = string.Join("; ", notes) + " → plain number, not a disclosure";
+            return false;
         }
 
-        detail = $"Statistics exposes none of [{string.Join(", ", OverheadSignalNames)}]";
+        if (IsNotACollectedValue(csvCell))
+        {
+            evidence = string.Join("; ", notes) + " → the per-op cell itself says 'not measured'";
+            return true;
+        }
+
+        // ── Console / Markdown / HTML: the marker must sit on this row ───
+        foreach (var (name, text) in new (string Name, string Text)[]
+        {
+            ("console", new ConsoleFormatter().Format(result)),
+            ("markdown", new MarkdownFormatter().Format(result)),
+            ("html", new HtmlFormatter().Format(result)),
+        })
+        {
+            var row = FindRowMentioning(text, result.Name);
+            notes.Add($"{name} row='{Shorten(row)}'");
+            if (ResolutionMarkerPattern.IsMatch(row))
+            {
+                evidence = string.Join("; ", notes) + $" → {name} discloses the floor on that row";
+                return true;
+            }
+        }
+
+        evidence = string.Join("; ", notes) + " → no formatter discloses the floor";
         return false;
+    }
+
+    private static bool IsNotACollectedValue(string cell) =>
+        cell.Length > 0
+        && NotCollectedCells.Any(value => cell.Trim().Equals(value, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Returns the <c>Avg_ns</c> cell of the CSV row whose name matches.</summary>
+    private static string ReadCsvPerOpCell(string csv, string resultName)
+    {
+        var lines = csv.Replace("\r\n", "\n").Split('\n');
+        var headerIndex = Array.FindIndex(
+            lines,
+            static line => line.StartsWith("Name,", StringComparison.Ordinal)
+        );
+        if (headerIndex < 0 || headerIndex + 1 >= lines.Length)
+            return "<no Name, header in csv>";
+
+        var header = lines[headerIndex].Split(',');
+        var column = Array.FindIndex(
+            header,
+            static cell => cell.Equals("Avg_ns", StringComparison.OrdinalIgnoreCase)
+        );
+        if (column < 0)
+            return "<no Avg_ns column in csv>";
+
+        var row = Array.FindIndex(
+            lines,
+            headerIndex + 1,
+            line => line.Split(',') is { Length: > 0 } cells
+                && cells[0].Trim('"', '\'').Equals(resultName, StringComparison.Ordinal)
+        );
+        if (row < 0)
+            return $"<no csv row named {resultName}>";
+
+        var cells = lines[row].Split(',');
+        return column < cells.Length ? cells[column].Trim('"', '\'') : "<csv row too short>";
+    }
+
+    /// <summary>The first line of <paramref name="text"/> that mentions <paramref name="needle"/>.</summary>
+    private static string FindRowMentioning(string text, string needle)
+    {
+        foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            if (line.Contains(needle, StringComparison.Ordinal))
+                return line;
+        }
+
+        return "<no row mentions the benchmark>";
+    }
+
+    private static string Shorten(string value) =>
+        value.Length <= 160 ? value.Trim() : value[..160].Trim() + "…";
+
+    /// <summary>
+    /// Walks up from the test binaries to the repository root and returns the
+    /// absolute path of <paramref name="fileName"/> (e.g.
+    /// <c>Directory.Packages.props</c>).
+    /// </summary>
+    internal static string FindRepositoryFile(string fileName)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, fileName);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            $"Could not find {fileName} above {AppContext.BaseDirectory}",
+            fileName
+        );
+    }
+
+    /// <summary>Reads a centrally managed package version out of <c>Directory.Packages.props</c>.</summary>
+    internal static string? ReadCentralPackageVersion(string packageId)
+    {
+        var props = XDocument.Load(FindRepositoryFile("Directory.Packages.props"));
+        return props
+            .Descendants("PackageVersion")
+            .FirstOrDefault(element =>
+                string.Equals(
+                    (string?)element.Attribute("Include"),
+                    packageId,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            ?.Attribute("Version")
+            ?.Value;
     }
 
     /// <summary>
