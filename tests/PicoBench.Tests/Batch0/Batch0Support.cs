@@ -1,5 +1,6 @@
 namespace PicoBench.Tests.Batch0;
 
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
@@ -226,24 +227,46 @@ internal static class Batch0Support
         value.Length <= 160 ? value.Trim() : value[..160].Trim() + "…";
 
     /// <summary>
-    /// Walks up from the test binaries to the repository root and returns the
-    /// absolute path of <paramref name="fileName"/> (e.g.
-    /// <c>Directory.Packages.props</c>).
+    /// Walks up to the repository root and returns the absolute path of
+    /// <paramref name="fileName"/> (e.g. <c>Directory.Packages.props</c>).
+    /// <para>
+    /// Three roots are tried in order: <see cref="AppContext.BaseDirectory"/>,
+    /// the current working directory, and the directory of the calling test
+    /// source file. The extra roots are what make the guard work under
+    /// <c>--artifacts-path</c> (Batch 0's isolated-build rule): the binaries then
+    /// live under <c>%TEMP%</c>, so walking up from the binaries can never reach
+    /// the repository's <c>Directory.Packages.props</c>. This is path discovery
+    /// only — no assertion is relaxed.
+    /// </para>
     /// </summary>
-    internal static string FindRepositoryFile(string fileName)
+    internal static string FindRepositoryFile(
+        string fileName,
+        [CallerFilePath] string callerFilePath = ""
+    )
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, fileName);
-            if (File.Exists(candidate))
-                return candidate;
+        string?[] roots =
+        [
+            AppContext.BaseDirectory,
+            Directory.GetCurrentDirectory(),
+            Path.GetDirectoryName(callerFilePath),
+        ];
 
-            directory = directory.Parent;
+        foreach (var root in roots)
+        {
+            var directory = string.IsNullOrEmpty(root) ? null : new DirectoryInfo(root);
+            while (directory is not null)
+            {
+                var candidate = Path.Combine(directory.FullName, fileName);
+                if (File.Exists(candidate))
+                    return candidate;
+
+                directory = directory.Parent;
+            }
         }
 
         throw new FileNotFoundException(
-            $"Could not find {fileName} above {AppContext.BaseDirectory}",
+            $"Could not find {fileName} above {AppContext.BaseDirectory}, "
+                + $"{Directory.GetCurrentDirectory()} or {callerFilePath}",
             fileName
         );
     }

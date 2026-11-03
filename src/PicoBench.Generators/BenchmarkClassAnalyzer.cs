@@ -19,7 +19,7 @@ internal static class BenchmarkClassAnalyzer
         var diagnostics = new List<Diagnostic>();
 
         if (ctx.TargetSymbol is not INamedTypeSymbol typeSymbol)
-            return new GeneratorAnalysisResult(null, [.. diagnostics]);
+            return new GeneratorAnalysisResult(null, diagnostics.ToImmutableArray());
 
         ct.ThrowIfCancellationRequested();
 
@@ -179,7 +179,7 @@ internal static class BenchmarkClassAnalyzer
         }
 
         if (diagnostics.Any(static d => d.Severity == DiagnosticSeverity.Error))
-            return new GeneratorAnalysisResult(null, [.. diagnostics]);
+            return new GeneratorAnalysisResult(null, diagnostics.ToImmutableArray());
 
         var isAsync =
             (globalSetup?.IsAsync ?? false)
@@ -203,7 +203,7 @@ internal static class BenchmarkClassAnalyzer
                 Methods = methods.ToImmutable(),
                 ParamsProperties = paramsProps.ToImmutable(),
             },
-            [.. diagnostics]
+            diagnostics.ToImmutableArray()
         );
     }
 
