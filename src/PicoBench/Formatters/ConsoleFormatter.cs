@@ -188,7 +188,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         if (Options.IncludeCpuCycles)
         {
-            sb.AppendLine($"  CPU Cycles: {result.Statistics.CpuCyclesPerOp:F0}");
+            sb.AppendLine($"  CPU Cycles: {FormatCycles(result.Statistics)}");
         }
 
         if (Options.IncludeGcInfo)
@@ -242,10 +242,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             )
             : 0;
         var cpuWidth = Options.IncludeCpuCycles
-            ? Math.Max(
-                "CPU Cycles".Length,
-                results.Max(r => $"{r.Statistics.CpuCyclesPerOp:F0}".Length)
-            )
+            ? Math.Max("CPU Cycles".Length, results.Max(r => FormatCycles(r.Statistics).Length))
             : 0;
         var gcWidth = Options.IncludeGcInfo
             ? Math.Max(
@@ -277,7 +274,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         if (Options.IncludeCpuCycles)
         {
-            columns.Add(new("CPU Cycles", cpuWidth, r => $"{r.Statistics.CpuCyclesPerOp:F0}"));
+            columns.Add(new("CPU Cycles", cpuWidth, r => FormatCycles(r.Statistics)));
         }
 
         if (Options.IncludeGcInfo)
@@ -305,6 +302,15 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         statistics.ResolutionLimited
             ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
             : FormatTime(nanoseconds);
+
+    /// <summary>
+    /// Renders the cycle column. A process-wide counter or a monotonic-clock
+    /// proxy is marked with <c>~</c>: it is not a thread-scoped cycle count.
+    /// </summary>
+    private static string FormatCycles(Statistics statistics) =>
+        statistics.CpuCyclesAreApproximate
+            ? $"~{statistics.CpuCyclesPerOp:F0}"
+            : $"{statistics.CpuCyclesPerOp:F0}";
 
     #endregion
 

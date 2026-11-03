@@ -332,8 +332,10 @@ public static partial class Runner
         // not attributed to the benchmark.
         var gcBaseline = GetGcBaselineCounts();
 
-        // Start timing
-        var cycleStart = GetProcessCpuCycles();
+        // Start timing. Synchronous benchmarks never hop threads, so the
+        // thread-scoped counter is both valid and immune to work done by other
+        // threads (a busy neighbour thread used to inflate cycles/op by ~2x).
+        var cycleStart = GetCpuCycles();
         var watch = Stopwatch.StartNew();
 
         // Run the measured work
@@ -342,7 +344,7 @@ public static partial class Runner
 
         // Stop timing
         watch.Stop();
-        var cycleEnd = GetProcessCpuCycles();
+        var cycleEnd = GetCpuCycles();
 
         // GC delta is computed before teardown so teardown allocations
         // are not attributed to the benchmark.
@@ -351,7 +353,13 @@ public static partial class Runner
         // Run teardown (not timed)
         teardown?.Invoke();
 
-        return CreateSample(watch, cycleStart, cycleEnd, gcInfo);
+        return CreateSample(
+            watch,
+            cycleStart,
+            cycleEnd,
+            gcInfo,
+            areCpuCyclesApproximate: !HasMeaningfulCpuCycles()
+        );
     }
 
     /// <summary>
@@ -374,9 +382,15 @@ public static partial class Runner
             action(state);
 
         watch.Stop();
-        var cycleEnd = GetProcessCpuCycles();
+        var cycleEnd = GetCpuCycles();
 
-        return CreateSample(watch, cycleStart, cycleEnd, CalculateGcDelta(gcBaseline));
+        return CreateSample(
+            watch,
+            cycleStart,
+            cycleEnd,
+            CalculateGcDelta(gcBaseline),
+            areCpuCyclesApproximate: !HasMeaningfulCpuCycles()
+        );
     }
 
     /// <summary>
@@ -399,7 +413,8 @@ public static partial class Runner
         ulong cycleStart,
         ulong cycleEnd,
         GcInfo gcInfo,
-        bool isGcApproximate = false
+        bool isGcApproximate = false,
+        bool areCpuCyclesApproximate = false
     )
     {
         var elapsedTicks = watch.ElapsedTicks;
@@ -422,6 +437,7 @@ public static partial class Runner
             ElapsedMilliseconds = elapsedNs / 1_000_000.0,
             ElapsedTicks = elapsedTicks,
             CpuCycles = cycleEnd - cycleStart,
+            CpuCyclesAreApproximate = areCpuCyclesApproximate,
             GcInfo = gcInfo,
         };
     }
@@ -471,7 +487,8 @@ public static partial class Runner
             cycleStart,
             cycleEnd,
             gcInfo,
-            isGcApproximate: true
+            isGcApproximate: true,
+            areCpuCyclesApproximate: true
         );
     }
 
@@ -505,7 +522,8 @@ public static partial class Runner
             cycleStart,
             cycleEnd,
             CalculateGcDelta(gcBaseline),
-            isGcApproximate: true
+            isGcApproximate: true,
+            areCpuCyclesApproximate: true
         );
     }
 
@@ -546,6 +564,7 @@ public static partial class Runner
             ElapsedMilliseconds = cpuDelta.TotalMilliseconds,
             ElapsedTicks = cpuDelta.Ticks,
             CpuCycles = cycleEnd - cycleStart,
+            CpuCyclesAreApproximate = true,
             GcInfo = null,
         };
     }
@@ -579,6 +598,7 @@ public static partial class Runner
             ElapsedMilliseconds = cpuDelta.TotalMilliseconds,
             ElapsedTicks = cpuDelta.Ticks,
             CpuCycles = cycleEnd - cycleStart,
+            CpuCyclesAreApproximate = true,
             GcInfo = null,
         };
     }

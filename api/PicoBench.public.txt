@@ -213,6 +213,7 @@ P:PicoBench.GcInfo.IsZero : bool { get; }
 P:PicoBench.GcInfo.Total : int { get; }
 P:PicoBench.ParamsAttribute.Values : object[] { get; }
 P:PicoBench.Statistics.Avg : double { get; init; }
+P:PicoBench.Statistics.CpuCyclesAreApproximate : bool { get; init; }
 P:PicoBench.Statistics.CpuCyclesPerOp : double { get; init; }
 P:PicoBench.Statistics.GcInfo : PicoBench.GcInfo { get; init; }
 P:PicoBench.Statistics.HasHighVariance : bool { get; }
@@ -229,6 +230,7 @@ P:PicoBench.Statistics.ResolutionLimited : bool { get; init; }
 P:PicoBench.Statistics.StandardError : double { get; init; }
 P:PicoBench.Statistics.StdDev : double { get; init; }
 P:PicoBench.TimingSample.CpuCycles : ulong { get; init; }
+P:PicoBench.TimingSample.CpuCyclesAreApproximate : bool { get; init; }
 P:PicoBench.TimingSample.ElapsedMilliseconds : double { get; init; }
 P:PicoBench.TimingSample.ElapsedNanoseconds : double { get; init; }
 P:PicoBench.TimingSample.ElapsedTicks : long { get; init; }

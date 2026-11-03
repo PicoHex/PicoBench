@@ -111,6 +111,7 @@ internal static class StatisticsCalculator
             StandardError = standardError,
             RelativeStdDevPercent = relativeStdDevPercent,
             CpuCyclesPerOp = cpuCyclesAvg,
+            CpuCyclesAreApproximate = Array.Exists(samples, static s => s.CpuCyclesAreApproximate),
             OverheadNs = harnessOverheadNanoseconds,
             ResolutionLimitNanoseconds = resolutionLimitNanoseconds,
             ResolutionLimited = resolutionLimitNanoseconds > 0 && avg <= resolutionLimitNanoseconds,

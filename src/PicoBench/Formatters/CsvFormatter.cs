@@ -174,7 +174,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeCpuCycles)
         {
-            values.Add(FormatNumber(s.CpuCyclesPerOp));
+            values.Add(FormatCycles(s));
         }
 
         if (Options.IncludeGcInfo)
@@ -287,6 +287,13 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         statistics.ResolutionLimited
             ? "<" + FormatNumber(statistics.ResolutionLimitNanoseconds)
             : FormatNumber(nanoseconds);
+
+    /// <summary>
+    /// Renders the cycle cell. <c>~</c> marks a process-wide counter or a
+    /// monotonic-clock proxy rather than a thread-scoped CPU cycle count.
+    /// </summary>
+    private static string FormatCycles(Statistics statistics) =>
+        (statistics.CpuCyclesAreApproximate ? "~" : "") + FormatNumber(statistics.CpuCyclesPerOp);
 
     /// <summary>
     /// Header of the boolean column that carries <see cref="GcInfo.IsApproximate"/>,

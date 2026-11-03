@@ -398,7 +398,7 @@ footer {
 
             if (Options.IncludeCpuCycles)
             {
-                sb.AppendLine($"<td class=\"number\">{s.CpuCyclesPerOp:F0}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatCycles(s)}</td>");
             }
 
             if (Options.IncludeGcInfo)
@@ -421,6 +421,15 @@ footer {
         statistics.ResolutionLimited
             ? $"&lt;{FormatTime(statistics.ResolutionLimitNanoseconds)}"
             : FormatTime(nanoseconds);
+
+    /// <summary>
+    /// Renders the cycle cell. <c>~</c> marks a process-wide counter or a
+    /// monotonic-clock proxy rather than a thread-scoped CPU cycle count.
+    /// </summary>
+    private static string FormatCycles(Statistics statistics) =>
+        statistics.CpuCyclesAreApproximate
+            ? $"~{statistics.CpuCyclesPerOp:F0}"
+            : $"{statistics.CpuCyclesPerOp:F0}";
 
     #endregion
 

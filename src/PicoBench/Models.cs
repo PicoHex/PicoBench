@@ -58,6 +58,15 @@ public sealed class TimingSample
     public ulong CpuCycles { get; init; }
 
     /// <summary>
+    /// When true, <see cref="CpuCycles"/> is not a thread-scoped CPU cycle
+    /// count: it comes either from a process-wide counter (asynchronous
+    /// benchmarks, which may resume on another thread, so the value also counts
+    /// work done by other threads) or from a monotonic clock proxy (macOS
+    /// <c>mach_absolute_time</c>), which is not a cycle count at all.
+    /// </summary>
+    public bool CpuCyclesAreApproximate { get; init; }
+
+    /// <summary>
     /// GC collection counts during this sample.
     /// <c>null</c> when GC data was not collected (CpuOnly async mode).
     /// </summary>
@@ -104,6 +113,14 @@ public sealed class Statistics
     /// on the current platform/runtime.
     /// </summary>
     public double CpuCyclesPerOp { get; init; }
+
+    /// <summary>
+    /// When true, <see cref="CpuCyclesPerOp"/> may include work performed by
+    /// other threads (process-wide counter) or is a monotonic-clock proxy rather
+    /// than real CPU cycles, so it must not be read as the cycle cost of the
+    /// measured operation.
+    /// </summary>
+    public bool CpuCyclesAreApproximate { get; init; }
 
     /// <summary>
     /// Fixed per-operation overhead of the measurement harness itself (delegate

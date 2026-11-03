@@ -144,7 +144,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                     $"| {FormatPerOp(s, s.P90)}{below} | {FormatPerOp(s, s.P95)}{below} | {FormatPerOp(s, s.P99)}{below} | {FormatPerOp(s, s.StandardError)}{below} | {s.RelativeStdDevPercent:F1} "
                 );
             if (Options.IncludeCpuCycles)
-                sb.Append($"| {s.CpuCyclesPerOp:F0} ");
+                sb.Append($"| {FormatCycles(s)} ");
             if (Options.IncludeGcInfo)
                 sb.Append($"| {FormatGcInfo(s.GcInfo)} ");
             sb.AppendLine("|");
@@ -167,6 +167,15 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         statistics.ResolutionLimited
             ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
             : FormatTime(nanoseconds);
+
+    /// <summary>
+    /// Renders the cycle cell. <c>~</c> marks a process-wide counter or a
+    /// monotonic-clock proxy rather than a thread-scoped CPU cycle count.
+    /// </summary>
+    private static string FormatCycles(Statistics statistics) =>
+        statistics.CpuCyclesAreApproximate
+            ? $"~{statistics.CpuCyclesPerOp:F0}"
+            : $"{statistics.CpuCyclesPerOp:F0}";
 
     #endregion
 
