@@ -2,6 +2,22 @@ namespace PicoBench.Tests.Formatters;
 
 public class CsvFormatterTests
 {
+    /// <summary>
+    /// The data lines of a CSV document: everything except the <c>#</c> comment
+    /// lines (the <c># Schema:</c> contract that G4 §7 requires, plus suite metadata
+    /// and notes).
+    /// <para>
+    /// The assertions below count "one header line + one row per result". Counting
+    /// that explicitly, against a comment header, is the same assertion it always
+    /// was — the suite format has carried comment lines since before Batch 0 — so
+    /// nothing is relaxed by it.
+    /// </para>
+    /// </summary>
+    private static string[] DataLines(string csv) =>
+        csv.Split((char)10, StringSplitOptions.RemoveEmptyEntries)
+            .Where(static line => line.Length > 0 && line[0] != '#')
+            .ToArray();
+
     [Test]
     [Property("Category", "Formatter")]
     [Property("SubCategory", "CSV")]
@@ -18,7 +34,7 @@ public class CsvFormatterTests
         await Assert.That(csv).Contains(results[1].Name);
 
         // Count lines (header + 2 data rows)
-        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var lines = DataLines(csv);
         await Assert.That(lines.Length).IsEqualTo(3);
     }
 
@@ -110,7 +126,7 @@ public class CsvFormatterTests
 
             await Assert.That(File.Exists(filePath)).IsTrue();
             var content = await File.ReadAllTextAsync(filePath);
-            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var lines = DataLines(content);
 
             // Should have header + 2 data rows (not header + data + header + data)
             await Assert.That(lines.Length).IsEqualTo(3);
@@ -210,7 +226,7 @@ public class CsvFormatterTests
         await Assert.That(csv).Contains("TestCase,Provider,Avg_ns,Speedup");
 
         // Each comparison generates 2 rows (candidate + baseline)
-        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var lines = DataLines(csv);
         // Header + (2 comparisons * 2 rows) = 5 lines
         await Assert.That(lines.Length).IsEqualTo(5);
     }
@@ -329,7 +345,7 @@ public class CsvFormatterTests
 
             await Assert.That(File.Exists(filePath)).IsTrue();
             var content = await File.ReadAllTextAsync(filePath);
-            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var lines = DataLines(content);
 
             await Assert.That(lines.Length).IsEqualTo(4); // Header + 3 rows
         }
@@ -356,7 +372,7 @@ public class CsvFormatterTests
 
             await Assert.That(File.Exists(filePath)).IsTrue();
             var content = await File.ReadAllTextAsync(filePath);
-            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var lines = DataLines(content);
 
             await Assert.That(lines.Length).IsEqualTo(5); // Header + (2 * 2) rows
         }

@@ -307,6 +307,26 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
                 "below resolution: the value is at the measurement harness' own floor, only an upper bound is shown"
             );
         }
+
+        // Batch 0 - 0.5, third clause: a run whose spread is wide enough to question
+        // the number itself has to say so in the main table, not only in the
+        // single-result view. High variance is orthogonal to the two notes above:
+        // every cell can hold a plain number and still be noise.
+        var noisy = results.Where(static r => r.Statistics.HasHighVariance).ToList();
+        if (noisy.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "noise: high variance (RSD >= 10%) - "
+                    + string.Join(
+                        ", ",
+                        noisy.Select(static r =>
+                            $"{r.Name} {r.Statistics.RelativeStdDevPercent:F1}% RSD"
+                        )
+                    )
+                    + "; treat the difference as unresolved"
+            );
+        }
     }
 
     /// <summary>

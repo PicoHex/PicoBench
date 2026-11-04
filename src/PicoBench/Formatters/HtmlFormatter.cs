@@ -411,6 +411,14 @@ footer {
 
         sb.AppendLine("</tbody>");
         sb.AppendLine("</table>");
+
+        var noisy = results.Where(static r => r.Statistics.HasHighVariance).ToList();
+        if (noisy.Count > 0)
+        {
+            sb.AppendLine(
+                $"<p class=\"note\">noise: high variance (RSD &gt;= 10%): {string.Join(", ", noisy.Select(static r => $"{Escape(r.Name)} ({r.Statistics.RelativeStdDevPercent:F1}% RSD)"))}; treat the difference as unresolved.</p>"
+            );
+        }
     }
 
     /// <summary>

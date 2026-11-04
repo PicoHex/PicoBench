@@ -168,6 +168,22 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                 "> **below resolution** — the value is at the measurement harness' own floor, so only an upper bound is shown."
             );
         }
+
+        var noisy = results.Where(static r => r.Statistics.HasHighVariance).ToList();
+        if (noisy.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "> **noise** - high variance (RSD >= 10%): "
+                    + string.Join(
+                        ", ",
+                        noisy.Select(static r =>
+                            $"{Escape(r.Name)} ({r.Statistics.RelativeStdDevPercent:F1}% RSD)"
+                        )
+                    )
+                    + "; treat the difference as unresolved."
+            );
+        }
     }
 
     /// <summary>
