@@ -254,28 +254,34 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         double? speedup
     )
     {
+        // The per-operation columns of this section are the same kind of cell as the
+        // results section's, and the section's own `# Schema:` line says so: a
+        // comparison row therefore goes through the very same helpers
+        // (FormatPerOp / FormatCycles) instead of the plain number formatter, so a
+        // sub-floor or unmeasured run cannot print a number here and `<limit` / N/A
+        // there (G8 · C1).
         var values = new List<string>
         {
             Escape($"{provider} * {testCase}"),
             Escape(provider),
-            FormatNumber(stats.Avg),
+            FormatPerOp(stats, stats.Avg),
             speedup.HasValue ? FormatNumber(speedup.Value) : "",
         };
 
         if (Options.IncludePercentiles)
         {
             values.AddRange([
-                FormatNumber(stats.P50),
-                FormatNumber(stats.P90),
-                FormatNumber(stats.P99),
-                FormatNumber(stats.StandardError),
+                FormatPerOp(stats, stats.P50),
+                FormatPerOp(stats, stats.P90),
+                FormatPerOp(stats, stats.P99),
+                FormatPerOp(stats, stats.StandardError),
                 FormatNumber(stats.RelativeStdDevPercent),
             ]);
         }
 
         if (Options.IncludeCpuCycles)
         {
-            values.Add(FormatNumber(stats.CpuCyclesPerOp));
+            values.Add(FormatCycles(stats));
         }
 
         if (Options.IncludeGcInfo)

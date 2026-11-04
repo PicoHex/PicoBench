@@ -430,7 +430,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 소비자에게 두 가지 영향이 있습니다: `<0.02` 때문에 작업당 열은 **숫자임이 보장되지 않으므로** pandas 같은 리더는 `object`로 추론하며 상한 행을 명시적으로 처리해야 합니다. 또한 `GCApproximate`가 `GC2`와 `SampleCount` 사이인 17번 위치에 삽입되었으므로 **위치 기반 리더는 `SampleCount`/`IterationsPerSample`을 하나씩 밀어야 합니다**(이름 기반 리더는 영향을 받지 않음).
 
-비교 열: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. 각 비교는 두 행(후보가 먼저, 기준선이 다음)을 쓰고 `Speedup`은 후보 행에만 채워집니다. 비교 셀은 현재 단순 숫자 포맷터를 거치므로 결과 테이블의 `N/A`/`<limit`가 거기에는 나타나지 않습니다.
+비교 열: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. 각 비교는 두 행(후보가 먼저, 기준선이 다음)을 쓰고 `Speedup`은 후보 행에만 채워집니다. 비교의 작업당 셀은 결과 테이블과 동일한 포맷터를 거치므로 `<limit`와 `N/A`가 거기에도 나타나며, `CpuCycles`에는 동일한 `~` 표시(`CpuCyclesAreApproximate`)가 붙습니다.
 
 `# Schema:` 행은 이미 반영되었고 **파일의 첫 행**입니다. 결과 파일(그리고 결과가 있는 스위트 파일)은 뒤따르는 열을 설명하는 계약 행으로 시작하며, 비교 섹션은 `# Comparisons` 바로 앞에 자체 계약 행을 씁니다:
 

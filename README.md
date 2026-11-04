@@ -432,7 +432,7 @@ Cell states of a per-operation column:
 
 Two consequences for consumers: because of `<0.02` a per-operation column is **not** guaranteed to be numeric, so readers such as pandas infer `object` and you have to handle the bound rows explicitly; and `GCApproximate` was inserted at position 17, between `GC2` and `SampleCount`, so **positional readers must shift `SampleCount`/`IterationsPerSample` by one** (name-based readers are unaffected).
 
-Comparisons columns: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Each comparison writes two rows — candidate first, then baseline — and `Speedup` is filled only on the candidate row. The comparison cells currently go through the plain number formatter, so `N/A`/`<limit` from the results table do not appear there.
+Comparisons columns: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Each comparison writes two rows — candidate first, then baseline — and `Speedup` is filled only on the candidate row. The comparison per-operation cells go through the same formatter as the results table, so `<limit` and `N/A` appear there too, and `CpuCycles` carries the same `~` marker (`CpuCyclesAreApproximate`).
 
 The `# Schema:` line has landed, and it is the plain **first line of the file**: a results file (and a suite file that has results) opens with the contract that describes the columns below it, and a comparisons section writes its own contract line just before `# Comparisons`:
 

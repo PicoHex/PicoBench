@@ -387,7 +387,7 @@ Estados de célula de uma coluna por operação:
 
 Duas consequências para consumidores: por causa de `<0.02`, uma coluna por operação **não** tem garantia de ser numérica, então leitores como o pandas inferem `object` e você precisa tratar explicitamente as linhas de limite; e `GCApproximate` foi inserido na posição 17, entre `GC2` e `SampleCount`, então **leitores posicionais devem deslocar `SampleCount`/`IterationsPerSample` em um** (leitores baseados em nome não são afetados).
 
-Colunas de comparações: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Cada comparação escreve duas linhas — primeiro o candidato, depois a baseline — e `Speedup` é preenchido apenas na linha do candidato. Atualmente as células de comparação passam pelo formatador de números simples, então `N/A`/`<limit` da tabela de resultados não aparecem lá.
+Colunas de comparações: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Cada comparação escreve duas linhas — primeiro o candidato, depois a baseline — e `Speedup` é preenchido apenas na linha do candidato. As células por operação das comparações passam pelo mesmo formatador da tabela de resultados, então `<limit` e `N/A` também aparecem lá, e `CpuCycles` leva a mesma marca `~` (`CpuCyclesAreApproximate`).
 
 A linha `# Schema:` já está implementada e é a **primeira linha do arquivo**: um arquivo de resultados (e um arquivo de suite com resultados) começa com o contrato que descreve as colunas abaixo, e uma seção de comparações escreve sua própria linha de contrato logo antes de `# Comparisons`:
 

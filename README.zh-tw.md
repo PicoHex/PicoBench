@@ -387,7 +387,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 對使用者而言有兩點後果：由於 `<0.02` 的存在，每操作欄**不保證是數值型**，因此 pandas 之類的讀取器會推斷為 `object`，你必須顯式處理上界列；而 `GCApproximate` 被插入到第 17 位，位於 `GC2` 與 `SampleCount` 之間，所以**按位置讀取的程式碼必須把 `SampleCount`/`IterationsPerSample` 後移一位**（按欄名讀取不受影響）。
 
-比較欄：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`。每個比較會寫出兩列 —— 候選在前，基準在後 —— 並且 `Speedup` 只填在候選列。比較的儲存格目前走普通數字格式化器，因此結果表中的 `N/A`/`<limit` 不會出現在那裡。
+比較欄：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`。每個比較會寫出兩列 —— 候選在前，基準在後 —— 並且 `Speedup` 只填在候選列。比較的每操作儲存格與結果表走同一個格式化器，因此 `<limit` 與 `N/A` 也會出現在那裡，`CpuCycles` 帶同樣的 `~` 標記（`CpuCyclesAreApproximate`）。
 
 `# Schema:` 行已經落地，並且就是**檔案首行**：結果檔案（以及含結果的套件檔案）以這段描述後續欄位的契約行開頭，比較區段則在 `# Comparisons` 之前再寫一條自己的契約行：
 

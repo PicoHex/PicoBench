@@ -385,7 +385,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 消費側への2つの影響: `<0.02` のため、1操作あたりの列が**数値であることは保証されません**。そのため pandas のようなリーダーは `object` と推論し、上限の行を明示的に扱う必要があります。また `GCApproximate` は `GC2` と `SampleCount` の間の位置17に挿入されたため、**位置ベースのリーダーは `SampleCount`/`IterationsPerSample` を1つずらす必要があります**（名前ベースのリーダーは影響を受けません）。
 
-比較の列: `TestCase`、`Provider`、`Avg_ns`、`Speedup`、`P50_ns`、`P90_ns`、`P99_ns`、`StdErr_ns`、`RSD_pct`、`CpuCycles`、`GC0`、`GC1`、`GC2`、`GCApproximate`。各比較は2行（候補が先、ベースラインが後）を書き、`Speedup` は候補の行にのみ入ります。比較のセルは現在単純な数値フォーマッターを通過するため、結果テーブルの `N/A`/`<limit` はそこには現れません。
+比較の列: `TestCase`、`Provider`、`Avg_ns`、`Speedup`、`P50_ns`、`P90_ns`、`P99_ns`、`StdErr_ns`、`RSD_pct`、`CpuCycles`、`GC0`、`GC1`、`GC2`、`GCApproximate`。各比較は2行（候補が先、ベースラインが後）を書き、`Speedup` は候補の行にのみ入ります。比較の1操作あたりのセルは結果テーブルと同じフォーマッターを通るため、`<limit` と `N/A` はそこにも現れ、`CpuCycles` には同じ `~` マーカー（`CpuCyclesAreApproximate`）が付きます。
 
 `# Schema:` 行はすでに実装済みで、**ファイルの先頭行**です。結果ファイル（および結果を持つスイートファイル）は、続く列を説明する契約行から始まり、比較セクションは `# Comparisons` の直前に自分自身の契約行を書きます:
 

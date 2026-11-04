@@ -387,7 +387,7 @@ Zellzustände einer Spalte pro Vorgang:
 
 Zwei Konsequenzen für Konsumenten: wegen `<0.02` ist eine Spalte pro Vorgang **nicht** garantiert numerisch, sodass Leser wie pandas `object` ableiten und Sie die Schrankenzeilen explizit behandeln müssen; und `GCApproximate` wurde an Position 17 eingefügt, zwischen `GC2` und `SampleCount`, sodass **positionelle Leser `SampleCount`/`IterationsPerSample` um eins verschieben müssen** (namensbasierte Leser sind nicht betroffen).
 
-Vergleichsspalten: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Jeder Vergleich schreibt zwei Zeilen — zuerst den Kandidaten, dann die Baseline — und `Speedup` wird nur in der Kandidatenzeile gefüllt. Die Vergleichszellen laufen derzeit durch den einfachen Zahlenformatierer, daher erscheinen `N/A`/`<limit` aus der Ergebnistabelle dort nicht.
+Vergleichsspalten: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Jeder Vergleich schreibt zwei Zeilen — zuerst den Kandidaten, dann die Baseline — und `Speedup` wird nur in der Kandidatenzeile gefüllt. Die Vergleichszellen für die Einzeloperation laufen durch denselben Formatierer wie die Ergebnistabelle, daher erscheinen `<limit` und `N/A` auch dort, und `CpuCycles` trägt dieselbe `~`-Markierung (`CpuCyclesAreApproximate`).
 
 Die `# Schema:`-Zeile ist umgesetzt und steht **in der ersten Zeile der Datei**: eine Ergebnisdatei (und eine Suite-Datei mit Ergebnissen) beginnt mit dem Vertrag, der die darunter stehenden Spalten beschreibt, und ein Vergleichsabschnitt schreibt seine eigene Vertragszeile direkt vor `# Comparisons`:
 
