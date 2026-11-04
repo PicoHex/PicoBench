@@ -57,7 +57,11 @@ public class ResolutionLimitTests
             var perOpFloor = statistics.OverheadNs / result.IterationsPerSample;
             var clockTickPerOp = 1_000_000_000.0 / Stopwatch.Frequency / result.IterationsPerSample;
 
-            var cell = ReadCsvPerOpCell(new CsvFormatter().Format(result), result.Name);
+            var cell = Batch0Support.ReadCsvCell(
+                new CsvFormatter().Format(result),
+                result.Name,
+                "Avg_ns"
+            );
             Batch0Support.Log(
                 $"iters={result.IterationsPerSample} avg={statistics.Avg:F4} ns/op "
                     + $"overhead={statistics.OverheadNs:F1} ns/sample => {perOpFloor:F4} ns/op; "
@@ -82,39 +86,5 @@ public class ResolutionLimitTests
             await Assert.That(disclosed).IsGreaterThan(clockTickPerOp);
             await Assert.That(disclosed).IsGreaterThan(0.0);
         }
-    }
-
-    /// <summary>Returns the <c>Avg_ns</c> cell of the CSV row whose name matches.</summary>
-    private static string ReadCsvPerOpCell(string csv, string resultName)
-    {
-        var lines = csv.Replace("\r\n", "\n").Split('\n');
-        var headerIndex = Array.FindIndex(
-            lines,
-            static line => line.StartsWith("Name,", StringComparison.Ordinal)
-        );
-        if (headerIndex < 0)
-            throw new InvalidOperationException("the CSV output has no 'Name,' header row");
-
-        var header = lines[headerIndex].Split(',');
-        var column = Array.FindIndex(
-            header,
-            static entry => entry.Equals("Avg_ns", StringComparison.OrdinalIgnoreCase)
-        );
-        if (column < 0)
-            throw new InvalidOperationException("the CSV header has no Avg_ns column");
-
-        for (var index = headerIndex + 1; index < lines.Length; index++)
-        {
-            var cells = lines[index].Split(',');
-            if (
-                cells.Length > column
-                && cells[0].Trim('"', '\'').Equals(resultName, StringComparison.Ordinal)
-            )
-            {
-                return cells[column].Trim('"', '\'');
-            }
-        }
-
-        throw new InvalidOperationException($"the CSV output has no row named {resultName}");
     }
 }

@@ -94,6 +94,103 @@ public class ComparisonMeasurementTests
     }
 
     /// <summary>
+    /// G5 §3.2 #4 — the 5% dead band is its own gate and needs its own guard: with
+    /// 10 interleaved rounds the paired median alone keeps a self-comparison
+    /// neutral, so removing the dead band kept every existing test green.
+    /// <para>
+    /// A 2% difference is inside the noise of one round: <c>Inconclusive</c>, not
+    /// "faster". The ratios are synthetic, so this cannot be satisfied by a lucky
+    /// measurement.
+    /// </para>
+    /// <para>Expected with <c>DeadBand = 0</c>: <b>RED</b> — 1.02 &gt; 1.0 with an
+    /// interval of [1.020, 1.020] reads as <see cref="ComparisonOutcome.Faster"/>.</para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch0")]
+    [Property("Batch0", "0.2/dead band")]
+    public async Task DeadBand_TwoPercentDifference_IsNeutral()
+    {
+        var (speedup, interval) = ComparisonMeasurement.PairedSpeedup(Uniform(1.02));
+        var comparison = Comparison(speedup, interval);
+
+        Batch0Support.Log(
+            $"median=1.02: speedup={speedup:F4} interval={interval?.ToString() ?? "<none>"} "
+                + $"outcome={comparison.Outcome}"
+        );
+
+        await Assert.That(speedup).IsEqualTo(1.02);
+        await Assert.That(comparison.IsFasterKnown).IsTrue();
+        await Assert.That(comparison.IsFaster).IsFalse();
+        await Assert.That(comparison.Outcome).IsEqualTo(ComparisonOutcome.Inconclusive);
+    }
+
+    /// <summary>
+    /// G5 §3.2 #4, positive half — the dead band must not swallow a real difference.
+    /// A 50% faster candidate is outside the band with an interval that excludes
+    /// parity, so it must still be reported as faster (this is what keeps the guard
+    /// from being satisfied by "never report a difference").
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch0")]
+    [Property("Batch0", "0.2/dead band (positive control)")]
+    public async Task DeadBand_FiftyPercentDifference_IsFaster()
+    {
+        var (speedup, interval) = ComparisonMeasurement.PairedSpeedup(Uniform(1.5));
+        var comparison = Comparison(speedup, interval);
+
+        Batch0Support.Log(
+            $"median=1.50: speedup={speedup:F4} interval={interval?.ToString() ?? "<none>"} "
+                + $"outcome={comparison.Outcome}"
+        );
+
+        await Assert.That(comparison.Outcome).IsEqualTo(ComparisonOutcome.Faster);
+        await Assert.That(comparison.IsFaster).IsTrue();
+    }
+
+    /// <summary>
+    /// G5 §3.2 #5 — the "interval excludes parity" condition is a second, separate
+    /// gate. A point estimate 6% above parity (outside the 5% dead band) whose
+    /// interval still contains 1.0 must not become a verdict.
+    /// <para>Ratios: one round at 0.90 and one at 0.95 drag the 2nd order statistic
+    /// below parity, the remaining eight sit at 1.06, so the median is 1.06 while
+    /// the 95% interval is [0.95, 1.06].</para>
+    /// <para>Expected with the <c>Low &gt; 1</c> / <c>High &lt; 1</c> conditions
+    /// removed from <c>Classify</c>: <b>RED</b> — 1.06 &gt; 1.05 is reported as
+    /// faster even though parity is still inside the interval.</para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch0")]
+    [Property("Batch0", "0.2/interval")]
+    public async Task Interval_ContainingParity_HoldsTheVerdictBack()
+    {
+        double[] ratios = [0.90, 0.95, 1.06, 1.06, 1.06, 1.06, 1.06, 1.06, 1.06, 1.06];
+
+        var (speedup, interval) = ComparisonMeasurement.PairedSpeedup(ratios);
+        var comparison = Comparison(speedup, interval);
+
+        Batch0Support.Log(
+            $"median=1.06, parity inside: speedup={speedup:F4} "
+                + $"interval={interval?.ToString() ?? "<none>"} outcome={comparison.Outcome}"
+        );
+
+        await Assert.That(speedup).IsGreaterThan(1.05);
+        await Assert.That(interval).IsNotNull();
+        await Assert.That(interval!.Value.Low).IsLessThanOrEqualTo(1.0);
+        await Assert.That(comparison.IsFaster).IsFalse();
+        await Assert.That(comparison.Outcome).IsEqualTo(ComparisonOutcome.Inconclusive);
+    }
+
+    /// <summary>Ten identical ratios — the shape a perfectly consistent comparison produces.</summary>
+    private static double[] Uniform(double ratio)
+    {
+        var ratios = new double[ComparisonMeasurement.Rounds];
+        for (var i = 0; i < ratios.Length; i++)
+            ratios[i] = ratio;
+
+        return ratios;
+    }
+
+    /// <summary>
     /// Builds 10 per-round ratios: the first <paramref name="usable"/> carry
     /// <paramref name="ratio"/>, the rest are <see cref="double.NaN"/> (a round in
     /// which the candidate lane measured nothing).

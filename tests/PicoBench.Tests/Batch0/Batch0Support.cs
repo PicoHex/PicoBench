@@ -211,6 +211,46 @@ internal static class Batch0Support
         return column < cells.Length ? cells[column].Trim('"', '\'') : "<csv row too short>";
     }
 
+    /// <summary>
+    /// Returns the value of <paramref name="column"/> in the CSV row named
+    /// <paramref name="rowName"/>.
+    /// <para>
+    /// Throws when the header, the column or the row is missing: a helper that
+    /// returned a placeholder string would let a numeric assertion pass on nothing
+    /// at all.
+    /// </para>
+    /// </summary>
+    internal static string ReadCsvCell(string csv, string rowName, string column)
+    {
+        var lines = csv.Replace("\r\n", "\n").Split('\n');
+        var headerIndex = Array.FindIndex(
+            lines,
+            static line => line.StartsWith("Name,", StringComparison.Ordinal)
+        );
+        if (headerIndex < 0)
+            throw new InvalidOperationException("the CSV output has no Name, header row");
+
+        var header = lines[headerIndex].Split(',');
+        var columnIndex = Array.FindIndex(
+            header,
+            cell => cell.Equals(column, StringComparison.OrdinalIgnoreCase)
+        );
+        if (columnIndex < 0)
+            throw new InvalidOperationException("the CSV header has no " + column + " column");
+
+        for (var index = headerIndex + 1; index < lines.Length; index++)
+        {
+            var cells = lines[index].Split(',');
+            if (cells.Length > columnIndex && cells[0].Trim(CsvQuotes).Equals(rowName, StringComparison.Ordinal))
+                return cells[columnIndex].Trim(CsvQuotes);
+        }
+
+        throw new InvalidOperationException("the CSV output has no row named " + rowName);
+    }
+
+    /// <summary>Quote characters a CSV cell may carry; stripped before comparing names.</summary>
+    private static readonly char[] CsvQuotes = [(char)34, (char)39];
+
     /// <summary>The first line of <paramref name="text"/> that mentions <paramref name="needle"/>.</summary>
     private static string FindRowMentioning(string text, string needle)
     {
