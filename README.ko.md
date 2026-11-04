@@ -402,7 +402,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 열 계약
 
-`CsvFormatter`는 헤더 행을 쓰고 이어서 데이터 행을 씁니다. 스위트는 `#` 주석 행(`# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`)과 두 섹션 `# Results`, `# Comparisons`를 추가하며, **각 섹션은 자체 헤더 행**을 가집니다. 따라서 파일에는 헤더 행이 둘 이상 있으므로 `pandas.read_csv(path, comment='#')`는 주석을 건너뛰지만 두 섹션은 직접 분할해야 합니다.
+`CsvFormatter`는 헤더 행을 쓰고 이어서 데이터 행을 씁니다. 스위트는 `#` 주석 행(`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`)과 두 섹션 `# Results`, `# Comparisons`를 추가하며, **각 섹션은 자체 헤더 행**을 가집니다. 따라서 파일에는 헤더 행이 둘 이상 있으므로 `pandas.read_csv(path, comment='#')`는 주석을 건너뛰지만 두 섹션은 직접 분할해야 합니다. 결과 파일의 첫 행이 이 `# Schema: v2; …` 계약 행이며, `#`로 시작하는 모든 행은 파서가 건너뛰어야 하는 주석입니다.
 
 결과 열(이 순서, 기본 옵션. `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles`, `IncludeTimestamp`를 `false`로 하면 해당 열이 사라집니다):
 
@@ -432,7 +432,14 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 비교 열: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. 각 비교는 두 행(후보가 먼저, 기준선이 다음)을 쓰고 `Speedup`은 후보 행에만 채워집니다. 비교 셀은 현재 단순 숫자 포맷터를 거치므로 결과 테이블의 `N/A`/`<limit`가 거기에는 나타나지 않습니다.
 
-> 이런 상태를 선언하는 기계 판독 가능한 `# Schema:` 헤더 행은 별도의 Batch 0 후속 작업으로 추적되고 있습니다. 그것이 반영되기 전까지는 위 표가 계약이며, 스위트 파일은 아직 스키마 버전을 식별하지 않습니다.
+`# Schema:` 행은 이미 반영되었고 **파일의 첫 행**입니다. 결과 파일(그리고 결과가 있는 스위트 파일)은 뒤따르는 열을 설명하는 계약 행으로 시작하며, 비교 섹션은 `# Comparisons` 바로 앞에 자체 계약 행을 씁니다:
+
+```
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+```
+
+`v2`는 Batch 0의 형태 — 위의 작업당 세 가지 셀 상태에 `GCApproximate`를 더한 것입니다. `columns=` 목록은 실제로 쓰이는 헤더 행에서 파생되므로 위 표와 어긋날 수 없고, 옵션으로 빠진 열을 나열하지도 않습니다. `section=`이 두 계약 행을 구분합니다. 파서는 `#`로 시작하는 모든 행을 건너뛰고, 열 순서는 하드코딩하지 말고 `columns=` 목록에서 읽어야 합니다.
 
 ---
 

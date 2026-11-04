@@ -357,7 +357,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### Контракт колонок CSV
 
-`CsvFormatter` записывает строку заголовка, затем строки данных; для набора добавляются строки комментариев `#` (`# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) и два раздела, `# Results` и `# Comparisons`, **каждый со своей строкой заголовка**. Поэтому в файле больше одной строки заголовка — `pandas.read_csv(path, comment='#')` пропускает комментарии, но два раздела нужно разделять самостоятельно.
+`CsvFormatter` записывает строку заголовка, затем строки данных; для набора добавляются строки комментариев `#` (`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) и два раздела, `# Results` и `# Comparisons`, **каждый со своей строкой заголовка**. Поэтому в файле больше одной строки заголовка — `pandas.read_csv(path, comment='#')` пропускает комментарии, но два раздела нужно разделять самостоятельно. Первая строка файла результатов — эта строка контракта `# Schema: v2; …`, а любая строка, начинающаяся с `#`, является комментарием, который парсер должен пропускать.
 
 Колонки результатов в этом порядке (параметры по умолчанию; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` и `IncludeTimestamp` при значении `false` убирают свои колонки):
 
@@ -387,7 +387,14 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 Колонки сравнений: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Каждое сравнение пишет две строки — сначала кандидат, затем базовый вариант — и `Speedup` заполняется только в строке кандидата. Ячейки сравнений сейчас проходят через обычный форматтер чисел, поэтому `N/A`/`<limit` из таблицы результатов там не появляются.
 
-> Машиночитаемая строка заголовка `# Schema:`, объявляющая эти состояния, отслеживается как отдельное продолжение Batch 0. Пока она не появится, контрактом является приведённая выше таблица, и файл набора пока не указывает версию своей схемы.
+Строка `# Schema:` уже реализована и стоит **в первой строке файла**: файл результатов (и файл набора с результатами) начинается с контракта, описывающего следующие ниже колонки, а раздел сравнений пишет свою строку контракта непосредственно перед `# Comparisons`:
+
+```
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+```
+
+`v2` — это форма Batch 0: три состояния ячейки на операцию, описанные выше, плюс `GCApproximate`. Список `columns=` выводится из реально записанной строки заголовка, поэтому он не может разойтись с таблицами выше и никогда не называет колонку, убранную параметром; `section=` разделяет две строки контракта. Парсер должен пропускать все строки, начинающиеся с `#`, и брать порядок колонок из списка `columns=`, а не задавать его в коде.
 
 ---
 

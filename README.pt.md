@@ -359,7 +359,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### Contrato de Colunas do CSV
 
-`CsvFormatter` escreve uma linha de cabeçalho e depois linhas de dados; uma suite adiciona linhas de comentário `#` (`# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) e duas seções, `# Results` e `# Comparisons`, **cada uma com sua própria linha de cabeçalho**. Portanto, um arquivo tem mais de uma linha de cabeçalho — `pandas.read_csv(path, comment='#')` pula os comentários, mas você precisa separar as duas seções sozinho.
+`CsvFormatter` escreve uma linha de cabeçalho e depois linhas de dados; uma suite adiciona linhas de comentário `#` (`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) e duas seções, `# Results` e `# Comparisons`, **cada uma com sua própria linha de cabeçalho**. Portanto, um arquivo tem mais de uma linha de cabeçalho — `pandas.read_csv(path, comment='#')` pula os comentários, mas você precisa separar as duas seções sozinho. A primeira linha de um arquivo de resultados é essa linha de contrato `# Schema: v2; …`, e toda linha que comece com `#` é um comentário que o leitor deve pular.
 
 Colunas de resultados, nesta ordem (opções padrão; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` e `IncludeTimestamp` removem suas colunas quando `false`):
 
@@ -389,7 +389,14 @@ Duas consequências para consumidores: por causa de `<0.02`, uma coluna por oper
 
 Colunas de comparações: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Cada comparação escreve duas linhas — primeiro o candidato, depois a baseline — e `Speedup` é preenchido apenas na linha do candidato. Atualmente as células de comparação passam pelo formatador de números simples, então `N/A`/`<limit` da tabela de resultados não aparecem lá.
 
-> Uma linha de cabeçalho `# Schema:` legível por máquina declarando esses estados está registrada como um acompanhamento separado do Batch 0. Até que ela chegue, a tabela acima é o contrato, e um arquivo de suite ainda não identifica sua versão de esquema.
+A linha `# Schema:` já está implementada e é a **primeira linha do arquivo**: um arquivo de resultados (e um arquivo de suite com resultados) começa com o contrato que descreve as colunas abaixo, e uma seção de comparações escreve sua própria linha de contrato logo antes de `# Comparisons`:
+
+```
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+```
+
+`v2` é a forma do Batch 0 — os três estados de célula por operação acima mais `GCApproximate`. A lista `columns=` é derivada da linha de cabeçalho realmente escrita, então não pode divergir das tabelas acima e nunca nomeia uma coluna que uma opção removeu; `section=` separa as duas linhas de contrato. Um leitor deve pular toda linha que comece com `#` e obter a ordem das colunas da lista `columns=` em vez de codificá-la.
 
 ---
 

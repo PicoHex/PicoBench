@@ -404,7 +404,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV Column Contract
 
-`CsvFormatter` writes a header row, then data rows; a suite adds `#` comment lines (`# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) and two sections, `# Results` and `# Comparisons`, **each with its own header row**. A file therefore has more than one header line — `pandas.read_csv(path, comment='#')` skips the comments but you must split the two sections yourself.
+`CsvFormatter` writes a header row, then data rows; a suite adds `#` comment lines (`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) and two sections, `# Results` and `# Comparisons`, **each with its own header row**. A file therefore has more than one header line — `pandas.read_csv(path, comment='#')` skips the comments but you must split the two sections yourself. The first line of a results file is that `# Schema: v2; …` contract line, and every line starting with `#` is a comment a parser must skip.
 
 Results columns, in this order (default options; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` and `IncludeTimestamp` remove their columns when `false`):
 
@@ -434,7 +434,14 @@ Two consequences for consumers: because of `<0.02` a per-operation column is **n
 
 Comparisons columns: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Each comparison writes two rows — candidate first, then baseline — and `Speedup` is filled only on the candidate row. The comparison cells currently go through the plain number formatter, so `N/A`/`<limit` from the results table do not appear there.
 
-> A machine-readable `# Schema:` header line declaring these states is tracked as a separate Batch 0 follow-up. Until it lands, the table above is the contract, and a suite file does not yet identify its schema version.
+The `# Schema:` line has landed, and it is the plain **first line of the file**: a results file (and a suite file that has results) opens with the contract that describes the columns below it, and a comparisons section writes its own contract line just before `# Comparisons`:
+
+```
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+```
+
+`v2` is the Batch 0 shape — the three per-operation cell states above plus `GCApproximate`. The `columns=` list is derived from the header row that is really written, so it cannot drift from the tables above and never names a column an option removed; `section=` separates the two contract lines. A parser must skip every line that starts with `#` and read the column order from the `columns=` list instead of hard-coding it.
 
 ---
 

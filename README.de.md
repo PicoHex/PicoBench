@@ -359,7 +359,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV-Spaltenvertrag
 
-`CsvFormatter` schreibt eine Kopfzeile und dann Datenzeilen; eine Suite fügt `#`-Kommentarzeilen hinzu (`# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) sowie zwei Abschnitte, `# Results` und `# Comparisons`, **jeweils mit eigener Kopfzeile**. Eine Datei hat daher mehr als eine Kopfzeile — `pandas.read_csv(path, comment='#')` überspringt die Kommentare, aber Sie müssen die beiden Abschnitte selbst trennen.
+`CsvFormatter` schreibt eine Kopfzeile und dann Datenzeilen; eine Suite fügt `#`-Kommentarzeilen hinzu (`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) sowie zwei Abschnitte, `# Results` und `# Comparisons`, **jeweils mit eigener Kopfzeile**. Eine Datei hat daher mehr als eine Kopfzeile — `pandas.read_csv(path, comment='#')` überspringt die Kommentare, aber Sie müssen die beiden Abschnitte selbst trennen. Die erste Zeile einer Ergebnisdatei ist diese Vertragszeile `# Schema: v2; …`, und jede mit `#` beginnende Zeile ist ein Kommentar, den ein Parser überspringen muss.
 
 Ergebnisspalten, in dieser Reihenfolge (Standardoptionen; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` und `IncludeTimestamp` entfernen ihre Spalten bei `false`):
 
@@ -389,7 +389,14 @@ Zwei Konsequenzen für Konsumenten: wegen `<0.02` ist eine Spalte pro Vorgang **
 
 Vergleichsspalten: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Jeder Vergleich schreibt zwei Zeilen — zuerst den Kandidaten, dann die Baseline — und `Speedup` wird nur in der Kandidatenzeile gefüllt. Die Vergleichszellen laufen derzeit durch den einfachen Zahlenformatierer, daher erscheinen `N/A`/`<limit` aus der Ergebnistabelle dort nicht.
 
-> Eine maschinenlesbare Kopfzeile `# Schema:`, die diese Zustände deklariert, wird als separate Batch-0-Follow-up-Aufgabe verfolgt. Bis sie vorliegt, ist die obige Tabelle der Vertrag, und eine Suite-Datei identifiziert ihre Schema-Version noch nicht.
+Die `# Schema:`-Zeile ist umgesetzt und steht **in der ersten Zeile der Datei**: eine Ergebnisdatei (und eine Suite-Datei mit Ergebnissen) beginnt mit dem Vertrag, der die darunter stehenden Spalten beschreibt, und ein Vergleichsabschnitt schreibt seine eigene Vertragszeile direkt vor `# Comparisons`:
+
+```
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+```
+
+`v2` ist die Batch-0-Form — die drei Zellzustände pro Vorgang oben plus `GCApproximate`. Die Liste `columns=` wird aus der tatsächlich geschriebenen Kopfzeile abgeleitet, kann also nicht von den obigen Tabellen abweichen und nennt nie eine Spalte, die eine Option entfernt hat; `section=` trennt die beiden Vertragszeilen. Ein Parser muss jede Zeile überspringen, die mit `#` beginnt, und die Spaltenreihenfolge aus der `columns=`-Liste lesen, statt sie fest zu verdrahten.
 
 ---
 

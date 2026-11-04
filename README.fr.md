@@ -359,7 +359,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### Contrat des Colonnes CSV
 
-`CsvFormatter` écrit une ligne d'en-tête, puis des lignes de données ; une suite ajoute des lignes de commentaire `#` (`# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) et deux sections, `# Results` et `# Comparisons`, **chacune avec sa propre ligne d'en-tête**. Un fichier a donc plus d'une ligne d'en-tête — `pandas.read_csv(path, comment='#')` ignore les commentaires, mais vous devez découper vous-même les deux sections.
+`CsvFormatter` écrit une ligne d'en-tête, puis des lignes de données ; une suite ajoute des lignes de commentaire `#` (`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) et deux sections, `# Results` et `# Comparisons`, **chacune avec sa propre ligne d'en-tête**. Un fichier a donc plus d'une ligne d'en-tête — `pandas.read_csv(path, comment='#')` ignore les commentaires, mais vous devez découper vous-même les deux sections. La première ligne d'un fichier de résultats est cette ligne de contrat `# Schema: v2; …`, et toute ligne commençant par `#` est un commentaire que le lecteur doit ignorer.
 
 Colonnes de résultats, dans cet ordre (options par défaut ; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` et `IncludeTimestamp` suppriment leurs colonnes quand ils valent `false`) :
 
@@ -389,7 +389,14 @@ Deux conséquences pour les consommateurs : à cause de `<0.02`, une colonne par
 
 Colonnes de comparaisons : `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Chaque comparaison écrit deux lignes — le candidat d'abord, puis la base — et `Speedup` n'est renseigné que sur la ligne du candidat. Les cellules de comparaison passent actuellement par le formateur de nombres simple, donc `N/A`/`<limit` du tableau de résultats n'y apparaissent pas.
 
-> Une ligne d'en-tête `# Schema:` lisible par machine, déclarant ces états, est suivie comme une tâche de suivi Batch 0 distincte. Tant qu'elle n'est pas livrée, le tableau ci-dessus est le contrat, et un fichier de suite n'identifie pas encore la version de son schéma.
+La ligne `# Schema:` est livrée et occupe la **première ligne du fichier** : un fichier de résultats (et un fichier de suite qui contient des résultats) commence par le contrat qui décrit les colonnes qui suivent, et une section de comparaisons écrit sa propre ligne de contrat juste avant `# Comparisons` :
+
+```
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+```
+
+`v2` est la forme du Batch 0 — les trois états de cellule par opération ci-dessus plus `GCApproximate`. La liste `columns=` est dérivée de la ligne d'en-tête réellement écrite : elle ne peut donc pas dériver des tableaux ci-dessus et ne nomme jamais une colonne qu'une option a retirée ; `section=` distingue les deux lignes de contrat. Un lecteur doit ignorer toute ligne commençant par `#` et lire l'ordre des colonnes dans la liste `columns=` au lieu de le coder en dur.
 
 ---
 

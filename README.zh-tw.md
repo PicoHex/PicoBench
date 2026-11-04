@@ -359,7 +359,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 欄契約
 
-`CsvFormatter` 先寫一行表頭，再寫資料列；套件會額外寫入 `#` 註解行（`# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`）以及兩個區段 `# Results` 與 `# Comparisons`，**每個區段都有自己的表頭行**。因此一個檔案中存在不止一行表頭 —— `pandas.read_csv(path, comment='#')` 會跳過註解行，但兩個區段需要你自己拆分。
+`CsvFormatter` 先寫一行表頭，再寫資料列；套件會額外寫入 `#` 註解行（`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`）以及兩個區段 `# Results` 與 `# Comparisons`，**每個區段都有自己的表頭行**。因此一個檔案中存在不止一行表頭 —— `pandas.read_csv(path, comment='#')` 會跳過註解行，但兩個區段需要你自己拆分。結果檔案的首行就是這條 `# Schema: v2; …` 契約行，任何以 `#` 開頭的行都是註解，解析器必須跳過。
 
 結果欄，按以下順序（預設選項；`IncludePercentiles`、`IncludeGcInfo`、`IncludeCpuCycles` 與 `IncludeTimestamp` 為 `false` 時會移除各自的欄）：
 
@@ -389,7 +389,14 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 比較欄：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`。每個比較會寫出兩列 —— 候選在前，基準在後 —— 並且 `Speedup` 只填在候選列。比較的儲存格目前走普通數字格式化器，因此結果表中的 `N/A`/`<limit` 不會出現在那裡。
 
-> 宣告這些狀態、機器可讀的 `# Schema:` 表頭行被作為單獨的 Batch 0 後續事項跟蹤。在該項落地之前，上表就是契約，並且套件檔案還無法標識自己的 schema 版本。
+`# Schema:` 行已經落地，並且就是**檔案首行**：結果檔案（以及含結果的套件檔案）以這段描述後續欄位的契約行開頭，比較區段則在 `# Comparisons` 之前再寫一條自己的契約行：
+
+```
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+```
+
+`v2` 即 Batch 0 的形態 —— 上文的每操作三態加上 `GCApproximate`。`columns=` 清單由實際寫出的表頭行推導，因此不會與上面的表偏離，也不會列出被選項關掉的欄；`section=` 用來區分兩條契約行。解析器必須跳過所有以 `#` 開頭的行，並從 `columns=` 清單讀取欄序，而不是硬編碼。
 
 ---
 
