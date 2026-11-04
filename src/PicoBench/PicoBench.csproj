@@ -63,6 +63,15 @@
       Visible="false"
     />
 
+    <!-- Imported after the project body (unlike the props), so it can dedupe
+         generator analyzers the consumer declared itself (B3-M2). -->
+    <None
+      Include="..\buildTransitive\PicoBench.targets"
+      Pack="true"
+      PackagePath="buildTransitive/PicoBench.targets"
+      Visible="false"
+    />
+
     <!-- Include the root README in the NuGet package -->
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
