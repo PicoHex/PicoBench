@@ -137,6 +137,21 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true
     );
 
+    /// <summary>
+    /// Batch 1 · 1.2 (B3-C3). An explicit interface implementation's symbol name
+    /// is <c>IThing.Do</c>, which cannot be used to call the method — the
+    /// generated code used to say <c>this.IThing.Do()</c> (CS1003/CS1061) with no
+    /// diagnostic at all.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ExplicitInterfaceImplementationNotSupported = new(
+        id: "PBGEN019",
+        title: "Explicit interface implementation cannot be benchmarked",
+        messageFormat: "Explicit interface implementation '{0}' cannot be a [Benchmark] or lifecycle method; implement the member implicitly and call that method instead",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
     public static readonly DiagnosticDescriptor EmptyParamsValues = new(
         id: "PBGEN016",
         title: "Empty [Params] value set",

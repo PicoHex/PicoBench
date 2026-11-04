@@ -282,6 +282,28 @@ internal static class BenchmarkClassAnalyzer
             || attrNames.Contains(IterationSetupAttributeName)
             || attrNames.Contains(IterationCleanupAttributeName);
 
+        // Batch 1 · 1.2 (B3-C3). An explicit interface implementation's symbol
+        // name is "IThing.Do", which is not an identifier: the emitter used to
+        // paste it into a local name and a call site (`this.IThing.Do()`), so a
+        // legal C# class failed to compile with CS1003/CS1061 and the generator
+        // said nothing. Reporting the shape is honest; calling it through the
+        // interface would put a cast in every emission path (sync, async,
+        // per-iteration setup/teardown) and change what is measured.
+        if ((isBenchmark || isLifecycle) && method.ExplicitInterfaceImplementations.Length > 0)
+        {
+            if (isBenchmark)
+                hasBenchmarkDeclarations = true;
+
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.ExplicitInterfaceImplementationNotSupported,
+                    GetAttributeLocation(conflictingAttr!, ct),
+                    method.Name
+                )
+            );
+            return;
+        }
+
         if (isBenchmark && isLifecycle)
         {
             diagnostics.Add(
