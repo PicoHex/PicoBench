@@ -50,8 +50,11 @@ distribution-free 95% interval.
   comparison, not a ratio of means. It is `NaN` (with `ImprovementPercent` also
   `NaN`) when no round produced a usable ratio — a 0/0 round is exactly that
   case: `NaN`, **not** `1.0`. Fewer than **six** usable paired rounds also give
-  `NaN` and no interval, because below that count the interval cannot cover the
-  median with 95% confidence.
+  `NaN` and no interval, because below that count the sign test cannot claim 95%
+  coverage (six is the first count that does: 96.875%). That is not merely a
+  missing interval: a comparison with `usable < 6` reports
+  `Outcome == Unknown`, hence `IsFasterKnown == false` **and** `IsFaster == false`
+  — it is "not measurable", not "not faster".
 - `ComparisonResult.IsFaster` — **narrower than before**. It is `true` only for
   `Outcome == Faster`, which requires both leaving the **5% dead band** *and*,
   when an interval exists, that interval excluding 1 (parity). A 3% difference is no
@@ -200,6 +203,14 @@ both lines are in the README (*CSV Column Contract*) and in the file itself.
   GC not collected.
 - Per-operation cells have **three states**: a number in nanoseconds (invariant
   culture), `<limit` (upper bound, at the harness floor) or `N/A` (not measured).
+- `Speedup` (comparisons section, candidate row only) is a **ratio number** in
+  the invariant `G` form (`2.5`, `2`), `Infinity` for an infinite ratio (∞ — the
+  candidate measured effectively zero, reachable on a comparison built from two
+  independent results, and reported as `Unknown`), or `NaN` when no round
+  produced a usable ratio (a 0/0 round, or any direct comparison with fewer than
+  six usable paired rounds — see §1). It is **not** `N/A`: that state belongs to a
+  per-operation cell the run did not measure, and the baseline row leaves this
+  cell empty.
 - `CpuCycles` may be `~count`; GC counters may be `N/A`.
 - New comment lines exist and must be skipped: `# Schema:` (per section) and, when
   the suite is noisy (RSD ≥ 10%), `# NoiseNote: high variance …`.
@@ -214,9 +225,9 @@ both lines are in the README (*CSV Column Contract*) and in the file itself.
    position 17, so a positional reader that used `SampleCount` /
    `IterationsPerSample` must shift by one; name-based readers are unaffected.
 3. Expect `<limit` and `N/A` in every per-operation column (so pandas infers
-   `object` for those columns) and `~` in `CpuCycles` — in whichever section a row
-   sits; the schema line above the row is what tells you which states are
-   possible.
+   `object` for those columns), `~` in `CpuCycles` and `NaN` / `Infinity` in
+   `Speedup` — in whichever section a row sits; the schema line above the row is
+   what tells you which states are possible.
 4. Keep the schema version (`v2`) with the data you archive, so a future v3 can be
    told apart from today's files.
 
