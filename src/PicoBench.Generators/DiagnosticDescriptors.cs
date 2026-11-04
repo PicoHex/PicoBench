@@ -146,6 +146,20 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true
     );
 
+    /// <summary>
+    /// Batch 1 · 1.1 (B3-C2). One class failed, the rest of the project must not
+    /// notice: this replaces the <c>CS8785</c> that used to throw the whole run's
+    /// generated output away.
+    /// </summary>
+    public static readonly DiagnosticDescriptor SourceGenerationFailed = new(
+        id: "PBGEN018",
+        title: "Benchmark class source generation failed",
+        messageFormat: "Source generation for benchmark class '{0}' failed: {1} (other benchmark classes are still generated)",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
     public static readonly DiagnosticDescriptor InheritedBenchmarkMembers = new(
         id: "PBGEN017",
         title: "Benchmark attributes on base types are ignored",

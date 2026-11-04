@@ -11,7 +11,46 @@ internal static class BenchmarkClassAnalyzer
     private const string IterationCleanupAttributeName = "PicoBench.IterationCleanupAttribute";
     private const string ParamsAttributeName = "PicoBench.ParamsAttribute";
 
+    /// <summary>
+    /// Analyses one <c>[BenchmarkClass]</c> target.
+    /// <para>
+    /// Batch 1 · 1.1 (B3-C2): this is the transform stage, and an exception
+    /// thrown here is <b>not</b> inside <c>RegisterSourceOutput</c> — it aborts
+    /// the whole generator run (<c>CS8785</c>) and every class in the project
+    /// silently loses its <c>.g.cs</c>. <c>[Params(new[] { … })]</c> is a real
+    /// trigger: reading <c>TypedConstant.Value</c> on an array throws. So the
+    /// transform is isolated too, and a failure here becomes one diagnostic for
+    /// this one class.
+    /// </para>
+    /// </summary>
     internal static GeneratorAnalysisResult AnalyzeTarget(
+        GeneratorAttributeSyntaxContext ctx,
+        CancellationToken ct
+    )
+    {
+        try
+        {
+            return AnalyzeTargetCore(ctx, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var name = ctx.TargetSymbol?.Name ?? "<unknown>";
+            return new GeneratorAnalysisResult(
+                null,
+                ImmutableArray.Create(
+                    Diagnostic.Create(
+                        DiagnosticDescriptors.SourceGenerationFailed,
+                        GetSymbolLocation(ctx.TargetSymbol),
+                        name,
+                        DescribeException(ex)
+                    )
+                ),
+                GetSymbolLocation(ctx.TargetSymbol)
+            );
+        }
+    }
+
+    private static GeneratorAnalysisResult AnalyzeTargetCore(
         GeneratorAttributeSyntaxContext ctx,
         CancellationToken ct
     )
@@ -179,7 +218,11 @@ internal static class BenchmarkClassAnalyzer
         }
 
         if (diagnostics.Any(static d => d.Severity == DiagnosticSeverity.Error))
-            return new GeneratorAnalysisResult(null, diagnostics.ToImmutableArray());
+            return new GeneratorAnalysisResult(
+                null,
+                diagnostics.ToImmutableArray(),
+                GetTypeLocation(typeSymbol)
+            );
 
         var isAsync =
             (globalSetup?.IsAsync ?? false)
@@ -203,7 +246,8 @@ internal static class BenchmarkClassAnalyzer
                 Methods = methods.ToImmutable(),
                 ParamsProperties = paramsProps.ToImmutable(),
             },
-            diagnostics.ToImmutableArray()
+            diagnostics.ToImmutableArray(),
+            GetTypeLocation(typeSymbol)
         );
     }
 
@@ -674,6 +718,35 @@ internal static class BenchmarkClassAnalyzer
             ?? Location.None;
     }
 
+    private static Location GetSymbolLocation(ISymbol? symbol)
+    {
+        if (symbol is null)
+            return Location.None;
+
+        return symbol.Locations.FirstOrDefault(static location => location.IsInSource)
+            ?? Location.None;
+    }
+
+    /// <summary>
+    /// One line, bounded length: exception messages become user-facing diagnostic
+    /// text and RS1032 rejects multi-line messages.
+    /// </summary>
+    private static string DescribeException(Exception exception)
+    {
+        var message = exception.Message;
+        for (var i = 0; i < message.Length; i++)
+        {
+            if (message[i] is '\r' or '\n')
+            {
+                message = message.Substring(0, i);
+                break;
+            }
+        }
+
+        const int maxLength = 240;
+        return message.Length <= maxLength ? message : message.Substring(0, maxLength) + "…";
+    }
+
     private static Location GetAttributeLocation(AttributeData attr, CancellationToken ct)
     {
         return attr.ApplicationSyntaxReference?.GetSyntax(ct).GetLocation() ?? Location.None;
@@ -682,12 +755,20 @@ internal static class BenchmarkClassAnalyzer
 
 internal sealed class GeneratorAnalysisResult(
     BenchmarkClassModel? model,
-    ImmutableArray<Diagnostic> diagnostics
+    ImmutableArray<Diagnostic> diagnostics,
+    Location? location = null
 )
 {
     public BenchmarkClassModel? Model { get; } = model;
 
     public ImmutableArray<Diagnostic> Diagnostics { get; } = diagnostics;
+
+    /// <summary>
+    /// Where the benchmark class lives, so an output-stage failure (Batch 1 ·
+    /// 1.1) can still point the user at their own file instead of at
+    /// "generated code". <see cref="Location.None"/> when unknown.
+    /// </summary>
+    public Location Location { get; } = location ?? Location.None;
 
     public bool HasErrors => Diagnostics.Any(static d => d.Severity == DiagnosticSeverity.Error);
 }
