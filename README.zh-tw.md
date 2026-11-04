@@ -256,7 +256,7 @@ PicoBench 採用進程內執行，CLR 設定會影響絕對值：
 |---|---|
 | `Statistics.OverheadNs` | 測試框架自身的每操作開銷（委派分發、迴圈簿記、時鐘與計數器讀取）中已實測並扣除的部分。非同步執行為 `0`，其開銷不做扣除 |
 | `Statistics.ResolutionLimitNanoseconds` | 本次執行能解析的最小每操作取值：一個時鐘刻度分攤到各次迭代，或所扣除開銷的逐次執行離散程度，取二者中較大者 |
-| `Statistics.ResolutionLimited` | `Avg` 等於或低於該上限，或至少有一個樣本完全無法測量。格式化器會把每操作儲存格列印為上界（Console 與 CSV 中為 `<limit`，Markdown 與 HTML 中為 `[below resolution]`），而不是一個數值 |
+| `Statistics.ResolutionLimited` | `Avg` 等於或低於該上限，或至少有一個樣本完全無法測量。格式化器會把每操作儲存格列印為上界（四種格式均輸出 `<limit`；Console 另加 `[below resolution]` 標記，Markdown 與 HTML 加 `(below resolution)`），而不是一個數值 |
 | `Statistics.Unmeasured` / `UnmeasuredSampleCount` | 計時源無法推進的樣本數（`CpuOnly` 的零刻度）。這些儲存格列印 `N/A`，絕不列印 `0.000` |
 
 因此，對亞奈秒結果的誠實解讀是 **「低於 `<limit` ns」**，而不是「0.02 ns」：該值並未被測量，而是被界定，並且該界定涵蓋時鐘量化與所扣除開銷的離散程度（殘差被鉗制在零，因此它是測試框架能解析的下限，而不是真實開銷更小的證明）。還有兩點不對稱值得記住：測試框架開銷扣除僅對同步基準實作（非同步的每操作取值仍攜帶其每樣本包裝開銷），而 GC 位元組完全未被測量 —— 只有回收計數，且按進程，在非同步路徑上是近似的。
