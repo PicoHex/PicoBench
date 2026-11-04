@@ -143,6 +143,21 @@ internal static class DiagnosticDescriptors
     /// generated code used to say <c>this.IThing.Do()</c> (CS1003/CS1061) with no
     /// diagnostic at all.
     /// </summary>
+    /// <summary>
+    /// Batch 1 · 1.6 (B3-H2). A <c>file</c> type is only visible in its own file,
+    /// so the generated <c>partial</c> half cannot see its members: the consumer
+    /// used to get <c>CS1061</c> on <c>.g.cs</c> for a class that is perfectly
+    /// legal C#.
+    /// </summary>
+    public static readonly DiagnosticDescriptor FileLocalBenchmarkClass = new(
+        id: "PBGEN020",
+        title: "File-local benchmark class",
+        messageFormat: "Benchmark class '{0}' is file-local; a file-local type cannot be extended from generated code - declare it as a non-file partial class",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
     public static readonly DiagnosticDescriptor ExplicitInterfaceImplementationNotSupported = new(
         id: "PBGEN019",
         title: "Explicit interface implementation cannot be benchmarked",

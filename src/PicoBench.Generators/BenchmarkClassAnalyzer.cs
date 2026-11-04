@@ -62,12 +62,12 @@ internal static class BenchmarkClassAnalyzer
 
         ct.ThrowIfCancellationRequested();
 
-        if (!IsPartial(typeSymbol))
+        if (!IsPartial(typeSymbol, ct))
         {
             diagnostics.Add(
                 Diagnostic.Create(
                     DiagnosticDescriptors.BenchmarkClassMustBePartial,
-                    GetTypeLocation(typeSymbol),
+                    GetTypeLocation(typeSymbol, ct),
                     typeSymbol.Name
                 )
             );
@@ -78,7 +78,7 @@ internal static class BenchmarkClassAnalyzer
             diagnostics.Add(
                 Diagnostic.Create(
                     DiagnosticDescriptors.RecordBenchmarkClass,
-                    GetTypeLocation(typeSymbol),
+                    GetTypeLocation(typeSymbol, ct),
                     typeSymbol.Name
                 )
             );
@@ -89,7 +89,21 @@ internal static class BenchmarkClassAnalyzer
             diagnostics.Add(
                 Diagnostic.Create(
                     DiagnosticDescriptors.GenericBenchmarkClass,
-                    GetTypeLocation(typeSymbol),
+                    GetTypeLocation(typeSymbol, ct),
+                    typeSymbol.Name
+                )
+            );
+        }
+
+        // Batch 1 · 1.6 (B3-H2). A `file` type cannot be extended from another
+        // file, so the generated partial half cannot see its members: the consumer
+        // used to get CS1061 on .g.cs with nothing explaining why.
+        if (typeSymbol.IsFileLocal)
+        {
+            diagnostics.Add(
+                Diagnostic.Create(
+                    DiagnosticDescriptors.FileLocalBenchmarkClass,
+                    GetTypeLocation(typeSymbol, ct),
                     typeSymbol.Name
                 )
             );
@@ -100,7 +114,7 @@ internal static class BenchmarkClassAnalyzer
             diagnostics.Add(
                 Diagnostic.Create(
                     DiagnosticDescriptors.NestedBenchmarkClass,
-                    GetTypeLocation(typeSymbol),
+                    GetTypeLocation(typeSymbol, ct),
                     typeSymbol.Name
                 )
             );
@@ -111,7 +125,7 @@ internal static class BenchmarkClassAnalyzer
             diagnostics.Add(
                 Diagnostic.Create(
                     DiagnosticDescriptors.NonInstantiableBenchmarkClass,
-                    GetTypeLocation(typeSymbol),
+                    GetTypeLocation(typeSymbol, ct),
                     typeSymbol.Name
                 )
             );
@@ -123,7 +137,7 @@ internal static class BenchmarkClassAnalyzer
             diagnostics.Add(
                 Diagnostic.Create(
                     DiagnosticDescriptors.InheritedBenchmarkMembers,
-                    GetTypeLocation(typeSymbol),
+                    GetTypeLocation(typeSymbol, ct),
                     inheritedAttributesOwner
                 )
             );
@@ -211,7 +225,7 @@ internal static class BenchmarkClassAnalyzer
             diagnostics.Add(
                 Diagnostic.Create(
                     DiagnosticDescriptors.NoBenchmarkMethods,
-                    GetTypeLocation(typeSymbol),
+                    GetTypeLocation(typeSymbol, ct),
                     typeSymbol.Name
                 )
             );
@@ -221,7 +235,7 @@ internal static class BenchmarkClassAnalyzer
             return new GeneratorAnalysisResult(
                 null,
                 diagnostics.ToImmutableArray(),
-                GetTypeLocation(typeSymbol)
+                GetTypeLocation(typeSymbol, ct)
             );
 
         var isAsync =
@@ -247,7 +261,7 @@ internal static class BenchmarkClassAnalyzer
                 ParamsProperties = paramsProps.ToImmutable(),
             },
             diagnostics.ToImmutableArray(),
-            GetTypeLocation(typeSymbol)
+            GetTypeLocation(typeSymbol, ct)
         );
     }
 
@@ -479,12 +493,12 @@ internal static class BenchmarkClassAnalyzer
             paramsProps.Add(paramModel);
     }
 
-    private static bool IsPartial(INamedTypeSymbol typeSymbol)
+    private static bool IsPartial(INamedTypeSymbol typeSymbol, CancellationToken ct)
     {
         foreach (var syntaxRef in typeSymbol.DeclaringSyntaxReferences)
         {
             if (
-                syntaxRef.GetSyntax() is TypeDeclarationSyntax typeDecl
+                syntaxRef.GetSyntax(ct) is TypeDeclarationSyntax typeDecl
                 && typeDecl.Modifiers.Any(static modifier =>
                     modifier.IsKind(SyntaxKind.PartialKeyword)
                 )
@@ -734,8 +748,21 @@ internal static class BenchmarkClassAnalyzer
         return conversion.Exists && (conversion.IsIdentity || conversion.IsImplicit);
     }
 
-    private static Location GetTypeLocation(INamedTypeSymbol typeSymbol)
+    /// <summary>
+    /// Batch 1 · 1.6 (B3-L4): resolves the location through
+    /// <c>GetSyntax(ct)</c> like every other symbol-to-syntax lookup in this
+    /// file. <c>Locations</c> cannot observe cancellation, and for a type
+    /// declared across many partial files this walk happens once per diagnostic.
+    /// </summary>
+    private static Location GetTypeLocation(INamedTypeSymbol typeSymbol, CancellationToken ct)
     {
+        foreach (var syntaxRef in typeSymbol.DeclaringSyntaxReferences)
+        {
+            var location = syntaxRef.GetSyntax(ct).GetLocation();
+            if (location.IsInSource)
+                return location;
+        }
+
         return typeSymbol.Locations.FirstOrDefault(static location => location.IsInSource)
             ?? Location.None;
     }
