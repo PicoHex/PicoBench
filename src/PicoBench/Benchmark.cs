@@ -365,6 +365,27 @@ public static class Benchmark
     /// into the two numbers the statistics need: the total to deduct and the
     /// smallest per-operation value this run can still resolve.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The <b>deducted</b> amount is the smallest of the empty-delegate probes,
+    /// because noise can only inflate a measurement and the minimum is therefore
+    /// the best estimate of the additive cost.
+    /// </para>
+    /// <para>
+    /// The <b>resolution limit</b> is the opposite quantity: an upper bound the
+    /// user can trust. <see cref="PerOpNanoseconds"/> clamps the residual at zero,
+    /// so a sample whose own overhead happened to exceed the deducted floor loses
+    /// that difference — and a limit built only from the clock tick and the probe
+    /// <i>spread</i> ignored it, printing <c>&lt;0.02 ns</c> for a true 0.3 ns/op
+    /// (G4 · B2). Any sample satisfies
+    /// <c>true per-op ≤ residual/iterations + overhead/iterations</c> (the
+    /// overhead is never negative), so the limit has to carry the per-operation
+    /// size of the amount that was subtracted; the largest probe is used, since the
+    /// residual is clamped against the smallest one. Without that term the claim
+    /// "this costs less than <c>limit</c>" can be smaller than the harness floor
+    /// the very same run deducted.
+    /// </para>
+    /// </remarks>
     private static (double Nanoseconds, double ResolutionLimitNanoseconds) MeasureOverhead(
         int iterationsPerSample
     )
@@ -374,8 +395,13 @@ public static class Benchmark
             Math.Max(0.0, harness.MaxNanoseconds - harness.MinNanoseconds) / iterationsPerSample;
         var clockTickPerOp =
             1_000_000_000.0 / Stopwatch.Frequency / iterationsPerSample;
+        var overheadUpperBoundPerOp =
+            Math.Max(0.0, harness.MaxNanoseconds) / iterationsPerSample;
 
-        return (harness.MinNanoseconds, Math.Max(clockTickPerOp, spreadPerOp));
+        return (
+            harness.MinNanoseconds,
+            Math.Max(clockTickPerOp, Math.Max(spreadPerOp, overheadUpperBoundPerOp))
+        );
     }
 
     /// <summary>

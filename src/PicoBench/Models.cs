@@ -131,10 +131,14 @@ public sealed class Statistics
     public double OverheadNs { get; init; }
 
     /// <summary>
-    /// Smallest per-operation value this run can resolve: the larger of one
-    /// timing-clock tick spread over the iterations and the run-to-run spread of
-    /// the deducted harness overhead. Values at or below this limit are
-    /// indistinguishable from the harness floor.
+    /// Smallest per-operation value this run can resolve, i.e. the largest of one
+    /// timing-clock tick spread over the iterations, the run-to-run spread of the
+    /// deducted harness overhead and the per-operation <b>size</b> of that overhead
+    /// (its upper bound): a per-operation value at or below this limit is
+    /// indistinguishable from the harness floor and is published as the upper bound
+    /// <c>&lt;limit</c> instead of a number. The bound never falls below the amount
+    /// that was deducted, so "this costs less than the limit" cannot claim a
+    /// precision below the floor the same run measured.
     /// </summary>
     public double ResolutionLimitNanoseconds { get; init; }
 
