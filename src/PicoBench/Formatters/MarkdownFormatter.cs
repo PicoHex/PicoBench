@@ -135,18 +135,77 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         foreach (var result in results)
         {
             var s = result.Statistics;
-            sb.Append($"| {Escape(result.Name)} | {FormatTime(s.Avg)} | {FormatTime(s.P50)} ");
+            var below = s.Unmeasured
+                ? " (unmeasured)"
+                : s.ResolutionLimited
+                    ? " (below resolution)"
+                    : "";
+            sb.Append(
+                $"| {Escape(result.Name)} | {FormatPerOp(s, s.Avg)}{below} | {FormatPerOp(s, s.P50)}{below} "
+            );
             if (Options.IncludePercentiles)
                 sb.Append(
-                    $"| {FormatTime(s.P90)} | {FormatTime(s.P95)} | {FormatTime(s.P99)} | {FormatTime(s.StandardError)} | {s.RelativeStdDevPercent:F1} "
+                    $"| {FormatPerOp(s, s.P90)}{below} | {FormatPerOp(s, s.P95)}{below} | {FormatPerOp(s, s.P99)}{below} | {FormatPerOp(s, s.StandardError)}{below} | {s.RelativeStdDevPercent:F1} "
                 );
             if (Options.IncludeCpuCycles)
-                sb.Append($"| {s.CpuCyclesPerOp:F0} ");
+                sb.Append($"| {FormatCycles(s)} ");
             if (Options.IncludeGcInfo)
                 sb.Append($"| {FormatGcInfo(s.GcInfo)} ");
             sb.AppendLine("|");
         }
+
+        if (results.Exists(static r => r.Statistics.Unmeasured))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "> **unmeasured** — the clock did not advance for the whole sample, so no per-operation value is shown (the timing source's granularity is coarser than the work)."
+            );
+        }
+        else if (results.Exists(static r => r.Statistics.ResolutionLimited))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "> **below resolution** — the value is at the measurement harness' own floor, so only an upper bound is shown."
+            );
+        }
+
+        var noisy = results.Where(static r => r.Statistics.HasHighVariance).ToList();
+        if (noisy.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "> **noise** - high variance (RSD >= 10%): "
+                    + string.Join(
+                        ", ",
+                        noisy.Select(static r =>
+                            $"{Escape(r.Name)} ({r.Statistics.RelativeStdDevPercent:F1}% RSD)"
+                        )
+                    )
+                    + "; treat the difference as unresolved."
+            );
+        }
     }
+
+    /// <summary>
+    /// Renders a per-operation cell. A value the run could not resolve above the
+    /// harness floor is written as an upper bound (<c>&lt;limit</c>), and a run
+    /// whose clock never advanced is written as "not measured".
+    /// </summary>
+    private string FormatPerOp(Statistics statistics, double nanoseconds) =>
+        statistics.Unmeasured
+            ? "N/A"
+            : statistics.ResolutionLimited
+                ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
+                : FormatTime(nanoseconds);
+
+    /// <summary>
+    /// Renders the cycle cell. <c>~</c> marks a process-wide counter or a
+    /// monotonic-clock proxy rather than a thread-scoped CPU cycle count.
+    /// </summary>
+    private static string FormatCycles(Statistics statistics) =>
+        statistics.CpuCyclesAreApproximate
+            ? $"~{statistics.CpuCyclesPerOp:F0}"
+            : $"{statistics.CpuCyclesPerOp:F0}";
 
     #endregion
 

@@ -8,10 +8,19 @@ internal static class StatisticsCalculator
     /// <summary>
     /// Compute statistics from timing data.
     /// </summary>
+    /// <param name="perOpTimes">Per-operation nanoseconds, with the harness overhead already deducted.</param>
+    /// <param name="perOpCycles">Per-operation CPU cycles.</param>
+    /// <param name="samples">The raw samples the per-operation values were derived from.</param>
+    /// <param name="harnessOverheadNanoseconds">Per-operation harness overhead that was deducted.</param>
+    /// <param name="resolutionLimitNanoseconds">
+    /// Smallest per-operation value this run can resolve; 0 when unknown.
+    /// </param>
     public static Statistics Compute(
         double[] perOpTimes,
         double[] perOpCycles,
-        TimingSample[] samples
+        TimingSample[] samples,
+        double harnessOverheadNanoseconds = 0,
+        double resolutionLimitNanoseconds = 0
     )
     {
         // Sort for percentile calculation
@@ -25,8 +34,16 @@ internal static class StatisticsCalculator
         bool anyApproximate = false;
         int gcInfoCount = 0;
 
+        // A sample whose timing source did not advance carries no measurement:
+        // CpuOnly reads Process.TotalProcessorTime, which only moves in whole
+        // timer ticks, so every sub-tick workload reads as exactly zero.
+        var unmeasuredCount = 0;
+
         for (int i = 0; i < samples.Length; i++)
         {
+            if (!(samples[i].ElapsedNanoseconds > 0))
+                unmeasuredCount++;
+
             var gc = samples[i].GcInfo;
             if (gc == null)
                 continue;
@@ -102,6 +119,13 @@ internal static class StatisticsCalculator
             StandardError = standardError,
             RelativeStdDevPercent = relativeStdDevPercent,
             CpuCyclesPerOp = cpuCyclesAvg,
+            CpuCyclesAreApproximate = Array.Exists(samples, static s => s.CpuCyclesAreApproximate),
+            OverheadNs = harnessOverheadNanoseconds,
+            ResolutionLimitNanoseconds = resolutionLimitNanoseconds,
+            ResolutionLimited =
+                unmeasuredCount > 0
+                || (resolutionLimitNanoseconds > 0 && avg <= resolutionLimitNanoseconds),
+            UnmeasuredSampleCount = unmeasuredCount,
             GcInfo = aggregatedGcInfo,
         };
     }

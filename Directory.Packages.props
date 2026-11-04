@@ -3,7 +3,15 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+    <!-- Batch 0 · 0.6 (B3-C1). Roslyn is pinned to the OLDEST host we promise to
+         support (SDK 8.0.100+ ships Roslyn 4.8 / 4.11), not to the newest one:
+         an analyzer compiled against Roslyn > loaded-host version is silently
+         skipped by the compiler (only a CS9057 warning), so a net8.0 consumer
+         would see CS1061 instead of generated code.
+         Written as "4.8" (not "4.8.0") on purpose: NuGet normalizes both to the
+         same package 4.8.0, while the SDK-8 ceiling guard reads it with
+         System.Version, where 4.8.0 > 4.8. Keep it spelled "4.8". -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.401" />
     <PackageVersion Include="System.IO.Abstractions" Version="22.2.0" />
     <PackageVersion Include="System.Threading.Tasks.Extensions" Version="4.6.3" />

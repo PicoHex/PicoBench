@@ -58,6 +58,15 @@ public sealed class TimingSample
     public ulong CpuCycles { get; init; }
 
     /// <summary>
+    /// When true, <see cref="CpuCycles"/> is not a thread-scoped CPU cycle
+    /// count: it comes either from a process-wide counter (asynchronous
+    /// benchmarks, which may resume on another thread, so the value also counts
+    /// work done by other threads) or from a monotonic clock proxy (macOS
+    /// <c>mach_absolute_time</c>), which is not a cycle count at all.
+    /// </summary>
+    public bool CpuCyclesAreApproximate { get; init; }
+
+    /// <summary>
     /// GC collection counts during this sample.
     /// <c>null</c> when GC data was not collected (CpuOnly async mode).
     /// </summary>
@@ -104,6 +113,68 @@ public sealed class Statistics
     /// on the current platform/runtime.
     /// </summary>
     public double CpuCyclesPerOp { get; init; }
+
+    /// <summary>
+    /// When true, <see cref="CpuCyclesPerOp"/> may include work performed by
+    /// other threads (process-wide counter) or is a monotonic-clock proxy rather
+    /// than real CPU cycles, so it must not be read as the cycle cost of the
+    /// measured operation.
+    /// </summary>
+    public bool CpuCyclesAreApproximate { get; init; }
+
+    /// <summary>
+    /// Fixed per-operation overhead of the measurement harness itself (delegate
+    /// dispatch, loop bookkeeping, clock and counter reads) that was measured
+    /// with the same iteration count and deducted from the per-operation values.
+    /// 0 when no overhead was measured (asynchronous benchmarks).
+    /// </summary>
+    public double OverheadNs { get; init; }
+
+    /// <summary>
+    /// Smallest per-operation value this run can resolve, i.e. the largest of one
+    /// timing-clock tick spread over the iterations, the run-to-run spread of the
+    /// deducted harness overhead and the per-operation <b>size</b> of that overhead
+    /// (its upper bound): a per-operation value at or below this limit is
+    /// indistinguishable from the harness floor and is published as the upper bound
+    /// <c>&lt;limit</c> instead of a number. The bound never falls below the amount
+    /// that was deducted, so "this costs less than the limit" cannot claim a
+    /// precision below the floor the same run measured.
+    /// </summary>
+    public double ResolutionLimitNanoseconds { get; init; }
+
+    /// <summary>
+    /// True when <see cref="Avg"/> is at or below
+    /// <see cref="ResolutionLimitNanoseconds"/>, i.e. the workload could not be
+    /// distinguished from the measurement harness' own overhead (sub-nanosecond
+    /// operations), or when the timing source could not advance at all for at
+    /// least one sample (see <see cref="Unmeasured"/>). Formatters print such a
+    /// value as an upper bound (<c>&lt;limit</c>) or as "below resolution"
+    /// instead of a plain number.
+    /// </summary>
+    public bool ResolutionLimited { get; init; }
+
+    /// <summary>
+    /// Number of samples whose timing source did not advance at all, i.e.
+    /// samples that carry no measurement of the measured work. In
+    /// <see cref="AsyncTimingMode.CpuOnly"/> mode the process CPU clock only
+    /// advances in whole timer ticks (typically 10-16 ms on Windows), so any
+    /// workload shorter than one tick reads as exactly zero CPU time.
+    /// </summary>
+    public int UnmeasuredSampleCount { get; init; }
+
+    /// <summary>
+    /// True when at least one sample could not be measured at all
+    /// (<see cref="UnmeasuredSampleCount"/> &gt; 0, a zero clock delta).
+    /// <para>
+    /// The per-operation values of such a run are <b>not</b> measurements of the
+    /// work: a zero-delta sample is reported as one timing quantum (the smallest
+    /// value the clock can express, so no quantile can claim a measured zero).
+    /// Formatters therefore print the per-operation cells as "not measured"
+    /// (<c>N/A</c>) instead of a number, and <see cref="ResolutionLimited"/> is
+    /// true as well.
+    /// </para>
+    /// </summary>
+    public bool Unmeasured => UnmeasuredSampleCount > 0;
 
     /// <summary>Aggregated GC info across all samples. Null when not collected.</summary>
     public GcInfo? GcInfo { get; init; }
@@ -215,58 +286,229 @@ public sealed class BenchmarkResult
 }
 
 /// <summary>
-/// Comparison result between two benchmark runs.
+/// Verdict of a comparison: whether the candidate is measurably faster or slower
+/// than the baseline, or whether the two could not be told apart.
 /// </summary>
-public sealed class ComparisonResult(
-    string name,
-    BenchmarkResult baseline,
-    BenchmarkResult candidate,
-    string? category = null,
-    IReadOnlyDictionary<string, string>? tags = null
-)
+public enum ComparisonOutcome
 {
-    /// <summary>Name of the comparison.</summary>
-    public string Name { get; } = name ?? throw new ArgumentNullException(nameof(name));
+    /// <summary>
+    /// The comparison could not be evaluated (no usable ratio, e.g. a
+    /// non-finite or non-positive average), so no verdict can be stated.
+    /// </summary>
+    Unknown = 0,
 
-    /// <summary>Optional category/group for organizing results.</summary>
-    public string? Category { get; } = category;
+    /// <summary>
+    /// Both lanes were measured, but the ratio stays inside the noise: within the
+    /// 5% dead band, or an interval that still contains parity.
+    /// </summary>
+    Inconclusive = 1,
 
-    /// <summary>Optional tags for filtering and grouping.</summary>
-    public IReadOnlyDictionary<string, string>? Tags { get; } = tags;
+    /// <summary>
+    /// The candidate is faster: the ratio is above the dead band and the interval
+    /// excludes 1.
+    /// </summary>
+    Faster = 2,
 
-    /// <summary>Baseline benchmark result.</summary>
-    public BenchmarkResult Baseline { get; } =
-        baseline ?? throw new ArgumentNullException(nameof(baseline));
+    /// <summary>
+    /// The candidate is slower: the ratio is below the dead band and the interval
+    /// excludes 1.
+    /// </summary>
+    Slower = 3,
+}
 
-    /// <summary>Candidate benchmark result (the one being compared).</summary>
-    public BenchmarkResult Candidate { get; } =
-        candidate ?? throw new ArgumentNullException(nameof(candidate));
-
-    /// <summary>Speedup ratio (Baseline.Avg / Candidate.Avg). >1 means candidate is faster.</summary>
-    public double Speedup
+/// <summary>
+/// A two-sided interval for a comparison ratio (baseline time / candidate time),
+/// so a caller can see how much of the reported difference the measurement itself
+/// could explain: <c>1.0</c> inside the interval means parity is still plausible.
+/// </summary>
+public readonly struct ComparisonInterval
+{
+    /// <summary>Creates an interval from its two ends.</summary>
+    /// <param name="low">Lower bound of the ratio.</param>
+    /// <param name="high">Upper bound of the ratio.</param>
+    public ComparisonInterval(double low, double high)
     {
-        get
-        {
-            var candidateAvg = Candidate.Statistics.Avg;
-            var baselineAvg = Baseline.Statistics.Avg;
-
-            // Handle near-zero candidate average
-            if (!(Math.Abs(candidateAvg) < 1e-12))
-                return baselineAvg / candidateAvg;
-            // If both are near-zero, treat as equal (speedup = 1)
-            return Math.Abs(baselineAvg) < 1e-12
-                ? 1.0
-                :
-                // Candidate is extremely fast (near-zero time)
-                double.PositiveInfinity;
-        }
+        Low = low;
+        High = high;
     }
 
-    /// <summary>Returns true if candidate is faster than baseline.</summary>
-    public bool IsFaster => Speedup > 1.0;
+    /// <summary>Lower bound of the ratio.</summary>
+    public double Low { get; }
+
+    /// <summary>Upper bound of the ratio.</summary>
+    public double High { get; }
+
+    /// <summary>True when <paramref name="value"/> lies inside the interval.</summary>
+    /// <param name="value">The value to test.</param>
+    public bool Contains(double value) => value >= Low && value <= High;
+
+    /// <inheritdoc />
+    public override string ToString() =>
+        "["
+        + Low.ToString("F3", CultureInfo.InvariantCulture)
+        + ", "
+        + High.ToString("F3", CultureInfo.InvariantCulture)
+        + "]";
+}
+
+/// <summary>
+/// Comparison result between two benchmark runs.
+/// </summary>
+public sealed class ComparisonResult
+{
+    private readonly double? _measuredSpeedup;
+    private readonly ComparisonInterval? _interval;
+
+    /// <summary>
+    /// Relative distance from parity (5%) a ratio has to exceed before it counts as
+    /// a real difference. Closer than that it is indistinguishable from the
+    /// round-to-round noise of an interleaved comparison.
+    /// </summary>
+    internal const double DeadBand = ComparisonMeasurement.DeadBand;
+
+    /// <summary>
+    /// Creates a comparison result from two independent benchmark results.
+    /// Such a comparison carries no interval: it reports the ratio of the two
+    /// averages and a verdict only when that ratio is outside the dead band.
+    /// </summary>
+    /// <param name="name">Name of the comparison.</param>
+    /// <param name="baseline">Baseline benchmark result.</param>
+    /// <param name="candidate">Candidate benchmark result (the one being compared).</param>
+    /// <param name="category">Optional category/group for organizing results.</param>
+    /// <param name="tags">Optional tags for filtering and grouping.</param>
+    public ComparisonResult(
+        string name,
+        BenchmarkResult baseline,
+        BenchmarkResult candidate,
+        string? category = null,
+        IReadOnlyDictionary<string, string>? tags = null
+    )
+        : this(name, baseline, candidate, category, tags, speedup: null, interval: null) { }
+
+    /// <summary>
+    /// Creates a comparison result that carries its own measured ratio and interval,
+    /// as produced by
+    /// <see cref="Benchmark.Compare(string, string, Action, string, Action, BenchmarkConfig?)"/>,
+    /// which interleaves the two lanes and pairs the rounds.
+    /// </summary>
+    internal ComparisonResult(
+        string name,
+        BenchmarkResult baseline,
+        BenchmarkResult candidate,
+        string? category,
+        IReadOnlyDictionary<string, string>? tags,
+        double? speedup,
+        ComparisonInterval? interval
+    )
+    {
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Baseline = baseline ?? throw new ArgumentNullException(nameof(baseline));
+        Candidate = candidate ?? throw new ArgumentNullException(nameof(candidate));
+        Category = category;
+        Tags = tags;
+        _measuredSpeedup = speedup;
+        _interval = interval;
+    }
+
+    /// <summary>Name of the comparison.</summary>
+    public string Name { get; }
+
+    /// <summary>Optional category/group for organizing results.</summary>
+    public string? Category { get; }
+
+    /// <summary>Optional tags for filtering and grouping.</summary>
+    public IReadOnlyDictionary<string, string>? Tags { get; }
+
+    /// <summary>Baseline benchmark result.</summary>
+    public BenchmarkResult Baseline { get; }
+
+    /// <summary>Candidate benchmark result (the one being compared).</summary>
+    public BenchmarkResult Candidate { get; }
+
+    /// <summary>Speedup ratio (Baseline.Avg / Candidate.Avg). >1 means candidate is faster.</summary>
+    /// <remarks>
+    /// A direct action-versus-action comparison reports the <b>median of the
+    /// per-round paired ratios</b> instead of the ratio of two arithmetic means, so
+    /// one noisy round cannot swing it. The behaviour for a zero/near-zero average
+    /// is unchanged: <c>1.0</c> when both averages are zero, positive infinity when
+    /// only the candidate's is. A direct comparison reports <see cref="double.NaN"/>
+    /// when fewer than 6 rounds produced a usable ratio, because the interval would
+    /// not reach 95% confidence; see <see cref="Outcome"/>.
+    /// </remarks>
+    public double Speedup =>
+        _measuredSpeedup ?? ComputeSpeedup(Baseline.Statistics.Avg, Candidate.Statistics.Avg);
+
+    /// <summary>
+    /// Interval of the speedup ratio, when the comparison measured one (only
+    /// <see cref="Benchmark.Compare(string, string, Action, string, Action, BenchmarkConfig?)"/>
+    /// does). Null for a comparison built from two independent results, which has no
+    /// interleaved rounds to pair.
+    /// </summary>
+    public ComparisonInterval? Interval => _interval;
+
+    /// <summary>
+    /// Verdict of the comparison:
+    /// <see cref="ComparisonOutcome.Inconclusive"/> when the ratio is inside the 5%
+    /// dead band or its interval still contains parity, and
+    /// <see cref="ComparisonOutcome.Unknown"/> when no ratio could be computed —
+    /// including the case where fewer rounds produced a usable ratio than the sign
+    /// test needs to reach 95% confidence (<c>6</c>), so no interval and no verdict
+    /// is stated at all.
+    /// </summary>
+    public ComparisonOutcome Outcome => Classify(Speedup, _interval);
+
+    /// <summary>
+    /// True when a ratio could be measured at all, i.e. <see cref="Outcome"/> is not
+    /// <see cref="ComparisonOutcome.Unknown"/> (the two lanes may still be
+    /// indistinguishable).
+    /// </summary>
+    public bool IsFasterKnown => Outcome != ComparisonOutcome.Unknown;
+
+    /// <summary>
+    /// True only when the candidate is faster <b>and</b> that is known: the ratio is
+    /// outside the 5% dead band and its interval excludes parity. Noise no longer
+    /// reads as an improvement — a difference inside the dead band returns false
+    /// (see <see cref="Outcome"/> and <see cref="Interval"/>).
+    /// </summary>
+    public bool IsFaster => Outcome == ComparisonOutcome.Faster;
 
     /// <summary>Percentage improvement. Positive means candidate is faster.</summary>
     public double ImprovementPercent => (Speedup - 1) * 100;
+
+    /// <summary>
+    /// Maps a ratio (and its interval, when one was measured) to a verdict. "Faster"
+    /// and "slower" need both the dead band and — when an interval is known — an
+    /// interval that excludes parity.
+    /// </summary>
+    internal static ComparisonOutcome Classify(double speedup, ComparisonInterval? interval)
+    {
+        if (double.IsNaN(speedup) || double.IsInfinity(speedup) || !(speedup > 0))
+            return ComparisonOutcome.Unknown;
+
+        var above = 1.0 + DeadBand;
+        var below = 1.0 / (1.0 + DeadBand);
+
+        if (speedup > above && (interval is not { } fasterInterval || fasterInterval.Low > 1.0))
+            return ComparisonOutcome.Faster;
+
+        if (speedup < below && (interval is not { } slowerInterval || slowerInterval.High < 1.0))
+            return ComparisonOutcome.Slower;
+
+        return ComparisonOutcome.Inconclusive;
+    }
+
+    private static double ComputeSpeedup(double baselineAvg, double candidateAvg)
+    {
+        // Handle near-zero candidate average
+        if (!(Math.Abs(candidateAvg) < 1e-12))
+            return baselineAvg / candidateAvg;
+        // If both are near-zero, treat as equal (speedup = 1)
+        return Math.Abs(baselineAvg) < 1e-12
+            ? 1.0
+            :
+            // Candidate is extremely fast (near-zero time)
+            double.PositiveInfinity;
+    }
 }
 
 /// <summary>

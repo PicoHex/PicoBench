@@ -158,20 +158,43 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
     private void AppendSingleResult(StringBuilder sb, BenchmarkResult result)
     {
-        sb.AppendLine($"Benchmark: {result.Name}");
-        sb.AppendLine($"  Avg: {FormatTime(result.Statistics.Avg)} ns");
-        sb.AppendLine($"  P50: {FormatTime(result.Statistics.P50)} ns");
+        sb.AppendLine($"Benchmark: {result.Name}{DescribeMeasurementLimit(result.Statistics)}");
+        sb.AppendLine($"  Avg: {FormatPerOpLine(result.Statistics, result.Statistics.Avg)}");
+        sb.AppendLine($"  P50: {FormatPerOpLine(result.Statistics, result.Statistics.P50)}");
+
+        if (result.Statistics.Unmeasured)
+        {
+            sb.AppendLine(
+                $"  Unmeasured: the clock did not advance for {result.Statistics.UnmeasuredSampleCount} "
+                    + $"sample(s); no per-operation value is reported (clock granularity "
+                    + $"~{result.Statistics.ResolutionLimitNanoseconds:F0} ns/op)"
+            );
+        }
+        else if (result.Statistics.ResolutionLimited)
+        {
+            sb.AppendLine(
+                $"  Resolution: below the measurement floor (resolution limit "
+                    + $"~{result.Statistics.ResolutionLimitNanoseconds:F3} ns/op, "
+                    + $"harness overhead {result.Statistics.OverheadNs:F3} ns/op deducted)"
+            );
+        }
+        else if (result.Statistics.OverheadNs > 0)
+        {
+            sb.AppendLine(
+                $"  Overhead: {result.Statistics.OverheadNs:F3} ns/op deducted (delegate/loop floor)"
+            );
+        }
 
         if (Options.IncludePercentiles)
         {
-            sb.AppendLine($"  P90: {FormatTime(result.Statistics.P90)} ns");
-            sb.AppendLine($"  P95: {FormatTime(result.Statistics.P95)} ns");
-            sb.AppendLine($"  P99: {FormatTime(result.Statistics.P99)} ns");
+            sb.AppendLine($"  P90: {FormatPerOpLine(result.Statistics, result.Statistics.P90)}");
+            sb.AppendLine($"  P95: {FormatPerOpLine(result.Statistics, result.Statistics.P95)}");
+            sb.AppendLine($"  P99: {FormatPerOpLine(result.Statistics, result.Statistics.P99)}");
         }
 
         if (Options.IncludeCpuCycles)
         {
-            sb.AppendLine($"  CPU Cycles: {result.Statistics.CpuCyclesPerOp:F0}");
+            sb.AppendLine($"  CPU Cycles: {FormatCycles(result.Statistics)}");
         }
 
         if (Options.IncludeGcInfo)
@@ -179,8 +202,11 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             sb.AppendLine($"  GC (0/1/2): {FormatGcInfo(result.Statistics.GcInfo)}");
         }
 
-        sb.AppendLine($"  StdDev: {FormatTime(result.Statistics.StdDev)} ns");
-        sb.AppendLine($"  StdErr: {FormatTime(result.Statistics.StandardError)} ns");
+        // Per-operation figures like the ones above: the CSV/Markdown/HTML tables
+        // print the same cells through the same rule, so an unmeasured run is "N/A"
+        // in all four formats instead of a number in one of them.
+        sb.AppendLine($"  StdDev: {FormatPerOpLine(result.Statistics, result.Statistics.StdDev)}");
+        sb.AppendLine($"  StdErr: {FormatPerOpLine(result.Statistics, result.Statistics.StandardError)}");
 
         if (result.Statistics.HasHighVariance)
         {
@@ -200,26 +226,32 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         var nameWidth = Math.Max("Name".Length, results.Max(r => r.Name.Length));
         var avgWidth = Math.Max(
             "Avg (ns)".Length,
-            results.Max(r => FormatTime(r.Statistics.Avg).Length)
+            results.Max(r => FormatPerOp(r.Statistics, r.Statistics.Avg).Length)
         );
         var p50Width = Math.Max(
             "P50 (ns)".Length,
-            results.Max(r => FormatTime(r.Statistics.P50).Length)
+            results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P50).Length)
         );
         var p90Width = Options.IncludePercentiles
-            ? Math.Max("P90 (ns)".Length, results.Max(r => FormatTime(r.Statistics.P90).Length))
+            ? Math.Max(
+                "P90 (ns)".Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P90).Length)
+            )
             : 0;
         var p95Width = Options.IncludePercentiles
-            ? Math.Max("P95 (ns)".Length, results.Max(r => FormatTime(r.Statistics.P95).Length))
+            ? Math.Max(
+                "P95 (ns)".Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P95).Length)
+            )
             : 0;
         var p99Width = Options.IncludePercentiles
-            ? Math.Max("P99 (ns)".Length, results.Max(r => FormatTime(r.Statistics.P99).Length))
+            ? Math.Max(
+                "P99 (ns)".Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P99).Length)
+            )
             : 0;
         var cpuWidth = Options.IncludeCpuCycles
-            ? Math.Max(
-                "CPU Cycles".Length,
-                results.Max(r => $"{r.Statistics.CpuCyclesPerOp:F0}".Length)
-            )
+            ? Math.Max("CPU Cycles".Length, results.Max(r => FormatCycles(r.Statistics).Length))
             : 0;
         var gcWidth = Options.IncludeGcInfo
             ? Math.Max(
@@ -232,20 +264,26 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         var columns = new List<TableColumn<BenchmarkResult>>
         {
             new("Name", nameWidth, r => r.Name, leftAlign: true),
-            new("Avg (ns)", avgWidth, r => FormatTime(r.Statistics.Avg)),
-            new("P50 (ns)", p50Width, r => FormatTime(r.Statistics.P50))
+            new("Avg (ns)", avgWidth, r => FormatPerOp(r.Statistics, r.Statistics.Avg)),
+            new("P50 (ns)", p50Width, r => FormatPerOp(r.Statistics, r.Statistics.P50))
         };
 
         if (Options.IncludePercentiles)
         {
-            columns.Add(new("P90 (ns)", p90Width, r => FormatTime(r.Statistics.P90)));
-            columns.Add(new("P95 (ns)", p95Width, r => FormatTime(r.Statistics.P95)));
-            columns.Add(new("P99 (ns)", p99Width, r => FormatTime(r.Statistics.P99)));
+            columns.Add(
+                new("P90 (ns)", p90Width, r => FormatPerOp(r.Statistics, r.Statistics.P90))
+            );
+            columns.Add(
+                new("P95 (ns)", p95Width, r => FormatPerOp(r.Statistics, r.Statistics.P95))
+            );
+            columns.Add(
+                new("P99 (ns)", p99Width, r => FormatPerOp(r.Statistics, r.Statistics.P99))
+            );
         }
 
         if (Options.IncludeCpuCycles)
         {
-            columns.Add(new("CPU Cycles", cpuWidth, r => $"{r.Statistics.CpuCyclesPerOp:F0}"));
+            columns.Add(new("CPU Cycles", cpuWidth, r => FormatCycles(r.Statistics)));
         }
 
         if (Options.IncludeGcInfo)
@@ -254,7 +292,83 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
 
         AppendTable(sb, columns, results);
+
+        if (results.Exists(static r => r.Statistics.Unmeasured))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "unmeasured: the clock did not advance for the whole sample — no per-operation value is shown"
+            );
+        }
+        else if (results.Exists(static r => r.Statistics.ResolutionLimited))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "below resolution: the value is at the measurement harness' own floor, only an upper bound is shown"
+            );
+        }
+
+        // Batch 0 - 0.5, third clause: a run whose spread is wide enough to question
+        // the number itself has to say so in the main table, not only in the
+        // single-result view. High variance is orthogonal to the two notes above:
+        // every cell can hold a plain number and still be noise.
+        var noisy = results.Where(static r => r.Statistics.HasHighVariance).ToList();
+        if (noisy.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "noise: high variance (RSD >= 10%) - "
+                    + string.Join(
+                        ", ",
+                        noisy.Select(static r =>
+                            $"{r.Name} {r.Statistics.RelativeStdDevPercent:F1}% RSD"
+                        )
+                    )
+                    + "; treat the difference as unresolved"
+            );
+        }
     }
+
+    /// <summary>
+    /// Renders a per-operation cell. A value the run could not resolve above
+    /// the harness floor is printed as an upper bound (<c>&lt;limit</c>) rather
+    /// than as a number that would look like a real measurement, and a run whose
+    /// clock never advanced is printed as "not measured".
+    /// </summary>
+    private string FormatPerOp(Statistics statistics, double nanoseconds) =>
+        statistics.Unmeasured
+            ? "N/A"
+            : statistics.ResolutionLimited
+                ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
+                : FormatTime(nanoseconds);
+
+    /// <summary>
+    /// A per-operation value with its unit, or the "not measured" note when the
+    /// timing source never advanced during the run.
+    /// </summary>
+    private string FormatPerOpLine(Statistics statistics, double nanoseconds) =>
+        statistics.Unmeasured ? "N/A (unmeasured)" : $"{FormatPerOp(statistics, nanoseconds)} ns";
+
+    /// <summary>
+    /// The measurement-quality marker printed next to a benchmark name:
+    /// <c>[unmeasured]</c> when the clock never advanced, <c>[below resolution]</c>
+    /// when the value sits at the harness floor, nothing otherwise.
+    /// </summary>
+    private static string DescribeMeasurementLimit(Statistics statistics) =>
+        statistics.Unmeasured
+            ? " [unmeasured]"
+            : statistics.ResolutionLimited
+                ? " [below resolution]"
+                : "";
+
+    /// <summary>
+    /// Renders the cycle column. A process-wide counter or a monotonic-clock
+    /// proxy is marked with <c>~</c>: it is not a thread-scoped cycle count.
+    /// </summary>
+    private static string FormatCycles(Statistics statistics) =>
+        statistics.CpuCyclesAreApproximate
+            ? $"~{statistics.CpuCyclesPerOp:F0}"
+            : $"{statistics.CpuCyclesPerOp:F0}";
 
     #endregion
 
@@ -272,10 +386,27 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             $"  Candidate ({comparison.Candidate.Name}): {FormatTime(comparison.Candidate.Statistics.Avg)} ns"
         );
         sb.AppendLine($"  Speedup: {FormatSpeedup(comparison.Speedup)} {indicator}");
-        sb.AppendLine(
-            $"  Winner: {(comparison.IsFaster ? comparison.Candidate.Name : comparison.Baseline.Name)}"
-        );
+        if (comparison.Interval is { } interval)
+        {
+            sb.AppendLine($"  Interval: {interval} (95% CI of the paired-round median)");
+        }
+
+        sb.AppendLine($"  Winner: {DescribeWinner(comparison)}");
     }
+
+    /// <summary>
+    /// Names the winner of a comparison, or says why there is none: a difference
+    /// inside the dead band (or whose interval still contains parity) is not a win.
+    /// </summary>
+    private static string DescribeWinner(ComparisonResult comparison) =>
+        comparison.Outcome switch
+        {
+            ComparisonOutcome.Faster => comparison.Candidate.Name,
+            ComparisonOutcome.Slower => comparison.Baseline.Name,
+            ComparisonOutcome.Inconclusive =>
+                $"none (within the {ComparisonResult.DeadBand * 100:F0}% dead band — indistinguishable)",
+            _ => "unknown (not measurable)",
+        };
 
     #endregion
 

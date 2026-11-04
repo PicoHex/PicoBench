@@ -11,6 +11,14 @@ public static partial class Runner
         LazyThreadSafetyMode.ExecutionAndPublication
     );
 
+    /// <summary>
+    /// <c>MethodImplOptions.AggressiveOptimization</c> (value 512) was introduced
+    /// after .NET Standard 2.0, so the netstandard2.0 reference assembly this
+    /// library compiles against does not declare it. The flag is honoured by the
+    /// JIT of every supported runtime and ignored where unknown.
+    /// </summary>
+    private const MethodImplOptions AggressiveOptimization = (MethodImplOptions)512;
+
     private static readonly Lazy<bool> Initializer = new(
         InitializeCore,
         LazyThreadSafetyMode.ExecutionAndPublication
@@ -233,6 +241,61 @@ public static partial class Runner
     }
 
     /// <summary>
+    /// Fixed per-sample cost of the timing harness itself: one empty delegate
+    /// timed through exactly the same path (GC baseline, cycle-counter reads,
+    /// stopwatch, loop bookkeeping) as a real sample. The minimum over several
+    /// repetitions is the best estimate of the additive cost, because noise can
+    /// only inflate a measurement; the maximum doubles as the run-to-run spread
+    /// used to report how small a per-operation value is still resolvable.
+    /// </summary>
+    internal readonly struct HarnessOverhead(double minNanoseconds, double maxNanoseconds)
+    {
+        /// <summary>Smallest measured harness cost (nanoseconds per sample).</summary>
+        internal double MinNanoseconds { get; } = minNanoseconds;
+
+        /// <summary>Largest measured harness cost (nanoseconds per sample).</summary>
+        internal double MaxNanoseconds { get; } = maxNanoseconds > minNanoseconds ? maxNanoseconds : minNanoseconds;
+    }
+
+    /// <summary>
+    /// Measures the fixed per-sample overhead of the harness with
+    /// <paramref name="iterations"/> iterations, i.e. the cost a caller would
+    /// otherwise see attributed to the measured action (delegate dispatch plus
+    /// loop bookkeeping plus the clock/counter reads around it).
+    /// </summary>
+    /// <param name="iterations">Iterations per sample used by the run being corrected.</param>
+    /// <param name="repetitions">Number of probes to keep; the minimum is reported.</param>
+    internal static HarnessOverhead MeasureHarnessOverhead(int iterations, int repetitions)
+    {
+        if (iterations <= 0 || repetitions <= 0)
+            return new HarnessOverhead(0, 0);
+
+        Action empty = static () => { };
+        var min = double.MaxValue;
+        var max = 0.0;
+
+        // The first probe is discarded: it carries first-call warm-up (the
+        // delegate, the counters and the loop are all cold) and would otherwise
+        // widen the reported spread without telling anything about the steady
+        // state this run is measured in.
+        for (var r = 0; r <= repetitions; r++)
+        {
+            var sample = Time(iterations, empty);
+            if (r == 0)
+                continue;
+
+            if (sample.ElapsedNanoseconds < min)
+                min = sample.ElapsedNanoseconds;
+            if (sample.ElapsedNanoseconds > max)
+                max = sample.ElapsedNanoseconds;
+        }
+
+        return min is double.MaxValue
+            ? new HarnessOverhead(0, 0)
+            : new HarnessOverhead(min, max);
+    }
+
+    /// <summary>
     /// Run a timed measurement of the given action.
     /// </summary>
     /// <param name="iterations">Number of times to invoke the action.</param>
@@ -250,45 +313,91 @@ public static partial class Runner
     /// <param name="setup">Optional setup action (not timed).</param>
     /// <param name="teardown">Optional teardown action (not timed).</param>
     /// <returns>A <see cref="TimingSample"/> containing timing and GC data.</returns>
+    /// <remarks>
+    /// <para>
+    /// <b>Cleanup contract</b> (B1-H3, Batch 0 · 0.8): <paramref name="teardown"/> is
+    /// the counterpart of <paramref name="setup"/> and runs <b>exactly once</b> per
+    /// sample — on success, when <paramref name="action"/> throws, and when the
+    /// measured delegate cancels (it throws <see cref="OperationCanceledException"/>,
+    /// which is just another exception here). The exception still propagates and the
+    /// loop still stops at the throwing iteration, so a failing sample can no longer
+    /// leak the resource the setup acquired.
+    /// </para>
+    /// <para>
+    /// If <paramref name="setup"/> itself throws, <paramref name="teardown"/> is
+    /// <b>not</b> invoked: there is no established state to tear down, and calling a
+    /// teardown that dereferences a half-initialised field could mask the original
+    /// setup exception. A setup that acquires resources before it can fail must roll
+    /// its own partial state back.
+    /// </para>
+    /// <para>
+    /// A teardown that throws replaces the exception in flight (normal .NET
+    /// semantics). Teardown work is never timed and never lands in this sample's
+    /// elapsed time, CPU cycles or GC delta.
+    /// </para>
+    /// </remarks>
+    // The timed loop must run in fully optimised code. Left to tiered compilation
+    // it executes in tier-0 for the first ~1000 iterations of *every* call (OSR
+    // only partially recovers), which added a fixed 20-45 µs per sample — the
+    // dominant part of the "+2 to +3 ns/op" floor below 5 ns and of the per-op
+    // drift between 100 and 10000 iterations (Batch 0 · 0.1, B1-C2).
+    [MethodImpl(AggressiveOptimization)]
     public static TimingSample Time(int iterations, Action action, Action? setup, Action? teardown)
     {
         ValidateIterations(iterations);
         if (action == null)
             throw new ArgumentNullException(nameof(action));
 
-        // Run setup (not timed)
+        // Run setup (not timed). A setup that throws never reaches the timing block
+        // below, so its teardown is not invoked (see the remarks above).
         setup?.Invoke();
 
         // GC baseline is captured after setup so setup allocations are
         // not attributed to the benchmark.
         var gcBaseline = GetGcBaselineCounts();
 
-        // Start timing
-        var cycleStart = GetProcessCpuCycles();
+        // Start timing. Synchronous benchmarks never hop threads, so the
+        // thread-scoped counter is both valid and immune to work done by other
+        // threads (a busy neighbour thread used to inflate cycles/op by ~2x).
+        var cycleStart = GetCpuCycles();
         var watch = Stopwatch.StartNew();
 
-        // Run the measured work
-        for (var i = 0; i < iterations; i++)
-            action();
+        try
+        {
+            // Run the measured work
+            for (var i = 0; i < iterations; i++)
+                action();
 
-        // Stop timing
-        watch.Stop();
-        var cycleEnd = GetProcessCpuCycles();
+            // Stop timing
+            watch.Stop();
+            var cycleEnd = GetCpuCycles();
 
-        // GC delta is computed before teardown so teardown allocations
-        // are not attributed to the benchmark.
-        var gcInfo = CalculateGcDelta(gcBaseline);
+            // GC delta is computed before teardown so teardown allocations
+            // are not attributed to the benchmark.
+            var gcInfo = CalculateGcDelta(gcBaseline);
 
-        // Run teardown (not timed)
-        teardown?.Invoke();
-
-        return CreateSample(watch, cycleStart, cycleEnd, gcInfo);
+            return CreateSample(
+                watch,
+                cycleStart,
+                cycleEnd,
+                gcInfo,
+                areCpuCyclesApproximate: !HasMeaningfulCpuCycles()
+            );
+        }
+        finally
+        {
+            // Unconditional cleanup: this is the only path to teardown, so it runs
+            // once on success, once when an iteration throws, and once when the
+            // delegate cancels (B1-H3). It runs after the sample was built, so a
+            // teardown that allocates or forces a GC cannot change this sample.
+            teardown?.Invoke();
+        }
     }
 
     /// <summary>
     /// Run a timed measurement with state passed to the action (avoids closure allocation).
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining | AggressiveOptimization)]
     public static TimingSample Time<TState>(int iterations, TState state, Action<TState> action)
     {
         ValidateIterations(iterations);
@@ -297,16 +406,23 @@ public static partial class Runner
 
         var gcBaseline = GetGcBaselineCounts();
 
-        var cycleStart = GetProcessCpuCycles();
+        // Thread-scoped counter: see Time(int, Action, Action?, Action?).
+        var cycleStart = GetCpuCycles();
         var watch = Stopwatch.StartNew();
 
         for (var i = 0; i < iterations; i++)
             action(state);
 
         watch.Stop();
-        var cycleEnd = GetProcessCpuCycles();
+        var cycleEnd = GetCpuCycles();
 
-        return CreateSample(watch, cycleStart, cycleEnd, CalculateGcDelta(gcBaseline));
+        return CreateSample(
+            watch,
+            cycleStart,
+            cycleEnd,
+            CalculateGcDelta(gcBaseline),
+            areCpuCyclesApproximate: !HasMeaningfulCpuCycles()
+        );
     }
 
     /// <summary>
@@ -329,7 +445,8 @@ public static partial class Runner
         ulong cycleStart,
         ulong cycleEnd,
         GcInfo gcInfo,
-        bool isGcApproximate = false
+        bool isGcApproximate = false,
+        bool areCpuCyclesApproximate = false
     )
     {
         var elapsedTicks = watch.ElapsedTicks;
@@ -352,6 +469,7 @@ public static partial class Runner
             ElapsedMilliseconds = elapsedNs / 1_000_000.0,
             ElapsedTicks = elapsedTicks,
             CpuCycles = cycleEnd - cycleStart,
+            CpuCyclesAreApproximate = areCpuCyclesApproximate,
             GcInfo = gcInfo,
         };
     }
@@ -360,6 +478,13 @@ public static partial class Runner
     /// Run an async timed measurement with optional setup and teardown.
     /// Uses Stopwatch for wall-clock timing. GC info is marked approximate.
     /// </summary>
+    /// <remarks>
+    /// Cleanup contract, identical to
+    /// <see cref="Time(int, Action, Action?, Action?)"/>: the awaited
+    /// <paramref name="teardown"/> runs exactly once per sample — on success, when an
+    /// iteration throws and when it cancels — while a throwing
+    /// <paramref name="setup"/> skips it (nothing was established to tear down).
+    /// </remarks>
     public static async Task<TimingSample> TimeAsync(
         int iterations,
         Func<Task> action,
@@ -383,20 +508,34 @@ public static partial class Runner
         var cycleStart = GetProcessCpuCycles();
         var watch = Stopwatch.StartNew();
 
-        for (int i = 0; i < iterations; i++)
-            await action();
+        try
+        {
+            for (int i = 0; i < iterations; i++)
+                await action();
 
-        watch.Stop();
-        var cycleEnd = GetProcessCpuCycles();
+            watch.Stop();
+            var cycleEnd = GetProcessCpuCycles();
 
-        // GC delta is computed before teardown so teardown allocations
-        // are not attributed to the benchmark.
-        var gcInfo = CalculateGcDelta(gcBaseline);
+            // GC delta is computed before teardown so teardown allocations
+            // are not attributed to the benchmark.
+            var gcInfo = CalculateGcDelta(gcBaseline);
 
-        if (teardown != null)
-            await teardown();
-
-        return CreateSample(watch, cycleStart, cycleEnd, gcInfo, isGcApproximate: true);
+            return CreateSample(
+                watch,
+                cycleStart,
+                cycleEnd,
+                gcInfo,
+                isGcApproximate: true,
+                areCpuCyclesApproximate: true
+            );
+        }
+        finally
+        {
+            // Unconditional cleanup: a throwing or cancelled iteration must not
+            // skip the teardown (B1-H3, Batch 0 · 0.8).
+            if (teardown != null)
+                await teardown();
+        }
     }
 
     /// <summary>
@@ -429,7 +568,8 @@ public static partial class Runner
             cycleStart,
             cycleEnd,
             CalculateGcDelta(gcBaseline),
-            isGcApproximate: true
+            isGcApproximate: true,
+            areCpuCyclesApproximate: true
         );
     }
 
@@ -438,6 +578,12 @@ public static partial class Runner
     /// Only CPU execution time is counted; I/O wait time is excluded.
     /// GC info is not collected (null).
     /// </summary>
+    /// <remarks>
+    /// Cleanup contract, identical to
+    /// <see cref="Time(int, Action, Action?, Action?)"/>: teardown runs exactly once
+    /// per sample when the measured work throws or is cancelled, and is skipped when
+    /// the setup itself throws.
+    /// </remarks>
     public static async Task<TimingSample> TimeCpuAsync(
         int iterations,
         Func<Task> action,
@@ -455,23 +601,31 @@ public static partial class Runner
         var cpuBefore = Process.GetCurrentProcess().TotalProcessorTime;
         var cycleStart = GetProcessCpuCycles();
 
-        for (int i = 0; i < iterations; i++)
-            await action();
-
-        var cycleEnd = GetProcessCpuCycles();
-        var cpuDelta = Process.GetCurrentProcess().TotalProcessorTime - cpuBefore;
-
-        if (teardown != null)
-            await teardown();
-
-        return new TimingSample
+        try
         {
-            ElapsedNanoseconds = cpuDelta.Ticks * 100.0, // 1 tick = 100ns
-            ElapsedMilliseconds = cpuDelta.TotalMilliseconds,
-            ElapsedTicks = cpuDelta.Ticks,
-            CpuCycles = cycleEnd - cycleStart,
-            GcInfo = null,
-        };
+            for (int i = 0; i < iterations; i++)
+                await action();
+
+            var cycleEnd = GetProcessCpuCycles();
+            var cpuDelta = Process.GetCurrentProcess().TotalProcessorTime - cpuBefore;
+
+            return new TimingSample
+            {
+                ElapsedNanoseconds = cpuDelta.Ticks * 100.0, // 1 tick = 100ns
+                ElapsedMilliseconds = cpuDelta.TotalMilliseconds,
+                ElapsedTicks = cpuDelta.Ticks,
+                CpuCycles = cycleEnd - cycleStart,
+                CpuCyclesAreApproximate = true,
+                GcInfo = null,
+            };
+        }
+        finally
+        {
+            // Unconditional cleanup: a throwing or cancelled iteration must not
+            // skip the teardown (B1-H3, Batch 0 · 0.8).
+            if (teardown != null)
+                await teardown();
+        }
     }
 
     /// <summary>
@@ -503,6 +657,7 @@ public static partial class Runner
             ElapsedMilliseconds = cpuDelta.TotalMilliseconds,
             ElapsedTicks = cpuDelta.Ticks,
             CpuCycles = cycleEnd - cycleStart,
+            CpuCyclesAreApproximate = true,
             GcInfo = null,
         };
     }

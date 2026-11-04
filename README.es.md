@@ -10,15 +10,16 @@ Una biblioteca de benchmarking ligera y sin dependencias para .NET con **dos API
 - **Dos APIs** - Imperativa (`Benchmark.Run`) para pruebas ad hoc; basada en atributos (`[Benchmark]` + generador de código fuente) para suites estructuradas
 - **Generador de Código Fuente Compatible con AOT** - El generador incremental emite llamadas directas a métodos sin reflexión en tiempo de ejecución
 - **Multiplataforma** - Soporte completo para Windows, Linux y macOS
-- **Cronometría de Alta Precisión** - Utiliza `Stopwatch` y reporta tiempos por operación en escala de nanosegundos
+- **Cronometría Sub-Microsegundo** - Temporizaciones por operación basadas en `Stopwatch` con el coste por operación del propio arnés medido y descontado. Una carga de trabajo por debajo del límite de resolución de la ejecución se reporta como cota superior (`<limit`) y se marca `ResolutionLimited` — nunca como un número con precisión de nanosegundos
+- **Límites Declarados** - `OverheadNs`, `ResolutionLimitNanoseconds`, `ResolutionLimited` y `Unmeasured` indican qué pudo y qué no pudo resolver una ejecución, de modo que un resultado a nivel de ruido no pueda leerse como una operación rápida
 - **Seguimiento de GC** - Monitorea los recuentos de recolección Gen0/Gen1/Gen2 durante los benchmarks (se excluye setup/teardown)
-- **Conteo de Ciclos de CPU** - Conteo de ciclos por hardware en Windows/Linux, más un proxy monotónico en macOS (`mach_absolute_time`)
+- **Conteo de Ciclos de CPU** - Recuentos de ciclos por hilo en la ruta síncrona (Windows `QueryThreadCycleTime`; Linux `perf_event` cuando el SO permite acceso sin privilegios). Los benchmarks asíncronos leen un contador de todo el proceso, porque un contador por hilo no puede seguirse entre cambios de hilo, y se marcan `CpuCyclesAreApproximate` (`~` en los cuatro formatos). macOS no tiene contador de ciclos: `mach_absolute_time` es un proxy de *tiempo* monotónico, no ciclos, y se marca de la misma forma
 - **Análisis Estadístico** - Media, Mediana, P90, P95, P99, Mínimo, Máximo, Desviación Estándar, error estándar y desviación estándar relativa
 - **Múltiples Formatos de Salida** - Cuatro formateadores integrados (`IFormatter`) (Console, Markdown, HTML, CSV) más salida de resumen programática
 - **Benchmarks Parametrizados** - Atributo `[Params]` con iteración automática de producto cartesiano
-- **Soporte de Comparación** - Línea base vs candidato con cálculos de aceleración
+- **Soporte de Comparación** - Línea base vs candidato medidos en rondas intercaladas; el veredicto es la mediana de los cocientes emparejados por ronda y requiere tanto una banda muerta del 5% como un intervalo libre de distribución que excluya la paridad, de modo que el ruido entre rondas no se publique como una mejora
 - **Configurable** - Preajustes Quick, Default y Precise, auto-calibración o configuración completamente personalizada
-- **netstandard2.0** - Compatible con .NET Framework 4.6.1+, .NET Core 2.0+, .NET 5+
+- **netstandard2.0** - Compatible con .NET Framework **4.7.2+** (`RuntimeInformation` se usa de forma incondicional, por lo que las versiones anteriores de .NET Framework no son compatibles), .NET Core 2.0+, .NET 5+
 
 ## Instalación
 
@@ -120,8 +121,17 @@ var comparison = Benchmark.Compare(
     "StringBuilder",  () => { var sb = new StringBuilder(); for (int i = 0; i < 100; i++) sb.Append('a'); _ = sb.ToString(); }
 );
 
-Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%)");
+Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%) [{(comparison.Interval?.ToString() ?? "no interval")}] -> {comparison.Outcome}");
 ```
+
+`Benchmark.Compare(name, baselineAction, candidateAction)` **no** ejecuta cada línea una sola vez. Intercala las dos líneas a lo largo de 10 rondas (qué línea va primero se alterna en cada ronda, para que ningún lado herede un proceso más caliente) y reporta la **mediana de los cocientes emparejados por ronda**. Qué significa eso para los números:
+
+- **`Speedup`** — tiempo de la línea base ÷ tiempo del candidato; `> 1` significa que el candidato es más rápido. Una ronda en la que el candidato no midió nada no aporta ningún cociente; cuando ninguna ronda produce un cociente utilizable, la comparación reporta `NaN` (y `ImprovementPercent` es `NaN` con ella) en lugar de inventar un veredicto. Un `ComparisonResult` construido a partir de dos `BenchmarkResult` independientes sigue reportando el cociente de los dos promedios. Una ronda 0/0 es exactamente ese caso: `NaN`, no `1.0` (una comparación construida a partir de dos resultados independientes a cero conserva el `1.0` heredado).
+- **`Interval`** — intervalo del 95% libre de distribución de esa mediana (estadístico de orden 2.º/9.º de los 10 cocientes emparejados). `Interval.Contains(1.0)` significa que la paridad sigue siendo plausible. Una comparación construida a partir de dos resultados independientes **no tiene intervalo** (`Interval` es `null`): no hay rondas intercaladas que emparejar, así que no se puede decir nada sobre la dispersión.
+- **`Outcome`** — el veredicto. `Faster` / `Slower` requieren que el cociente salga de una **banda muerta del 5%** *y* (cuando existe un intervalo) que el intervalo excluya 1. Todo lo que quede dentro es `Inconclusive`; un cociente que no se pudo calcular (no finito o no positivo) es `Unknown`, y también lo es una comparación con menos de seis rondas emparejadas utilizables (por debajo de eso el intervalo no puede cubrir la mediana con un 95% de confianza).
+- **`IsFaster`** — `true` solo para `Outcome == Faster`, es decir, **más estrecho que antes**: una diferencia del 3% ahora devuelve `false` (`Inconclusive`), y una comparación sin rondas debe superar la misma banda muerta del 5%. Usa `Outcome` para la respuesta de tres vías y `IsFasterKnown` para distinguir "ninguna diferencia medible" de "no se pudo medir en absoluto".
+
+Coste: una comparación directa ejecuta cada línea 10 veces, es decir, **20 `Run`s** — baja `SampleCount` / `WarmupIterations` para las ejecuciones A/B si eso resulta demasiado lento.
 
 ### Avanzado: Calentamiento, Configuración y Limpieza Separados
 
@@ -220,8 +230,9 @@ var scoped = await Benchmark.RunScopedAsync("Scoped",
 ```
 
 - **Modos de medición** – `AsyncTimingMode.WallClock` (predeterminado) mide la duración total, incluidas las suspensiones await; `AsyncTimingMode.CpuOnly` mide `Process.TotalProcessorTime` y excluye la espera de E/S. El reloj de CPU avanza solo en tics del temporizador (normalmente 10–16 ms), por lo que la autocalibración eleva su presupuesto mínimo de muestra a la granularidad medida del reloj. En CpuOnly no se recopilan datos de GC.
+- **Muestras no medibles** – en modo `CpuOnly` una carga de trabajo más corta que un tic del temporizador del SO se lee como exactamente cero tiempo de CPU. Esa muestra se cuenta en `Statistics.UnmeasuredSampleCount` (`Unmeasured` es `true`), su valor por operación pasa a ser **un cuanto de temporización — una cota superior —, no `0.000`**, y los formateadores imprimen las celdas por operación como `N/A`. Las estadísticas de una ejecución así no son mediciones del trabajo: léelas como "por debajo de la resolución del reloj de CPU". Los recuentos de iteraciones **no** se inflan de forma silenciosa para ocultar el problema — solo `AutoCalibrateIterations = true` (los preajustes `Quick`/`Precise`) calibra; `Default` usa el `IterationsPerSample` configurado sin cambios.
 - **Atribución de GC** – los contadores de GC asíncronos se marcan como aproximados (`GcInfo.IsApproximate`). Las asignaciones de setup/teardown se excluyen en ambos modos.
-- **Ciclos de CPU** – los benchmarks asíncronos usan contadores de todo el proceso (los contadores por hilo no se pueden restar entre cambios de hilo).
+- **Ciclos de CPU** – la ruta síncrona lee un contador por hilo (`QueryThreadCycleTime` en Windows, un `perf_event` abierto para el hilo de medición en Linux). Los benchmarks asíncronos leen un contador de todo el proceso, porque un contador por hilo no puede seguirse entre cambios de hilo: ese número incluye trabajo hecho por otros hilos y se marca `Statistics.CpuCyclesAreApproximate`, que se renderiza con un `~` en Console, Markdown, HTML y CSV. macOS no tiene contador de ciclos — `mach_absolute_time` es un proxy de *tiempo* monotónico en lugar de ciclos arquitectónicos, y se marca de la misma forma.
 - **Cancelación** – `BenchmarkConfig.CancellationToken` solo se comprueba en los límites de muestra de los benchmarks asíncronos; los síncronos lo ignoran.
 - **Clases mixtas** – un método `[Benchmark]` síncrono conserva la ruta de medición síncrona directa aunque la clase tenga otros miembros asíncronos.
 - **Warmup** – las iteraciones de warmup solo invocan el delegado de warmup; `setup`/`teardown` y `[IterationSetup]`/`[IterationCleanup]` no se ejecutan durante el warmup. Las acciones de warmup deben ser autosuficientes.
@@ -234,8 +245,21 @@ PicoBench se ejecuta en proceso, por lo que la configuración del CLR afecta a l
 
 - Desactive el JIT por niveles: `DOTNET_TieredCompilation=0`, `DOTNET_TieredPGO=0` (o `COMPlus_*`).
 - Para microbenchmarks de un solo hilo use GC de estación de trabajo: `DOTNET_gcServer=0`.
-- Los ciclos de CPU solo están disponibles si el sistema operativo permite contadores sin privilegios (Windows `QueryThreadCycleTime`/`QueryProcessCycleTime`; Linux `perf_event` con `perf_event_paranoid` ≤ 2; macOS ofrece un proxy monótono, no ciclos reales). `EnvironmentInfo` y todos los formateadores informan la fuente usada.
+- Los recuentos de ciclos de CPU solo están disponibles donde el SO permite contadores sin privilegios (Windows `QueryThreadCycleTime`; Linux `perf_event` cuando `perf_event_paranoid` es 2 o menor). Las ejecuciones síncronas en Windows son por hilo; las ejecuciones asíncronas y macOS usan un contador de todo el proceso o, en macOS, un proxy de reloj monotónico en lugar de ciclos reales — ambos se marcan `CpuCyclesAreApproximate`. `EnvironmentInfo` y todos los formateadores informan qué fuente se usó.
 - `BenchmarkConfig.BoostPriorities` (predeterminado `true`) eleva la prioridad del proceso y del hilo solo durante la ejecución y restaura los valores anteriores al terminar.
+
+### Qué pueden y qué no pueden resolver los números
+
+Cada ejecución mide el coste que el propio arnés añade por operación con el mismo recuento de iteraciones y lo descuenta, y luego publica el valor más pequeño que aún puede resolver:
+
+| Campo | Significado |
+|---|---|
+| `Statistics.OverheadNs` | coste por operación del arnés (despacho de delegados, contabilidad del bucle, lecturas de reloj y de contadores) que se midió y se descontó. `0` para ejecuciones asíncronas, cuyo sobrecoste no se descuenta |
+| `Statistics.ResolutionLimitNanoseconds` | valor por operación más pequeño que esta ejecución puede resolver: el mayor entre un tic de reloj repartido entre las iteraciones, la dispersión entre ejecuciones del sobrecoste descontado y el tamaño por operación de ese sobrecoste (su cota superior) |
+| `Statistics.ResolutionLimited` | `Avg` está en ese límite o por debajo, o al menos una muestra no pudo medirse en absoluto. Los formateadores imprimen las celdas por operación como cota superior (`<limit` en los cuatro formatos; Console añade la marca `[below resolution]` y Markdown/HTML añaden `(below resolution)`) en lugar de un número |
+| `Statistics.Unmeasured` / `UnmeasuredSampleCount` | cuántas muestras no pudo avanzar la fuente de temporización (un tic cero en `CpuOnly`). Esas celdas imprimen `N/A`, nunca `0.000` |
+
+Por lo tanto, la lectura honesta de un resultado sub-nanosegundo es **"por debajo de `<limit` ns"**, no "0.02 ns": el valor no está medido, está acotado, y la cota cubre la cuantización del reloj y la dispersión del sobrecoste descontado (es el mayor entre el tic de reloj, la dispersión del sobrecoste descontado y el tamaño por operación de ese sobrecoste; y como el residuo se recorta a cero, cada muestra cumple verdadero ≤ residuo + sobrecoste, así que la cota ya no puede quedar por debajo del suelo que esa misma ejecución descontó). Merece la pena recordar dos asimetrías más: la deducción del sobrecoste del arnés solo está implementada para benchmarks síncronos (los valores por operación asíncronos siguen cargando su coste de envoltorio por muestra), y los bytes de GC no se miden en absoluto — solo los recuentos de recolección, por proceso, aproximados en la ruta asíncrona.
 
 ---
 
@@ -333,6 +357,47 @@ File.WriteAllText(Path.Combine(dir, "results.html"), new HtmlFormatter().Format(
 File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(suite));
 ```
 
+### Contrato de Columnas del CSV
+
+`CsvFormatter` escribe una fila de encabezado y luego filas de datos; una suite añade líneas de comentario `#` (`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) y dos secciones, `# Results` y `# Comparisons`, **cada una con su propia fila de encabezado**. Por lo tanto, un archivo tiene más de una línea de encabezado — `pandas.read_csv(path, comment='#')` omite los comentarios, pero debes separar las dos secciones tú mismo. La primera línea de un archivo de resultados es esa línea de contrato `# Schema: v2; …`, y toda línea que empiece por `#` es un comentario que el lector debe omitir.
+
+Columnas de resultados, en este orden (opciones predeterminadas; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` e `IncludeTimestamp` eliminan sus columnas cuando valen `false`):
+
+| # | Columna | Significado |
+|---|---|---|
+| 1 | `Name` | nombre del benchmark (entre comillas si contiene `,` `"` o un salto de línea; un `=`/`+`/`-`/`@` inicial se prefija con `'`) |
+| 2 | `Category` | categoría, vacía cuando no está definida |
+| 3 | `Avg_ns` | nanosegundos por operación — tres estados de celda, ver abajo |
+| 4 | `P50_ns` | mediana de nanosegundos por operación (los mismos tres estados) |
+| 5-12 | `P90_ns`, `P95_ns`, `P99_ns`, `Min_ns`, `Max_ns`, `StdDev_ns`, `StdErr_ns`, `RSD_pct` | percentiles y dispersión; `RSD_pct` es un porcentaje simple, pero los otros siete usan los estados de celda por operación |
+| 13 | `CpuCycles` | ciclos por operación; un prefijo `~` marca un contador de todo el proceso o un proxy de reloj (`CpuCyclesAreApproximate`), no ciclos de hilo |
+| 14-16 | `GC0`, `GC1`, `GC2` | recuentos de recolección, o `N/A` cuando no se recopiló GC |
+| 17 | `GCApproximate` | `1` cuando los contadores son aproximados (ruta asíncrona), `0` cuando son exactos, `N/A` cuando no se recopilaron |
+| 18 | `SampleCount` | número de muestras (entero) |
+| 19 | `IterationsPerSample` | iteraciones por muestra (entero) |
+| 20 | `Timestamp` | ISO-8601 round-trip (`o`, cultura invariante) |
+
+Estados de celda de una columna por operación:
+
+| Celda | Significado |
+|---|---|
+| `12.5` | un valor medido en nanosegundos (cultura invariante, formato round-trip) |
+| `<0.02` | **cota superior**: la ejecución no pudo resolver el valor por encima de `Statistics.ResolutionLimitNanoseconds`. El número que sigue a `<` es ese límite, y no es un valor medido |
+| `N/A` | no medido (`Statistics.Unmeasured`, un delta de reloj cero) o no recopilado (columnas de GC) |
+
+Dos consecuencias para los consumidores: por culpa de `<0.02`, una columna por operación **no** tiene garantizado ser numérica, así que lectores como pandas infieren `object` y hay que manejar explícitamente las filas de cota; y `GCApproximate` se insertó en la posición 17, entre `GC2` y `SampleCount`, así que **los lectores posicionales deben desplazar `SampleCount`/`IterationsPerSample` en uno** (los lectores basados en nombres no se ven afectados).
+
+Columnas de comparaciones: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Cada comparación escribe dos filas — primero el candidato, luego la línea base — y `Speedup` solo se rellena en la fila del candidato. Las celdas por operación de las comparaciones pasan por el mismo formateador que la tabla de resultados, así que `<limit` y `N/A` también aparecen allí, y `CpuCycles` lleva la misma marca `~` (`CpuCyclesAreApproximate`).
+
+La línea `# Schema:` ya está implementada y es la **primera línea del archivo**: un archivo de resultados (y un archivo de suite con resultados) empieza con el contrato que describe las columnas que siguen, y una sección de comparaciones escribe su propia línea de contrato justo antes de `# Comparisons`:
+
+```
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+```
+
+`v2` es la forma del Batch 0 — los tres estados de celda por operación de arriba más `GCApproximate`. La lista `columns=` se deriva de la fila de encabezado que realmente se escribe, así que no puede desviarse de las tablas anteriores y nunca nombra una columna que una opción haya eliminado; `section=` distingue las dos líneas de contrato. Un lector debe omitir toda línea que empiece por `#` y tomar el orden de columnas de la lista `columns=` en lugar de codificarlo a mano.
+
 ---
 
 ## Modelo de Resultados
@@ -340,12 +405,27 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | Tipo | Descripción |
 |------|-------------|
 | `BenchmarkResult` | Nombre, Categoría, Etiquetas, Estadísticas, Muestras, IteracionesPorMuestra, RecuentoDeMuestras, Marca de tiempo |
-| `ComparisonResult` | Nombre, Categoría, Etiquetas, Línea base, Candidato, Aceleración, EsMásRápido, PorcentajeDeMejora |
+| `ComparisonResult` | Nombre, Categoría, Etiquetas, Línea base, Candidato, Aceleración, PorcentajeDeMejora, **Outcome**, **IsFasterKnown**, **Interval**, EsMásRápido |
 | `BenchmarkSuite` | Nombre, Descripción, Resultados, Comparaciones, Entorno, Duración, Marca de tiempo |
-| `Statistics` | Promedio, P50, P90, P95, P99, Mínimo, Máximo, DesviaciónEstándar, StandardError, RelativeStdDevPercent, CiclosDeCpuPorOp, GcInfo |
-| `TimingSample` | NanosegundosTranscurridos, MilisegundosTranscurridos, TicksTranscurridos, CiclosDeCpu, GcInfo |
-| `GcInfo` | Gen0, Gen1, Gen2, Total, EsCero |
+| `ComparisonOutcome` | Enum: `Unknown` (no se pudo calcular ningún cociente), `Inconclusive` (dentro de la banda muerta del 5%, o el intervalo aún contiene la paridad), `Faster`, `Slower` |
+| `ComparisonInterval` | Low, High, Contains(value), ToString() — intervalo del 95% libre de distribución de la mediana del cociente emparejado |
+| `Statistics` | Promedio, P50, P90, P95, P99, Mínimo, Máximo, DesviaciónEstándar, StandardError, RelativeStdDevPercent, CiclosDeCpuPorOp, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
+| `TimingSample` | NanosegundosTranscurridos, MilisegundosTranscurridos, TicksTranscurridos, CiclosDeCpu, **CpuCyclesAreApproximate**, GcInfo |
+| `GcInfo` | Gen0, Gen1, Gen2, Total, EsCero, IsApproximate |
 | `EnvironmentInfo` | SO, Arquitectura, VersiónDelRuntime, RecuentoDeProcesadores, Modo de ejecución, Configuración, tipo / disponibilidad / significado del contador de CPU, etiquetas personalizadas |
+
+Semántica de los miembros añadidos por el trabajo de fidelidad de medición:
+
+| Miembro | Contrato |
+|---|---|
+| `ComparisonResult.Outcome` | Veredicto de tres vías; `Faster`/`Slower` necesitan la banda muerta del 5% **y** un intervalo que excluya 1 |
+| `ComparisonResult.IsFasterKnown` | `Outcome != Unknown` — "las dos líneas se compararon" (pueden seguir siendo indistinguibles) |
+| `ComparisonResult.IsFaster` | Solo `Outcome == Faster`. Más estrecho que el antiguo `Speedup > 1.0`: una diferencia dentro de la banda muerta ya no es "más rápido" |
+| `ComparisonResult.Interval` | `ComparisonInterval?`; `null` cuando la comparación se construyó a partir de dos resultados independientes en lugar de rondas intercaladas |
+| `Statistics.ResolutionLimited` | El valor por operación es una cota superior (`<limit`), no una medición |
+| `Statistics.UnmeasuredSampleCount` / `Unmeasured` | Muestras para las que la fuente de temporización no pudo avanzar; sus celdas por operación son `N/A` |
+| `Statistics.CpuCyclesAreApproximate` | `CpuCyclesPerOp` es de todo el proceso (asíncrono) o un proxy de reloj monotónico (macOS), no ciclos de hilo: los formateadores lo prefijan con `~` |
+| `TimingSample.CpuCyclesAreApproximate` | La misma marca a nivel de muestra; `Statistics` la agrega con OR lógico |
 
 ---
 
@@ -387,12 +467,13 @@ src/
 
 | Característica | Windows | Linux | macOS |
 |---------|---------|-------|-------|
-| Cronometría de alta precisión | Stopwatch | Stopwatch | Stopwatch |
+| Temporización | Stopwatch | Stopwatch | Stopwatch |
 | Seguimiento de GC (Gen0/1/2) | Sí | Sí | Sí |
-| Conteo de ciclos de CPU | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time` (proxy) |
-| Aumento de prioridad de proceso | Sí | Sí | Sí |
+| Conteo de ciclos de CPU, síncrono | `QueryThreadCycleTime` (por hilo) | `perf_event_open` por hilo (cuando `perf_event_paranoid` ≤ 2) | `mach_absolute_time`, un **proxy de tiempo** — marcado `~` |
+| Conteo de ciclos de CPU, asíncrono | `QueryProcessCycleTime` (todo el proceso) — marcado `~` | `perf_event` de todo el proceso — marcado `~` | `mach_absolute_time` — marcado `~` |
+| Aumento de prioridad de proceso | Sí (con alcance, restaurado) | Sí (con alcance, restaurado) | Sí (con alcance, restaurado) |
 
-En macOS, el contador de CPU exportado es un proxy monotónico de alta resolución y no ciclos arquitectónicos reales. `EnvironmentInfo` y la salida de los formateadores muestran esta diferencia explícitamente.
+En macOS, el contador de CPU exportado es un proxy de *tiempo* monotónico de alta resolución y no ciclos arquitectónicos: el valor avanza con el tiempo real, no con las instrucciones ejecutadas, y por eso se marca `CpuCyclesAreApproximate` y se imprime con `~`. La misma marca se usa para la ruta asíncrona, cuyo contador de todo el proceso incluye trabajo hecho por otros hilos. `EnvironmentInfo` y la salida de los formateadores exponen ambas distinciones de forma explícita.
 
 ---
 

@@ -195,6 +195,14 @@ public static class Benchmark
 
     /// <summary>
     /// Compare two actions directly and return a comparison result.
+    /// <para>
+    /// Both lanes are measured in <see cref="ComparisonMeasurement.Rounds"/>
+    /// interleaved rounds (the lane that goes first alternates every round), the
+    /// verdict is the median of the per-round paired ratios, and a difference is only
+    /// reported when it is outside a 5% dead band and its interval excludes parity —
+    /// see <see cref="ComparisonResult.Outcome"/>. A single sequential baseline-then-
+    /// candidate run used to turn noise into a conclusion (Batch 0 · 0.2, B1-C1).
+    /// </para>
     /// </summary>
     public static ComparisonResult Compare(
         string name,
@@ -213,10 +221,71 @@ public static class Benchmark
         if (candidateAction == null)
             throw new ArgumentNullException(nameof(candidateAction));
 
-        var baseline = Run(baselineName, baselineAction, config);
-        var candidate = Run(candidateName, candidateAction, config);
+        var baselineRounds = new List<BenchmarkResult>(ComparisonMeasurement.Rounds);
+        var candidateRounds = new List<BenchmarkResult>(ComparisonMeasurement.Rounds);
 
-        return new ComparisonResult(name: name, baseline: baseline, candidate: candidate);
+        for (var round = 0; round < ComparisonMeasurement.Rounds; round++)
+        {
+            // Alternate which lane runs first: otherwise the second lane always
+            // inherits a warm process and wins on that alone.
+            if ((round & 1) == 1)
+            {
+                candidateRounds.Add(Run(candidateName, candidateAction, config));
+                baselineRounds.Add(Run(baselineName, baselineAction, config));
+            }
+            else
+            {
+                baselineRounds.Add(Run(baselineName, baselineAction, config));
+                candidateRounds.Add(Run(candidateName, candidateAction, config));
+            }
+        }
+
+        var pairedRatios = new double[ComparisonMeasurement.Rounds];
+        for (var round = 0; round < ComparisonMeasurement.Rounds; round++)
+        {
+            pairedRatios[round] = ComparisonMeasurement.Ratio(
+                baselineRounds[round].Statistics.Avg,
+                candidateRounds[round].Statistics.Avg
+            );
+        }
+
+        var (speedup, interval) = ComparisonMeasurement.PairedSpeedup(pairedRatios);
+
+        return new ComparisonResult(
+            name: name,
+            baseline: MergeRounds(baselineName, baselineRounds),
+            candidate: MergeRounds(candidateName, candidateRounds),
+            category: null,
+            tags: null,
+            speedup: speedup,
+            interval: interval
+        );
+    }
+
+    /// <summary>
+    /// Merges the rounds of one lane into a single result (median point estimates,
+    /// run extremes, summed GC counts) so a caller still gets one
+    /// <see cref="BenchmarkResult"/> per lane.
+    /// </summary>
+    private static BenchmarkResult MergeRounds(string name, List<BenchmarkResult> rounds)
+    {
+        var statistics = ComparisonMeasurement.Merge([.. rounds.Select(r => r.Statistics)]);
+
+        List<TimingSample>? samples = null;
+        if (rounds.TrueForAll(static r => r.Samples is not null))
+        {
+            samples = new List<TimingSample>();
+            foreach (var round in rounds)
+                samples.AddRange(round.Samples!);
+        }
+
+        return new BenchmarkResult(
+            name: name,
+            statistics: statistics,
+            iterationsPerSample: rounds[0].IterationsPerSample,
+            sampleCount: rounds.Sum(static r => r.SampleCount),
+            samples: samples
+        );
     }
 
     #region Private Helpers
@@ -241,6 +310,12 @@ public static class Benchmark
     }
 
     /// <summary>
+    /// How many empty delegates are timed to estimate the harness overhead of a
+    /// run. The minimum is used, so extra repetitions only cost time.
+    /// </summary>
+    private const int HarnessOverheadRepetitions = 5;
+
+    /// <summary>
     /// Run the collection phase, compute statistics, and build the result.
     /// </summary>
     private static BenchmarkResult CollectAndBuild(
@@ -253,6 +328,7 @@ public static class Benchmark
             ForceGc();
 
         var iterationsPerSample = ResolveIterationsPerSample(config, sampleFunc);
+        var overhead = MeasureOverhead(iterationsPerSample);
 
         var samples = new TimingSample[config.SampleCount];
         var perOpTimes = new double[config.SampleCount];
@@ -262,11 +338,17 @@ public static class Benchmark
         {
             var sample = sampleFunc(iterationsPerSample);
             samples[s] = sample;
-            perOpTimes[s] = sample.ElapsedNanoseconds / iterationsPerSample;
+            perOpTimes[s] = PerOpNanoseconds(sample, iterationsPerSample, overhead.Nanoseconds);
             perOpCycles[s] = (double)sample.CpuCycles / iterationsPerSample;
         }
 
-        var stats = StatisticsCalculator.Compute(perOpTimes, perOpCycles, samples);
+        var stats = StatisticsCalculator.Compute(
+            perOpTimes,
+            perOpCycles,
+            samples,
+            overhead.Nanoseconds / iterationsPerSample,
+            overhead.ResolutionLimitNanoseconds
+        );
 
         return new BenchmarkResult(
             name: name,
@@ -275,6 +357,65 @@ public static class Benchmark
             sampleCount: config.SampleCount,
             samples: config.RetainSamples ? samples : null
         );
+    }
+
+    /// <summary>
+    /// Measures the fixed cost a sample carries regardless of the measured
+    /// action, using the same iteration count as the run itself, and turns it
+    /// into the two numbers the statistics need: the total to deduct and the
+    /// smallest per-operation value this run can still resolve.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The <b>deducted</b> amount is the smallest of the empty-delegate probes,
+    /// because noise can only inflate a measurement and the minimum is therefore
+    /// the best estimate of the additive cost.
+    /// </para>
+    /// <para>
+    /// The <b>resolution limit</b> is the opposite quantity: an upper bound the
+    /// user can trust. <see cref="PerOpNanoseconds"/> clamps the residual at zero,
+    /// so a sample whose own overhead happened to exceed the deducted floor loses
+    /// that difference — and a limit built only from the clock tick and the probe
+    /// <i>spread</i> ignored it, printing <c>&lt;0.02 ns</c> for a true 0.3 ns/op
+    /// (G4 · B2). Any sample satisfies
+    /// <c>true per-op ≤ residual/iterations + overhead/iterations</c> (the
+    /// overhead is never negative), so the limit has to carry the per-operation
+    /// size of the amount that was subtracted; the largest probe is used, since the
+    /// residual is clamped against the smallest one. Without that term the claim
+    /// "this costs less than <c>limit</c>" can be smaller than the harness floor
+    /// the very same run deducted.
+    /// </para>
+    /// </remarks>
+    private static (double Nanoseconds, double ResolutionLimitNanoseconds) MeasureOverhead(
+        int iterationsPerSample
+    )
+    {
+        var harness = Runner.MeasureHarnessOverhead(iterationsPerSample, HarnessOverheadRepetitions);
+        var spreadPerOp =
+            Math.Max(0.0, harness.MaxNanoseconds - harness.MinNanoseconds) / iterationsPerSample;
+        var clockTickPerOp =
+            1_000_000_000.0 / Stopwatch.Frequency / iterationsPerSample;
+        var overheadUpperBoundPerOp =
+            Math.Max(0.0, harness.MaxNanoseconds) / iterationsPerSample;
+
+        return (
+            harness.MinNanoseconds,
+            Math.Max(clockTickPerOp, Math.Max(spreadPerOp, overheadUpperBoundPerOp))
+        );
+    }
+
+    /// <summary>
+    /// Per-operation nanoseconds of a sample with the harness overhead removed.
+    /// A measurement can never be negative, so the residual is clamped at zero.
+    /// </summary>
+    private static double PerOpNanoseconds(
+        TimingSample sample,
+        int iterationsPerSample,
+        double overheadNanoseconds
+    )
+    {
+        var net = sample.ElapsedNanoseconds - overheadNanoseconds;
+        return (net > 0 ? net : 0.0) / iterationsPerSample;
     }
 
     private static int ResolveIterationsPerSample(
@@ -441,6 +582,34 @@ public static class Benchmark
             : Runner.TimeAsync(iterations, action, setup, teardown);
     }
 
+    /// <summary>
+    /// Per-operation nanoseconds of a sample, never a "measured zero": a sample
+    /// whose clock did not advance is reported as one quantum of the timing
+    /// source, the smallest value that source can express. The sample itself stays
+    /// flagged as unmeasured (<see cref="Statistics.Unmeasured"/>), so the value is
+    /// disclosed as "not measured" rather than published as a fast operation.
+    /// </summary>
+    private static double PerOpNanosecondsWithFloor(
+        TimingSample sample,
+        int iterationsPerSample,
+        double quantumPerOp
+    )
+    {
+        var perOp = sample.ElapsedNanoseconds / iterationsPerSample;
+        return quantumPerOp > 0 && !(perOp > 0) ? quantumPerOp : perOp;
+    }
+
+    /// <summary>
+    /// Smallest time span the asynchronous timing source can express, in
+    /// nanoseconds: the measured granularity of the process CPU clock in
+    /// <see cref="AsyncTimingMode.CpuOnly"/> mode (0 elsewhere, where the source
+    /// already resolves nanoseconds).
+    /// </summary>
+    internal static double ResolveTimingQuantumNanoseconds(BenchmarkConfig config) =>
+        config.TimingMode == AsyncTimingMode.CpuOnly
+            ? Runner.GetCpuClockGranularity().Ticks * 100.0
+            : 0.0;
+
     private static async Task<BenchmarkResult> CollectAndBuildAsync(
         string name,
         BenchmarkConfig config,
@@ -452,6 +621,12 @@ public static class Benchmark
 
         var iterationsPerSample = await ResolveIterationsPerSampleAsync(config, sampleFuncAsync);
 
+        // Floor of the timing source this run uses. CpuOnly reads the process CPU
+        // clock, which advances in whole timer ticks: one sample can never be
+        // resolved below one tick, and a sub-tick sample reads as exactly zero.
+        // WallClock reads Stopwatch, whose tick is already the nanosecond scale.
+        var quantumPerOp = ResolveTimingQuantumNanoseconds(config) / iterationsPerSample;
+
         var samples = new TimingSample[config.SampleCount];
         var perOpTimes = new double[config.SampleCount];
         var perOpCycles = new double[config.SampleCount];
@@ -462,11 +637,17 @@ public static class Benchmark
 
             var sample = await sampleFuncAsync(iterationsPerSample);
             samples[s] = sample;
-            perOpTimes[s] = sample.ElapsedNanoseconds / iterationsPerSample;
+            perOpTimes[s] = PerOpNanosecondsWithFloor(sample, iterationsPerSample, quantumPerOp);
             perOpCycles[s] = (double)sample.CpuCycles / iterationsPerSample;
         }
 
-        var stats = StatisticsCalculator.Compute(perOpTimes, perOpCycles, samples);
+        var stats = StatisticsCalculator.Compute(
+            perOpTimes,
+            perOpCycles,
+            samples,
+            harnessOverheadNanoseconds: 0,
+            resolutionLimitNanoseconds: quantumPerOp
+        );
 
         return new BenchmarkResult(
             name: name,
