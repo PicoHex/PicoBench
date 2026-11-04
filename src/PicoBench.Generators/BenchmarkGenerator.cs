@@ -54,11 +54,11 @@ public sealed class BenchmarkGenerator : IIncrementalGenerator
                 continue;
 
             var model = result.Model;
-            var hintName = CreateHintName(model);
 
             try
             {
                 var code = Emitter.Generate(model);
+                var hintName = CreateHintName(model);
 
                 // Same type, two [BenchmarkClass] declarations: both analyses see
                 // every member of the merged type, so one source is complete.
