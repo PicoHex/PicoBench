@@ -124,7 +124,7 @@ var comparison = Benchmark.Compare(
 Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%) [{(comparison.Interval?.ToString() ?? "no interval")}] -> {comparison.Outcome}");
 ```
 
-- **`Speedup`** — ベースライン時間 ÷ 候補時間で、`> 1` なら候補が高速です。候補が何も計測できなかったラウンドは比率にまったく寄与しません。使用可能な比率が1つも得られない場合、比較は判定を捏造せず `NaN` を報告します（`ImprovementPercent` も同時に `NaN` になります）。2つの独立した `BenchmarkResult` から構築した `ComparisonResult` は、2つの平均値の比率を報告します。
+- **`Speedup`** — ベースライン時間 ÷ 候補時間で、`> 1` なら候補が高速です。候補が何も計測できなかったラウンドは比率にまったく寄与しません。使用可能な比率が1つも得られない場合、比較は判定を捏造せず `NaN` を報告します（`ImprovementPercent` も同時に `NaN` になります）。2つの独立した `BenchmarkResult` から構築した `ComparisonResult` は、2つの平均値の比率を報告します。 0/0 のラウンドはまさにこのケースで、`1.0` ではなく `NaN` になります（全ゼロの2つの独立した結果から構築した比較では従来どおり `1.0` です）。
 - **`Interval`** — その中央値の分布非依存な95%区間（10個のペア比の2番目/9番目の順序統計量）です。`Interval.Contains(1.0)` は同等性がまだ妥当であることを意味します。2つの独立した結果から構築した比較には**区間がありません**（`Interval` は `null`） — ペアにできる交互ラウンドが存在しないため、ばらつきについて何も言えません。
 - **`Outcome`** — 判定です。`Faster` / `Slower` は、比率が**5%のデッドバンド**を外れること*に加えて*、（区間が存在する場合は）区間が1を排除することを必要とします。その内側にあるものは `Inconclusive`、計算できなかった比率（非有限または非正）は `Unknown` であり、使用可能なペアラウンドが6未満の比較も同様です（それを下回ると区間が中央値を95%信頼度で覆えません）。
 - **`IsFaster`** — `Outcome == Faster` の場合のみ `true` です。つまり**以前より狭い**定義で、3%の差は `false`（`Inconclusive`）を返し、ラウンドを持たない比較も同じ5%のデッドバンドを通過する必要があります。三者択の答えには `Outcome`、「測定可能な差がない」と「まったく測定できなかった」の区別には `IsFasterKnown` を使用してください。

@@ -128,7 +128,7 @@ var comparison = Benchmark.Compare(
 Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%) [{(comparison.Interval?.ToString() ?? "no interval")}] -> {comparison.Outcome}");
 ```
 
-- **`Speedup`** — 기준선 시간 ÷ 후보 시간이며, `> 1`이면 후보가 더 빠릅니다. 후보가 아무것도 측정하지 못한 라운드는 비율에 전혀 기여하지 않습니다. 사용 가능한 비율이 하나도 없는 경우 비교는 판정을 만들어내지 않고 `NaN`을 보고합니다(`ImprovementPercent`도 함께 `NaN`이 됩니다). 두 개의 독립적인 `BenchmarkResult`로 구성된 `ComparisonResult`는 두 평균의 비율을 보고합니다.
+- **`Speedup`** — 기준선 시간 ÷ 후보 시간이며, `> 1`이면 후보가 더 빠릅니다. 후보가 아무것도 측정하지 못한 라운드는 비율에 전혀 기여하지 않습니다. 사용 가능한 비율이 하나도 없는 경우 비교는 판정을 만들어내지 않고 `NaN`을 보고합니다(`ImprovementPercent`도 함께 `NaN`이 됩니다). 두 개의 독립적인 `BenchmarkResult`로 구성된 `ComparisonResult`는 두 평균의 비율을 보고합니다. 0/0 라운드가 바로 이 경우이며 `1.0`이 아니라 `NaN`입니다(모두 0인 두 독립 결과로 만든 비교는 기존처럼 `1.0`을 유지합니다).
 - **`Interval`** — 그 중앙값의 분포 비의존 95% 구간입니다(10개 페어 비율의 2번째/9번째 순서 통계량). `Interval.Contains(1.0)`은 동등성이 여전히 그럴듯하다는 뜻입니다. 두 개의 독립적인 결과로 구성된 비교에는 **구간이 없습니다**(`Interval`은 `null`) — 페어로 묶을 교차 라운드가 없으므로 산포에 대해 말할 수 있는 것이 없습니다.
 - **`Outcome`** — 판정입니다. `Faster` / `Slower`는 비율이 **5% 데드 밴드**를 벗어나고 *그리고* (구간이 존재할 때) 구간이 1을 배제할 것을 요구합니다. 그 안에 있으면 `Inconclusive`, 계산할 수 없는 비율(비유한 또는 비양수)은 `Unknown`이며, 사용 가능한 페어 라운드가 6개 미만인 비교도 마찬가지입니다(그 미만에서는 구간이 중앙값을 95% 신뢰도로 포함할 수 없습니다).
 - **`IsFaster`** — `Outcome == Faster`인 경우에만 `true`입니다. 즉 **이전보다 좁아졌습니다**: 3% 차이는 이제 `false`(`Inconclusive`)를 반환하고, 라운드가 없는 비교도 같은 5% 데드 밴드를 통과해야 합니다. 3방향 답에는 `Outcome`을, "측정 가능한 차이 없음"과 "전혀 측정할 수 없음"의 구분에는 `IsFasterKnown`을 사용하세요.

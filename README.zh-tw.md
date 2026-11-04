@@ -126,7 +126,7 @@ Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPe
 
 `Benchmark.Compare(name, baselineAction, candidateAction)` **不會**讓每條通道只執行一次。它會在 10 輪中交錯執行兩條通道（每輪交替哪條通道先跑，因此任何一方都不會繼承更熱的進程），並回報**每輪配對比值的中位數**。這意味著：
 
-- **`Speedup`** —— 基準耗時 ÷ 候選耗時；`> 1` 表示候選更快。候選未測到任何耗時的輪次不產生比值；當沒有任何輪次給出可用比值時，比較會回報 `NaN`（`ImprovementPercent` 也隨之為 `NaN`），而不是憑空編造結論。由兩個獨立的 `BenchmarkResult` 建構的 `ComparisonResult` 仍然回報兩個平均值的比值。
+- **`Speedup`** —— 基準耗時 ÷ 候選耗時；`> 1` 表示候選更快。候選未測到任何耗時的輪次不產生比值；當沒有任何輪次給出可用比值時，比較會回報 `NaN`（`ImprovementPercent` 也隨之為 `NaN`），而不是憑空編造結論。由兩個獨立的 `BenchmarkResult` 建構的 `ComparisonResult` 仍然回報兩個平均值的比值。 0/0 的輪次正是這種情況：得到 `NaN` 而不是 `1.0`（由兩個全零的獨立結果建構的比較仍沿用舊的 `1.0`）。
 - **`Interval`** —— 該中位數的分佈無關 95% 區間（10 個配對比值的第 2/第 9 順序統計量）。`Interval.Contains(1.0)` 表示持平仍然可信。由兩個獨立結果建構的比較**沒有區間**（`Interval` 為 `null`）—— 沒有可配對的交錯輪次，因此無法描述離散程度。
 - **`Outcome`** —— 結論。`Faster` / `Slower` 要求比值離開 **5% 死區** *並且*（存在區間時）區間排除 1。落在其中即為 `Inconclusive`；無法計算的比值（非有限值或非正值）為 `Unknown`，可用配對輪次少於六輪的比較也是如此（低於該數量，區間無法以 95% 信心覆蓋中位數）。
 - **`IsFaster`** —— 僅當 `Outcome == Faster` 時為 `true`，即**比以往更窄**：3% 的差異現在回傳 `false`（`Inconclusive`），而沒有輪次的比較也必須越過同樣的 5% 死區。用 `Outcome` 取得三態答案，用 `IsFasterKnown` 區分「無可測差異」與「根本無法測量」。
