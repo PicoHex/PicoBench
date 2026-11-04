@@ -34,10 +34,32 @@ internal static class ComparisonMeasurement
     internal const double DeadBand = 0.05;
 
     /// <summary>
+    /// Smallest number of usable rounds whose sign-test interval still reaches the
+    /// 95% confidence it claims.
+    /// <para>
+    /// The interval is <c>[x_(k), x_(n+1-k)]</c> with <c>k = 1</c> for every count
+    /// this small, so its coverage is <c>1 - 2·P(Bin(n, ½) ≤ 0) = 1 - 2^(1-n)</c>:
+    /// n = 3/4/5 give 75/87.5/93.75% — <b>below the 95% the interval advertises</b> —
+    /// and n = 6 is the first count that reaches it (96.875%). Fewer usable rounds
+    /// therefore produce no interval <b>and no verdict</b> (G4 · B1), which also
+    /// removes the n ≤ 2 degenerate case where <c>[r, r]</c> let a single surviving
+    /// ratio of 2.0 read as a difference with a zero-width interval.
+    /// </para>
+    /// <para>
+    /// Reachable in practice: <c>Benchmark.PerOpNanoseconds</c> clamps the residual
+    /// at zero, so a sub-floor workload produces rounds whose candidate average is
+    /// exactly 0, <see cref="Ratio"/> returns <see cref="double.NaN"/> for them and
+    /// they are dropped.
+    /// </para>
+    /// </summary>
+    internal const int MinimumUsableRounds = 6;
+
+    /// <summary>
     /// Median of the paired per-round ratios plus the distribution-free 95%
     /// interval of that median. Ratios that are not finite and positive (a lane
-    /// that measured nothing) are dropped; <see cref="double.NaN"/> is returned
-    /// when no round produced a usable ratio.
+    /// that measured nothing) are dropped; <see cref="double.NaN"/> and no
+    /// interval are returned when fewer than <see cref="MinimumUsableRounds"/>
+    /// rounds produced a usable ratio, i.e. when the sign test cannot reach 95%.
     /// </summary>
     internal static (double Speedup, ComparisonInterval? Interval) PairedSpeedup(
         IReadOnlyList<double> perRoundRatios
@@ -50,7 +72,7 @@ internal static class ComparisonMeasurement
                 usable.Add(ratio);
         }
 
-        if (usable.Count == 0)
+        if (usable.Count < MinimumUsableRounds)
             return (double.NaN, null);
 
         usable.Sort();
@@ -187,6 +209,13 @@ internal static class ComparisonMeasurement
     /// <c>[x_(k), x_(n+1-k)]</c> that covers the median with at least 95%
     /// confidence. The coverage is <c>1 - 2·P(Bin(n, 0.5) ≤ k-1)</c> — the sign
     /// test, i.e. no assumption about the distribution of the ratios.
+    /// <para>
+    /// The 95% is only reached from <see cref="MinimumUsableRounds"/> (6) usable
+    /// ratios upwards: below that this method still returns the full range, whose
+    /// real coverage is 50/75/87.5/93.75% for n = 1/2/3/4/5. Callers must
+    /// therefore reject counts below <see cref="MinimumUsableRounds"/> — see
+    /// <see cref="PairedSpeedup"/>.
+    /// </para>
     /// </summary>
     internal static int MedianConfidenceRank(int count)
     {

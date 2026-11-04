@@ -427,7 +427,9 @@ public sealed class ComparisonResult
     /// per-round paired ratios</b> instead of the ratio of two arithmetic means, so
     /// one noisy round cannot swing it. The behaviour for a zero/near-zero average
     /// is unchanged: <c>1.0</c> when both averages are zero, positive infinity when
-    /// only the candidate's is.
+    /// only the candidate's is. A direct comparison reports <see cref="double.NaN"/>
+    /// when fewer than 6 rounds produced a usable ratio, because the interval would
+    /// not reach 95% confidence; see <see cref="Outcome"/>.
     /// </remarks>
     public double Speedup =>
         _measuredSpeedup ?? ComputeSpeedup(Baseline.Statistics.Avg, Candidate.Statistics.Avg);
@@ -444,7 +446,10 @@ public sealed class ComparisonResult
     /// Verdict of the comparison:
     /// <see cref="ComparisonOutcome.Inconclusive"/> when the ratio is inside the 5%
     /// dead band or its interval still contains parity, and
-    /// <see cref="ComparisonOutcome.Unknown"/> when no ratio could be computed.
+    /// <see cref="ComparisonOutcome.Unknown"/> when no ratio could be computed —
+    /// including the case where fewer rounds produced a usable ratio than the sign
+    /// test needs to reach 95% confidence (<c>6</c>), so no interval and no verdict
+    /// is stated at all.
     /// </summary>
     public ComparisonOutcome Outcome => Classify(Speedup, _interval);
 
