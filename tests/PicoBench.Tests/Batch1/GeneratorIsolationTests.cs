@@ -147,16 +147,18 @@ public class GeneratorIsolationTests
 
         await Assert.That(Batch1Support.HasGeneratorFailure(output)).IsFalse();
 
-        // Exactly one diagnostic — for the one broken class, not one per member
-        // and not a warning nobody reads.
+        // At most one diagnostic — for the one broken class, not one per member
+        // and not a cascade. (0 is the better answer: Batch 1 · 1.4 may teach the
+        // formatter to emit an array literal, and then nothing is wrong at all.
+        // Either way this class may not take the sibling with it.)
         var generatorErrors = Batch1Support.GeneratorErrors(output);
-        await Assert.That(generatorErrors.Count).IsEqualTo(1);
+        await Assert.That(generatorErrors.Count).IsLessThanOrEqualTo(1);
 
-        // …and the healthy sibling still generates, and the result compiles.
-        await Assert.That(output.Sources.Length).IsEqualTo(1);
+        // …and the healthy sibling always generates, and the result compiles.
         await Assert
             .That(output.HintNames.Any(static h => h.Contains("Sibling", StringComparison.Ordinal)))
             .IsTrue();
+        await Assert.That(output.Sources.Length).IsEqualTo(generatorErrors.Count == 0 ? 2 : 1);
         await Assert.That(compilerErrors.Count).IsEqualTo(0);
     }
 

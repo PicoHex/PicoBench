@@ -295,7 +295,10 @@ public class IdentifierEscapingTests
         var compilerErrors = GeneratorHarness.CompileErrors(source, output);
         Batch1Support.LogRun("explicit lifecycle", output, compilerErrors);
 
-        await Assert.That(Batch1Support.ReportsId(output, "PBGEN019")).IsTrue();
+        var generatorErrors = Batch1Support.GeneratorErrors(output);
+        await Assert.That(generatorErrors.Count).IsEqualTo(1);
+        await Assert.That(generatorErrors[0].Id).IsEqualTo("PBGEN019");
+        await Assert.That(generatorErrors[0].GetMessage()).Contains("ISetup.Setup");
         await Assert.That(output.Sources.Length).IsEqualTo(0);
         await Assert.That(compilerErrors.Count).IsEqualTo(0);
     }
