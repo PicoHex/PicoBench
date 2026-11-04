@@ -10,15 +10,16 @@
 - **2つのAPI** - アドホックテスト用の命令型API (`Benchmark.Run`)；構造化されたスイート用の属性ベースAPI (`[Benchmark]` + ソースジェネレーター)
 - **AOT互換ソースジェネレーター** - インクリメンタルジェネレーターが実行時に直接メソッド呼び出しを生成、リフレクションゼロ
 - **クロスプラットフォーム** - Windows、Linux、macOSを完全サポート
-- **高精度タイミング** - `Stopwatch` を使用し、1操作あたりの時間をナノ秒スケールで報告
+- **サブマイクロ秒タイミング** - `Stopwatch` ベースの1操作あたりの計測で、ハーネス自身の1操作あたりコストを実測して差し引きます。実行の分解能限界を下回るワークロードは上限値（`<limit`）として報告され `ResolutionLimited` のフラグが立ちます — ナノ秒精度の数値として報告されることはありません
+- **開示された限界** - `OverheadNs`、`ResolutionLimitNanoseconds`、`ResolutionLimited`、`Unmeasured` は、その実行が何を分解できて何を分解できなかったかを示すため、ノイズレベルの結果を高速な操作として読み違えることはありません
 - **GC追跡** - ベンチマーク中のGen0/Gen1/Gen2コレクション回数を監視（setup/teardown を除く）
-- **CPUサイクルカウント** - Windows / Linux ではハードウェアサイクル、macOS では単調クロックのプロキシ値（`mach_absolute_time`）を使用
+- **CPUサイクルカウント** - 同期パスではスレッドスコープのサイクル数を取得します（Windows `QueryThreadCycleTime`；Linux では OS が非特権アクセスを許可する場合 `perf_event`）。非同期ベンチマークはプロセス全体のカウンターを読み（スレッド単位のカウンターはスレッド遷移をまたいで追跡できないため）、`CpuCyclesAreApproximate` のフラグが立ちます（4つの全フォーマットで `~`）。macOS にはサイクルカウンターがなく、`mach_absolute_time` はサイクルではなく単調な*時間*プロキシであり、同じフラグが立ちます
 - **統計分析** - 平均、中央値、P90、P95、P99、最小値、最大値、標準偏差、標準誤差、相対標準偏差
 - **複数出力形式** - 4 つの組み込み `IFormatter` フォーマッター（Console、Markdown、HTML、CSV）とプログラム要約出力
 - **パラメータ化ベンチマーク** - `[Params]`属性で自動デカルト積反復
-- **比較サポート** - ベースライン vs 候補、高速化計算付き
+- **比較サポート** - ベースラインと候補を交互のラウンドで計測し、判定にはラウンドごとのペア比の中央値を使います。5% のデッドバンドと、同等性を排除する分布非依存の区間の両方が必要なので、ラウンド間のノイズが改善として公表されることはありません
 - **設定可能** - Quick、Default、Preciseプリセット、自動キャリブレーション、または完全カスタム設定
-- **netstandard2.0** - .NET Framework 4.6.1+、.NET Core 2.0+、.NET 5+と互換性
+- **netstandard2.0** - .NET Framework **4.7.2+**（`RuntimeInformation` を無条件で使用するため、それ以前の .NET Framework バージョンは非対応）、.NET Core 2.0+、.NET 5+と互換性
 
 ## インストール
 
@@ -120,8 +121,15 @@ var comparison = Benchmark.Compare(
     "StringBuilder",  () => { var sb = new StringBuilder(); for (int i = 0; i < 100; i++) sb.Append('a'); _ = sb.ToString(); }
 );
 
-Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%)");
+Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%) [{(comparison.Interval?.ToString() ?? "no interval")}] -> {comparison.Outcome}");
 ```
+
+- **`Speedup`** — ベースライン時間 ÷ 候補時間で、`> 1` なら候補が高速です。候補が何も計測できなかったラウンドは比率にまったく寄与しません。使用可能な比率が1つも得られない場合、比較は判定を捏造せず `NaN` を報告します（`ImprovementPercent` も同時に `NaN` になります）。2つの独立した `BenchmarkResult` から構築した `ComparisonResult` は、2つの平均値の比率を報告します。
+- **`Interval`** — その中央値の分布非依存な95%区間（10個のペア比の2番目/9番目の順序統計量）です。`Interval.Contains(1.0)` は同等性がまだ妥当であることを意味します。2つの独立した結果から構築した比較には**区間がありません**（`Interval` は `null`） — ペアにできる交互ラウンドが存在しないため、ばらつきについて何も言えません。
+- **`Outcome`** — 判定です。`Faster` / `Slower` は、比率が**5%のデッドバンド**を外れること*に加えて*、（区間が存在する場合は）区間が1を排除することを必要とします。その内側にあるものは `Inconclusive`、計算できなかった比率（非有限または非正）は `Unknown` であり、使用可能なペアラウンドが6未満の比較も同様です（それを下回ると区間が中央値を95%信頼度で覆えません）。
+- **`IsFaster`** — `Outcome == Faster` の場合のみ `true` です。つまり**以前より狭い**定義で、3%の差は `false`（`Inconclusive`）を返し、ラウンドを持たない比較も同じ5%のデッドバンドを通過する必要があります。三者択の答えには `Outcome`、「測定可能な差がない」と「まったく測定できなかった」の区別には `IsFasterKnown` を使用してください。
+
+コスト: 直接比較は各レーンを10回ずつ、つまり**20 `Run`** を実行します — 遅すぎる場合は A/B 実行で `SampleCount` / `WarmupIterations` を下げてください。
 
 ### 詳細：独立したウォームアップ、セットアップ、ティアダウン
 
@@ -220,8 +228,9 @@ var scoped = await Benchmark.RunScopedAsync("Scoped",
 ```
 
 - **計測モード** – `AsyncTimingMode.WallClock`（既定）は await による中断を含む総時間を計測します。`AsyncTimingMode.CpuOnly` は `Process.TotalProcessorTime` を計測し、I/O 待ちを除外します。CPU クロックは OS のタイマーティック（通常 10〜16 ms）単位でしか進まないため、自動キャリブレーションは最小サンプル予算を実測したクロック粒度まで引き上げます。CpuOnly モードでは GC データを収集しません。
+- **計測不能なサンプル** – `CpuOnly` モードでは、1回の OS タイマーティックより短いワークロードは CPU 時間がちょうどゼロとして読まれます。そのようなサンプルは `Statistics.UnmeasuredSampleCount` に数えられ（`Unmeasured` が `true`）、1操作あたりの値は `0.000` ではなく**1タイミング量子 — 上限値**になり、フォーマッターは1操作あたりのセルを `N/A` と表示します。そのような実行の統計は処理の測定値ではありません。「CPU クロックの分解能を下回っている」と読んでください。問題を隠すためにイテレーション回数が黙って水増しされることはありません — キャリブレーションするのは `AutoCalibrateIterations = true`（`Quick`/`Precise` プリセット）の場合のみで、`Default` は設定された `IterationsPerSample` をそのまま使います。
 - **GC の帰属** – 非同期の GC カウントは近似値としてマークされます（`GcInfo.IsApproximate`）。setup/teardown の割り当てはどちらのモードでも除外されます。
-- **CPU サイクル** – 非同期ベンチマークはプロセス全体のカウンターを使用します（スレッド単位のカウンターはスレッド遷移をまたいで減算できないため）。
+- **CPU サイクル** – 同期パスはスレッドスコープのカウンターを読みます（Windows では `QueryThreadCycleTime`、Linux では計測スレッド用に開いた `perf_event`）。非同期ベンチマークはプロセス全体のカウンターを読みます（スレッド単位のカウンターはスレッド遷移をまたいで追跡できないため）。その数値には他のスレッドが行った処理が含まれ、`Statistics.CpuCyclesAreApproximate` でフラグが立ち、Console、Markdown、HTML、CSV で `~` 付きで描画されます。macOS にはサイクルカウンターがなく、`mach_absolute_time` はアーキテクチャ上のサイクルではなく単調な*時間*プロキシであり、同じフラグが立ちます。
 - **キャンセル** – `BenchmarkConfig.CancellationToken` は非同期ベンチマークのサンプル境界でのみ確認されます。同期ベンチマークは無視します。
 - **混在クラス** – クラスに他の非同期メンバーがあっても、同期 `[Benchmark]` メソッドは直接の同期計測パスを使います。
 - **ウォームアップ** – ウォームアップのイテレーションはウォームアップデリゲートのみを呼び出します。`setup`/`teardown` と `[IterationSetup]`/`[IterationCleanup]` はウォームアップ中には実行されません。ウォームアップ処理は自己完結させてください。
@@ -234,8 +243,21 @@ PicoBench はインプロセスで実行されるため、CLR の設定が絶対
 
 - 階層化 JIT を無効化: `DOTNET_TieredCompilation=0`、`DOTNET_TieredPGO=0`（または `COMPlus_*`）。
 - シングルスレッドのマイクロベンチマークではワークステーション GC を使用: `DOTNET_gcServer=0`。
-- CPU サイクルは OS が非特権カウンターを許可する場合のみ利用できます（Windows `QueryThreadCycleTime`/`QueryProcessCycleTime`、Linux は `perf_event_paranoid` ≤ 2 の場合 `perf_event`、macOS は真のサイクルではなく単調プロキシ）。`EnvironmentInfo` とすべてのフォーマッターが使用ソースを報告します。
+- CPU サイクル数は OS が非特権カウンターを許可する場合にのみ利用できます（Windows `QueryThreadCycleTime`；Linux では `perf_event_paranoid` が 2 以下の場合の `perf_event`）。Windows の同期実行はスレッドスコープで、非同期実行と macOS はプロセス全体のカウンターを、macOS では実際のサイクルの代わりに単調クロックプロキシを使用します — どちらも `CpuCyclesAreApproximate` でフラグが立ちます。`EnvironmentInfo` とすべてのフォーマッターが使用されたソースを報告します。
 - `BenchmarkConfig.BoostPriorities`（既定 `true`）は実行中のみプロセスとスレッドの優先度を上げ、終了後に元の値へ戻します。
+
+### 数値が分解できること・できないこと
+
+すべての実行は、同じイテレーション回数でハーネス自身が1操作あたりに追加するコストを計測して差し引き、その後、まだ分解できる最小値を公表します:
+
+| フィールド | 意味 |
+|---|---|
+| `Statistics.OverheadNs` | 計測・差し引かれたハーネスの1操作あたりコスト（デリゲートディスパッチ、ループの管理、クロックとカウンターの読み取り）。非同期実行ではオーバーヘッドを差し引かないため `0` |
+| `Statistics.ResolutionLimitNanoseconds` | この実行が分解できる最小の1操作あたりの値: クロック1ティックをイテレーション数で割った値、または差し引いたオーバーヘッドの実行間ばらつきの、大きい方 |
+| `Statistics.ResolutionLimited` | `Avg` がその限界以下であるか、少なくとも1つのサンプルがまったく計測できなかったことを示します。フォーマッターは1操作あたりのセルを、数値ではなく上限値（Console と CSV では `<limit`、Markdown と HTML では `[below resolution]`）として表示します |
+| `Statistics.Unmeasured` / `UnmeasuredSampleCount` | タイミングソースがまったく進めなかったサンプル数（`CpuOnly` のゼロティック）。それらのセルは `0.000` ではなく `N/A` と表示されます |
+
+したがって、サブナノ秒の結果に対する正直な読み方は「`<limit` ns 未満」であり、「0.02 ns」ではありません: その値は測定されたのではなく上限で区切られており、その上限はクロックの量子化と差し引いたオーバーヘッドのばらつきを覆います（残差はゼロでクランプされるため、実際のコストがより小さいことの証明ではなく、ハーネスが分解できる下限です）。さらに2つの非対称性に留意してください: ハーネスのオーバーヘッド差し引きは同期ベンチマークにのみ実装されており（非同期の1操作あたりの値は依然としてサンプルごとのラッパーコストを抱えます）、GC バイト数はまったく計測されません — プロセス単位の収集回数のみで、非同期パスでは近似値です。
 
 ---
 
@@ -333,6 +355,40 @@ File.WriteAllText(Path.Combine(dir, "results.html"), new HtmlFormatter().Format(
 File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(suite));
 ```
 
+### CSV 列の契約
+
+`CsvFormatter` はヘッダー行を書き、続けてデータ行を書きます。スイートは `#` コメント行（`# Suite:`、`# Environment:`、`# CpuCounter:`、`# CpuCounterNote:`、`# GcInfoNote:`、`# Timestamp:`、`# Duration:`）と2つのセクション `# Results` と `# Comparisons` を追加し、**それぞれが独自のヘッダー行**を持ちます。したがってファイルには複数のヘッダー行があるため、`pandas.read_csv(path, comment='#')` はコメントをスキップしますが、2つのセクションは自分で分割する必要があります。
+
+結果の列（この順序、既定オプション。`IncludePercentiles`、`IncludeGcInfo`、`IncludeCpuCycles`、`IncludeTimestamp` を `false` にすると対応する列が消えます）:
+
+| # | 列 | 意味 |
+|---|---|---|
+| 1 | `Name` | ベンチマーク名（`,` `"` または改行を含む場合は引用符で囲み、先頭の `=`/`+`/`-`/`@` には `'` を前置） |
+| 2 | `Category` | カテゴリ。未設定の場合は空 |
+| 3 | `Avg_ns` | 1操作あたりのナノ秒 — セルには3つの状態があります（下記参照） |
+| 4 | `P50_ns` | 1操作あたりの中央値ナノ秒（同じ3つの状態） |
+| 5-12 | `P90_ns`, `P95_ns`, `P99_ns`, `Min_ns`, `Max_ns`, `StdDev_ns`, `StdErr_ns`, `RSD_pct` | パーセンタイルとばらつき。`RSD_pct` は単なるパーセンテージですが、他の7つは1操作あたりのセル状態を使います |
+| 13 | `CpuCycles` | 1操作あたりのサイクル数。`~` 接頭辞はスレッドサイクルではなくプロセス全体のカウンターまたはクロックプロキシ（`CpuCyclesAreApproximate`）を示します |
+| 14-16 | `GC0`, `GC1`, `GC2` | 収集回数。GC が収集されなかった場合は `N/A` |
+| 17 | `GCApproximate` | カウンターが近似値（非同期パス）なら `1`、正確なら `0`、収集されなかった場合は `N/A` |
+| 18 | `SampleCount` | サンプル数（整数） |
+| 19 | `IterationsPerSample` | サンプルあたりのイテレーション数（整数） |
+| 20 | `Timestamp` | ISO-8601 ラウンドトリップ（`o`、インバリアントカルチャ） |
+
+1操作あたりの列のセル状態:
+
+| セル | 意味 |
+|---|---|
+| `12.5` | 測定されたナノ秒値（インバリアントカルチャ、ラウンドトリップ形式） |
+| `<0.02` | **上限値**: 実行が `Statistics.ResolutionLimitNanoseconds` を超える値を分解できませんでした。`<` の後ろの数値がその限界であり、測定値ではありません |
+| `N/A` | 計測されなかった（`Statistics.Unmeasured`、クロック差分がゼロ）か、収集されなかった（GC 列） |
+
+消費側への2つの影響: `<0.02` のため、1操作あたりの列が**数値であることは保証されません**。そのため pandas のようなリーダーは `object` と推論し、上限の行を明示的に扱う必要があります。また `GCApproximate` は `GC2` と `SampleCount` の間の位置17に挿入されたため、**位置ベースのリーダーは `SampleCount`/`IterationsPerSample` を1つずらす必要があります**（名前ベースのリーダーは影響を受けません）。
+
+比較の列: `TestCase`、`Provider`、`Avg_ns`、`Speedup`、`P50_ns`、`P90_ns`、`P99_ns`、`StdErr_ns`、`RSD_pct`、`CpuCycles`、`GC0`、`GC1`、`GC2`、`GCApproximate`。各比較は2行（候補が先、ベースラインが後）を書き、`Speedup` は候補の行にのみ入ります。比較のセルは現在単純な数値フォーマッターを通過するため、結果テーブルの `N/A`/`<limit` はそこには現れません。
+
+> これらの状態を宣言する機械可読な `# Schema:` ヘッダー行は、別個の Batch 0 フォローアップとして扱われています。それが実装されるまで、上記の表が契約であり、スイートファイルはスキーマバージョンをまだ特定しません。
+
 ---
 
 ## 結果モデル
@@ -340,12 +396,27 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | タイプ | 説明 |
 |------|-------------|
 | `BenchmarkResult` | 名前、カテゴリ、タグ、統計、サンプル、サンプルあたり反復数、サンプル数、タイムスタンプ |
-| `ComparisonResult` | 名前、カテゴリ、タグ、ベースライン、候補、高速化、高速かどうか、改善率 |
+| `ComparisonResult` | 名前、カテゴリ、タグ、ベースライン、候補、高速化、改善率、**Outcome**、**IsFasterKnown**、**Interval**、高速かどうか |
 | `BenchmarkSuite` | 名前、説明、結果、比較、環境、期間、タイムスタンプ |
-| `Statistics` | 平均、P50、P90、P95、P99、最小、最大、標準偏差、StandardError、RelativeStdDevPercent、操作あたりCPUサイクル、GcInfo |
-| `TimingSample` | 経過ナノ秒、経過ミリ秒、経過ティック、CPUサイクル、GcInfo |
-| `GcInfo` | Gen0、Gen1、Gen2、合計、ゼロか |
+| `ComparisonOutcome` | 列挙型: `Unknown`（比率を計算できなかった）、`Inconclusive`（5% デッドバンド内、または区間が依然として同等性を含む）、`Faster`、`Slower` |
+| `ComparisonInterval` | Low, High, Contains(value), ToString() — 中央値ペア比の分布非依存な95%区間 |
+| `Statistics` | 平均、P50、P90、P95、P99、最小、最大、標準偏差、StandardError、RelativeStdDevPercent、操作あたりCPUサイクル、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GcInfo、HasHighVariance |
+| `TimingSample` | 経過ナノ秒、経過ミリ秒、経過ティック、CPUサイクル、**CpuCyclesAreApproximate**、GcInfo |
+| `GcInfo` | Gen0、Gen1、Gen2、合計、ゼロか、IsApproximate |
 | `EnvironmentInfo` | OS、アーキテクチャ、ランタイムバージョン、プロセッサ数、実行モード、設定、CPUカウンター種別 / 可用性 / 意味の有無、カスタムタグ |
+
+計測忠実度の作業で追加されたメンバーの意味:
+
+| メンバー | 契約 |
+|---|---|
+| `ComparisonResult.Outcome` | 三者択の判定。`Faster`/`Slower` には 5% デッドバンド**と**1を排除する区間の両方が必要 |
+| `ComparisonResult.IsFasterKnown` | `Outcome != Unknown` — 「2つのレーンは比較された」（まだ区別できない場合もあります） |
+| `ComparisonResult.IsFaster` | `Outcome == Faster` の場合のみ。旧来の `Speedup > 1.0` より狭く、デッドバンド内の差はもはや「高速」ではありません |
+| `ComparisonResult.Interval` | `ComparisonInterval?`。交互ラウンドではなく2つの独立した結果から比較を構築した場合は `null` |
+| `Statistics.ResolutionLimited` | 1操作あたりの値が測定値ではなく上限値（`<limit`）であることを示します |
+| `Statistics.UnmeasuredSampleCount` / `Unmeasured` | タイミングソースが進めなかったサンプル。それらの1操作あたりのセルは `N/A` |
+| `Statistics.CpuCyclesAreApproximate` | `CpuCyclesPerOp` がスレッドサイクルではなくプロセス全体（非同期）または単調クロックプロキシ（macOS）であることを示します。フォーマッターは `~` を前置します |
+| `TimingSample.CpuCyclesAreApproximate` | サンプルレベルで同じフラグ。`Statistics` は論理和で集約します |
 
 ---
 
@@ -387,12 +458,13 @@ src/
 
 | 機能 | Windows | Linux | macOS |
 |---------|---------|-------|-------|
-| 高精度タイミング | Stopwatch | Stopwatch | Stopwatch |
+| タイミング | Stopwatch | Stopwatch | Stopwatch |
 | GC追跡 (Gen0/1/2) | はい | はい | はい |
-| CPUサイクルカウント | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time`（プロキシ） |
-| プロセス優先度ブースト | はい | はい | はい |
+| CPUサイクルカウント（同期） | `QueryThreadCycleTime`（スレッドスコープ） | スレッドごとの `perf_event_open`（`perf_event_paranoid` ≤ 2 の場合） | `mach_absolute_time`、**時間プロキシ** — `~` フラグ付き |
+| CPUサイクルカウント（非同期） | `QueryProcessCycleTime`（プロセス全体） — `~` フラグ付き | プロセス全体の `perf_event` — `~` フラグ付き | `mach_absolute_time` — `~` フラグ付き |
+| プロセス優先度ブースト | はい（範囲限定、復元） | はい（範囲限定、復元） | はい（範囲限定、復元） |
 
-macOS では、出力される CPU カウンターはアーキテクチャ上の実サイクルではなく、高分解能の単調クロックプロキシです。`EnvironmentInfo` と各フォーマッター出力はこの違いを明示します。
+macOS では、エクスポートされる CPU カウンターはアーキテクチャ上のサイクル数ではなく、高分解能の単調な*時間*プロキシです。値は実行された命令数ではなく実時間とともに進むため、`CpuCyclesAreApproximate` でフラグが立ち、`~` 付きで表示されます。同じフラグが非同期パスにも使われ、そのプロセス全体のカウンターには他のスレッドが行った処理が含まれます。`EnvironmentInfo` とフォーマッターの出力はどちらの区別も明示的に示します。
 
 ---
 

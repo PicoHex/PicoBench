@@ -10,15 +10,16 @@
 - **兩種 API** - 命令式 (`Benchmark.Run`) 用於臨時測試；基於屬性 (`[Benchmark]` + 源生成器) 用於結構化測試套件
 - **AOT 相容的源生成器** - 增量生成器在執行時生成直接方法呼叫，零反射
 - **跨平台** - 完全支援 Windows、Linux 和 macOS
-- **高精度計時** - 使用 `Stopwatch` 並回報奈秒尺度的每操作耗時
+- **亞微秒計時** - 基於 `Stopwatch` 的每操作計時，並實測並扣除測試框架自身的每操作開銷。低於本次執行解析度上限的工作負載僅以其上界回報（`<limit`）並標記 `ResolutionLimited` —— 絕不給出奈秒級精確的數值
+- **顯式揭露的極限** - `OverheadNs`、`ResolutionLimitNanoseconds`、`ResolutionLimited` 與 `Unmeasured` 說明了本次執行能夠解析與無法解析什麼，因此雜訊級的結果不會被當作快速操作來讀
 - **GC 追蹤** - 監控基準測試期間的 Gen0/Gen1/Gen2 回收計數（不含 setup/teardown）
-- **CPU 週期計數** - Windows / Linux 提供硬體週期計數，macOS 提供單調時鐘代理值（`mach_absolute_time`）
+- **CPU 週期計數** - 同步路徑使用執行緒級週期計數（Windows `QueryThreadCycleTime`；Linux 在作業系統允許非特權存取時使用 `perf_event`）。非同步基準讀取進程級計數器，因為執行緒級計數器無法跨執行緒切換追蹤，因此標記為 `CpuCyclesAreApproximate`（四種格式中均帶 `~`）。macOS 沒有週期計數器：`mach_absolute_time` 是單調的*時間*代理，而不是週期，同樣會被標記
 - **統計分析** - 均值、中位數、P90、P95、P99、最小值、最大值、標準差、標準誤和相對標準差
 - **多種輸出格式** - 4 個內建 `IFormatter` 格式化器（Console、Markdown、HTML、CSV）以及程式化摘要輸出
 - **參數化基準測試** - `[Params]` 屬性，支援自動笛卡爾積迭代
-- **比較支援** - 基準 vs 候選實現，帶加速比計算
+- **比較支援** - 基準與候選在交錯輪次中測量；結論取每輪配對比值的中位數，並且必須同時滿足 5% 死區與排除持平的分佈無關區間，因此輪次間的雜訊不會被當作效能提升發佈
 - **可配置** - Quick、Default 和 Precise 預設、自動校準或完全自訂配置
-- **netstandard2.0** - 相容 .NET Framework 4.6.1+、.NET Core 2.0+、.NET 5+
+- **netstandard2.0** - 相容 .NET Framework **4.7.2+**（`RuntimeInformation` 被無條件使用，因此不支援更早的 .NET Framework 版本）、.NET Core 2.0+、.NET 5+
 
 ## 安裝
 
@@ -120,8 +121,17 @@ var comparison = Benchmark.Compare(
     "StringBuilder",  () => { var sb = new StringBuilder(); for (int i = 0; i < 100; i++) sb.Append('a'); _ = sb.ToString(); }
 );
 
-Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%)");
+Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%) [{(comparison.Interval?.ToString() ?? "no interval")}] -> {comparison.Outcome}");
 ```
+
+`Benchmark.Compare(name, baselineAction, candidateAction)` **不會**讓每條通道只執行一次。它會在 10 輪中交錯執行兩條通道（每輪交替哪條通道先跑，因此任何一方都不會繼承更熱的進程），並回報**每輪配對比值的中位數**。這意味著：
+
+- **`Speedup`** —— 基準耗時 ÷ 候選耗時；`> 1` 表示候選更快。候選未測到任何耗時的輪次不產生比值；當沒有任何輪次給出可用比值時，比較會回報 `NaN`（`ImprovementPercent` 也隨之為 `NaN`），而不是憑空編造結論。由兩個獨立的 `BenchmarkResult` 建構的 `ComparisonResult` 仍然回報兩個平均值的比值。
+- **`Interval`** —— 該中位數的分佈無關 95% 區間（10 個配對比值的第 2/第 9 順序統計量）。`Interval.Contains(1.0)` 表示持平仍然可信。由兩個獨立結果建構的比較**沒有區間**（`Interval` 為 `null`）—— 沒有可配對的交錯輪次，因此無法描述離散程度。
+- **`Outcome`** —— 結論。`Faster` / `Slower` 要求比值離開 **5% 死區** *並且*（存在區間時）區間排除 1。落在其中即為 `Inconclusive`；無法計算的比值（非有限值或非正值）為 `Unknown`，可用配對輪次少於六輪的比較也是如此（低於該數量，區間無法以 95% 信心覆蓋中位數）。
+- **`IsFaster`** —— 僅當 `Outcome == Faster` 時為 `true`，即**比以往更窄**：3% 的差異現在回傳 `false`（`Inconclusive`），而沒有輪次的比較也必須越過同樣的 5% 死區。用 `Outcome` 取得三態答案，用 `IsFasterKnown` 區分「無可測差異」與「根本無法測量」。
+
+成本：直接比較會讓每條通道執行 10 次，即 **20 次 `Run`** —— 如果太慢，A/B 執行可降低 `SampleCount` / `WarmupIterations`。
 
 ### 高級：獨立的熱身、設置和清理
 
@@ -220,8 +230,9 @@ var scoped = await Benchmark.RunScopedAsync("Scoped",
 ```
 
 - **計時模式** —— `AsyncTimingMode.WallClock`（預設）統計包含 await 掛起的完整時長；`AsyncTimingMode.CpuOnly` 統計 `Process.TotalProcessorTime`，排除 I/O 等待。CPU 時鐘以作業系統定時器刻度推進（通常 10–16 ms），因此該模式下自動校準會把最小採樣預算提升到實測時鐘粒度。CpuOnly 模式不收集 GC 資料。
+- **不可測樣本** —— 在 `CpuOnly` 模式下，短於一個作業系統定時器刻度的工作負載會被讀作恰好為零的 CPU 時間。此類樣本會計入 `Statistics.UnmeasuredSampleCount`（`Unmeasured` 為 `true`），其每操作值變成**一個計時量子 —— 一個上界 —— 而不是 `0.000`**，並且各格式化器會把每操作儲存格列印為 `N/A`。此類執行得到的統計不是對該工作的測量：應將其讀作「低於 CPU 時鐘的解析度」。迭代次數**不會**被默默放大來掩蓋問題 —— 只有 `AutoCalibrateIterations = true`（`Quick`/`Precise` 預設）才會校準；`Default` 原樣使用配置的 `IterationsPerSample`。
 - **GC 歸因** —— 非同步 GC 計數標記為近似值（`GcInfo.IsApproximate`）。兩種模式都會排除 setup/teardown 的配置。
-- **CPU 周期** —— 非同步基準使用進程級計數器（線程級計數器無法跨線程切換相減）。
+- **CPU 周期** —— 同步路徑讀取執行緒級計數器（Windows 上為 `QueryThreadCycleTime`，Linux 上為針對測量執行緒開啟的 `perf_event`）。非同步基準讀取進程級計數器，因為執行緒級計數器無法跨執行緒切換追蹤：該數值包含其他執行緒完成的工作，並被標記為 `Statistics.CpuCyclesAreApproximate`，在 Console、Markdown、HTML 和 CSV 中渲染為 `~`。macOS 沒有週期計數器 —— `mach_absolute_time` 是單調的*時間*代理而非架構週期，同樣會被標記。
 - **取消** —— `BenchmarkConfig.CancellationToken` 僅在非同步基準的樣本邊界檢查；同步基準忽略它。
 - **混合類** —— 即使類中存在其他非同步成員，同步 `[Benchmark]` 方法仍走直接同步測量路徑。
 - **預熱** —— 預熱迭代只呼叫預熱委托；`setup`/`teardown` 與 `[IterationSetup]`/`[IterationCleanup]` 在預熱期間不會執行。預熱動作需自給自足。
@@ -234,8 +245,21 @@ PicoBench 採用進程內執行，CLR 設定會影響絕對值：
 
 - 關閉分層 JIT：`DOTNET_TieredCompilation=0`、`DOTNET_TieredPGO=0`（或 `COMPlus_*`）。
 - 單線程微基準建議使用工作站 GC：`DOTNET_gcServer=0`。
-- 僅當作業系統允許非特權計數器時才可取得 CPU 周期（Windows `QueryThreadCycleTime`/`QueryProcessCycleTime`；Linux 在 `perf_event_paranoid` ≤ 2 時使用 `perf_event`；macOS 提供單調代理而非真實周期）。`EnvironmentInfo` 與所有格式化器都會報告所用來源。
+- 僅當作業系統允許非特權計數器時才可取得 CPU 週期計數（Windows `QueryThreadCycleTime`；Linux 在 `perf_event_paranoid` 為 2 或更低時使用 `perf_event`）。Windows 的同步執行是執行緒級的；非同步執行與 macOS 使用進程級計數器，或在 macOS 上使用單調時鐘代理而非真實週期 —— 兩者都會被標記 `CpuCyclesAreApproximate`。`EnvironmentInfo` 與每個格式化器都會報告所用來源。
 - `BenchmarkConfig.BoostPriorities`（預設 `true`）僅在執行期間提升進程與線程優先級，結束後恢復原值。
+
+### 這些數字能解析什麼、不能解析什麼
+
+每次執行都會用相同的迭代次數實測並扣除測試框架自身每操作附加的開銷，然後公佈它仍能解析的最小值：
+
+| 欄位 | 涵義 |
+|---|---|
+| `Statistics.OverheadNs` | 測試框架自身的每操作開銷（委派分發、迴圈簿記、時鐘與計數器讀取）中已實測並扣除的部分。非同步執行為 `0`，其開銷不做扣除 |
+| `Statistics.ResolutionLimitNanoseconds` | 本次執行能解析的最小每操作取值：一個時鐘刻度分攤到各次迭代，或所扣除開銷的逐次執行離散程度，取二者中較大者 |
+| `Statistics.ResolutionLimited` | `Avg` 等於或低於該上限，或至少有一個樣本完全無法測量。格式化器會把每操作儲存格列印為上界（Console 與 CSV 中為 `<limit`，Markdown 與 HTML 中為 `[below resolution]`），而不是一個數值 |
+| `Statistics.Unmeasured` / `UnmeasuredSampleCount` | 計時源無法推進的樣本數（`CpuOnly` 的零刻度）。這些儲存格列印 `N/A`，絕不列印 `0.000` |
+
+因此，對亞奈秒結果的誠實解讀是 **「低於 `<limit` ns」**，而不是「0.02 ns」：該值並未被測量，而是被界定，並且該界定涵蓋時鐘量化與所扣除開銷的離散程度（殘差被鉗制在零，因此它是測試框架能解析的下限，而不是真實開銷更小的證明）。還有兩點不對稱值得記住：測試框架開銷扣除僅對同步基準實作（非同步的每操作取值仍攜帶其每樣本包裝開銷），而 GC 位元組完全未被測量 —— 只有回收計數，且按進程，在非同步路徑上是近似的。
 
 ---
 
@@ -333,6 +357,40 @@ File.WriteAllText(Path.Combine(dir, "results.html"), new HtmlFormatter().Format(
 File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(suite));
 ```
 
+### CSV 欄契約
+
+`CsvFormatter` 先寫一行表頭，再寫資料列；套件會額外寫入 `#` 註解行（`# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`）以及兩個區段 `# Results` 與 `# Comparisons`，**每個區段都有自己的表頭行**。因此一個檔案中存在不止一行表頭 —— `pandas.read_csv(path, comment='#')` 會跳過註解行，但兩個區段需要你自己拆分。
+
+結果欄，按以下順序（預設選項；`IncludePercentiles`、`IncludeGcInfo`、`IncludeCpuCycles` 與 `IncludeTimestamp` 為 `false` 時會移除各自的欄）：
+
+| # | 欄位 | 涵義 |
+|---|---|---|
+| 1 | `Name` | 基準名稱（包含 `,` `"` 或換行時加引號；開頭的 `=`/`+`/`-`/`@` 會加上 `'` 前綴） |
+| 2 | `Category` | 類別，未設定時為空 |
+| 3 | `Avg_ns` | 每操作奈秒數 —— 有三種儲存格狀態，見下文 |
+| 4 | `P50_ns` | 每操作奈秒數中位數（同樣三種狀態） |
+| 5-12 | `P90_ns`, `P95_ns`, `P99_ns`, `Min_ns`, `Max_ns`, `StdDev_ns`, `StdErr_ns`, `RSD_pct` | 百分位數與離散程度；`RSD_pct` 是普通百分比，其餘七個使用每操作儲存格狀態 |
+| 13 | `CpuCycles` | 每操作週期數；`~` 前綴表示進程級計數器或時鐘代理（`CpuCyclesAreApproximate`），而非執行緒週期 |
+| 14-16 | `GC0`, `GC1`, `GC2` | 回收計數，未收集 GC 時為 `N/A` |
+| 17 | `GCApproximate` | 計數器為近似值時是 `1`（非同步路徑），精確時為 `0`，未收集時為 `N/A` |
+| 18 | `SampleCount` | 樣本數（整數） |
+| 19 | `IterationsPerSample` | 每樣本迭代數（整數） |
+| 20 | `Timestamp` | ISO-8601 往返格式（`o`，固定不變文化） |
+
+每操作欄的儲存格狀態：
+
+| 儲存格 | 涵義 |
+|---|---|
+| `12.5` | 以奈秒為單位的實測值（固定不變文化，往返格式） |
+| `<0.02` | **上界**：本次執行無法解析高於 `Statistics.ResolutionLimitNanoseconds` 的取值。`<` 之後的數字就是該上限，它不是實測值 |
+| `N/A` | 未測量（`Statistics.Unmeasured`，時鐘增量為零）或未收集（GC 欄） |
+
+對使用者而言有兩點後果：由於 `<0.02` 的存在，每操作欄**不保證是數值型**，因此 pandas 之類的讀取器會推斷為 `object`，你必須顯式處理上界列；而 `GCApproximate` 被插入到第 17 位，位於 `GC2` 與 `SampleCount` 之間，所以**按位置讀取的程式碼必須把 `SampleCount`/`IterationsPerSample` 後移一位**（按欄名讀取不受影響）。
+
+比較欄：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`。每個比較會寫出兩列 —— 候選在前，基準在後 —— 並且 `Speedup` 只填在候選列。比較的儲存格目前走普通數字格式化器，因此結果表中的 `N/A`/`<limit` 不會出現在那裡。
+
+> 宣告這些狀態、機器可讀的 `# Schema:` 表頭行被作為單獨的 Batch 0 後續事項跟蹤。在該項落地之前，上表就是契約，並且套件檔案還無法標識自己的 schema 版本。
+
 ---
 
 ## 結果模型
@@ -340,12 +398,27 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | 類型 | 描述 |
 |------|-------------|
 | `BenchmarkResult` | 名稱、類別、標籤、統計、樣本、每次樣本迭代數、樣本數、時間戳 |
-| `ComparisonResult` | 名稱、類別、標籤、基準、候選、加速比、是否更快、改進百分比 |
+| `ComparisonResult` | 名稱、類別、標籤、基準、候選、加速比、改進百分比、**Outcome**、**IsFasterKnown**、**Interval**、是否更快 |
 | `BenchmarkSuite` | 名稱、描述、結果、比較、環境、持續時間、時間戳 |
-| `Statistics` | 平均值、P50、P90、P95、P99、最小值、最大值、標準差、標準誤、相對標準差百分比、每操作 CPU 週期、GC 信息 |
-| `TimingSample` | 奈秒耗時、毫秒耗時、計時器滴答數、CPU 週期、GC 信息 |
-| `GcInfo` | Gen0、Gen1、Gen2、總計、是否為零 |
+| `ComparisonOutcome` | 列舉：`Unknown`（無法計算任何比值）、`Inconclusive`（落在 5% 死區內，或區間仍包含持平）、`Faster`、`Slower` |
+| `ComparisonInterval` | Low, High, Contains(value), ToString() —— 中位配對比值的分佈無關 95% 區間 |
+| `Statistics` | 平均值、P50、P90、P95、P99、最小值、最大值、標準差、標準誤、相對標準差百分比、每操作 CPU 週期、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GC 信息、HasHighVariance |
+| `TimingSample` | 奈秒耗時、毫秒耗時、計時器滴答數、CPU 週期、**CpuCyclesAreApproximate**、GC 信息 |
+| `GcInfo` | Gen0、Gen1、Gen2、總計、是否為零、IsApproximate |
 | `EnvironmentInfo` | 操作系統、架構、執行時版本、處理器數量、執行模式、配置、CPU 計數器類型 / 可用性 / 是否有意義、自訂標籤 |
+
+測量保真度工作中新增成員的涵義：
+
+| 成員 | 契約 |
+|---|---|
+| `ComparisonResult.Outcome` | 三態結論；`Faster`/`Slower` 需要 5% 死區**並且**一個排除 1 的區間 |
+| `ComparisonResult.IsFasterKnown` | `Outcome != Unknown` —— 「兩條通道已被比較過」（它們仍可能無法區分） |
+| `ComparisonResult.IsFaster` | 僅 `Outcome == Faster`。比舊的 `Speedup > 1.0` 更窄：死區內的差異不再算「更快」 |
+| `ComparisonResult.Interval` | `ComparisonInterval?`；當比較由兩個獨立結果而非交錯輪次建構時為 `null` |
+| `Statistics.ResolutionLimited` | 每操作取值是一個上界（`<limit`），不是一次測量 |
+| `Statistics.UnmeasuredSampleCount` / `Unmeasured` | 計時源無法推進的樣本；它們的每操作儲存格為 `N/A` |
+| `Statistics.CpuCyclesAreApproximate` | `CpuCyclesPerOp` 是進程級（非同步）或單調時鐘代理（macOS），而非執行緒週期：格式化器會加上 `~` 前綴 |
+| `TimingSample.CpuCyclesAreApproximate` | 樣本級同一標記；`Statistics` 以邏輯或聚合它 |
 
 ---
 
@@ -387,12 +460,13 @@ src/
 
 | 功能 | Windows | Linux | macOS |
 |---------|---------|-------|-------|
-| 高精度計時 | Stopwatch | Stopwatch | Stopwatch |
+| 計時 | Stopwatch | Stopwatch | Stopwatch |
 | GC 追蹤 (Gen0/1/2) | 是 | 是 | 是 |
-| CPU 週期計數 | `QueryThreadCycleTime` | `perf_event_open` | `mach_absolute_time`（代理值） |
+| CPU 週期計數（同步） | `QueryThreadCycleTime`（執行緒級） | 每執行緒的 `perf_event_open`（當 `perf_event_paranoid` ≤ 2 時） | `mach_absolute_time`，一個**時間代理** —— 標記為 `~` |
+| CPU 週期計數（非同步） | `QueryProcessCycleTime`（進程級）—— 標記為 `~` | 進程級 `perf_event` —— 標記為 `~` | `mach_absolute_time` —— 標記為 `~` |
 | 進程優先級提升 | 是 | 是 | 是 |
 
-在 macOS 上，導出的 CPU 計數器是高精度單調時鐘代理值，而不是真正的架構 CPU 週期。`EnvironmentInfo` 和格式化輸出會明確區分這一點。
+在 macOS 上，導出的 CPU 計數器是高解析度單調的*時間*代理，而不是架構週期計數：該值隨時間推進，而不是隨已執行的指令推進，因此被標記 `CpuCyclesAreApproximate` 並以 `~` 列印。非同步路徑使用同一標記，其進程級計數器包含其他執行緒完成的工作。`EnvironmentInfo` 與格式化器輸出都會明確揭露這兩種區別。
 
 ---
 
