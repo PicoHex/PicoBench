@@ -299,11 +299,11 @@ Every run measures the cost the harness itself adds per operation with the same 
 | Field | Meaning |
 |---|---|
 | `Statistics.OverheadNs` | per-operation cost of the harness (delegate dispatch, loop bookkeeping, clock and counter reads) that was measured and deducted. `0` for asynchronous runs, whose overhead is not deducted |
-| `Statistics.ResolutionLimitNanoseconds` | smallest per-operation value this run can resolve: one clock tick spread over the iterations, or the run-to-run spread of the deducted overhead, whichever is larger |
+| `Statistics.ResolutionLimitNanoseconds` | smallest per-operation value this run can resolve: the largest of one clock tick spread over the iterations, the run-to-run spread of the deducted overhead and the per-operation size of that overhead (its upper bound) |
 | `Statistics.ResolutionLimited` | `Avg` is at or below that limit, or at least one sample could not be measured at all. Formatters print the per-operation cells as an upper bound (`<limit` in all four formats; Console adds the marker `[below resolution]` and Markdown/HTML add `(below resolution)`) instead of a number |
 | `Statistics.Unmeasured` / `UnmeasuredSampleCount` | how many samples the timing source could not advance for (a `CpuOnly` zero tick). Those cells print `N/A`, never `0.000` |
 
-So the honest reading of a sub-nanosecond result is **"below `<limit` ns"**, not "0.02 ns": the value is not measured, it is bounded, and the bound covers clock quantisation and the spread of the deducted overhead (the residual is clamped at zero, so it is a floor of what the harness can resolve rather than a proof that the real cost is smaller). Two further asymmetries are worth remembering: the harness overhead deduction is implemented for synchronous benchmarks only (asynchronous per-operation values still carry their per-sample wrapper cost), and GC bytes are not measured at all — only collection counts, per process, approximate on the asynchronous path.
+So the honest reading of a sub-nanosecond result is **"below `<limit` ns"**, not "0.02 ns": the value is not measured, it is bounded, and it is a real upper bound — the largest of the clock tick, the spread of the deducted overhead and the per-operation size of that overhead. Because the residual is clamped at zero, every sample satisfies `true ≤ residual + overhead`, so the bound can no longer understate the floor the same run deducted. Two further asymmetries are worth remembering: the harness overhead deduction is implemented for synchronous benchmarks only (asynchronous per-operation values still carry their per-sample wrapper cost), and GC bytes are not measured at all — only collection counts, per process, approximate on the asynchronous path.
 
 ---
 
