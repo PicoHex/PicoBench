@@ -77,7 +77,7 @@
     </ItemGroup>
 
     <Message
-      Importance="normal"
+      Importance="high"
       Condition="'@(_PicoBenchPackagedGeneratorCopy)' != '' and '@(_PicoBenchForeignGeneratorCopy)' != ''"
       Text="PicoBench: ignoring duplicate copy of the source generator at '%(_PicoBenchForeignGeneratorCopy.FullPath)' (two analyzers implementing assembly '$(_PicoBenchGeneratorName)' would generate the same members twice and fail with CS0111). Remove one of the two references; to keep that copy instead, delete the packaged one or set PicoBenchDisableGeneratorDeduplication=true."
     />

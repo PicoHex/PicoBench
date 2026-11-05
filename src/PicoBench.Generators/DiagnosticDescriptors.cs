@@ -198,4 +198,28 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true
     );
+
+    /// <summary>
+    /// B of <c>.review-2026-11/30-review-b1.md</c> (§6 of the review and F6 of
+    /// <c>31-verify-b1.md</c>). <c>[Params(null)]</c> binds <c>null</c> to the
+    /// whole <c>params object[]</c> parameter, so the attribute argument arrives
+    /// as an array whose <c>Values</c> is <c>default</c>. Enumerating it threw a
+    /// <c>NullReferenceException</c> that the transform containment turned into
+    /// <c>PBGEN018 "… failed: Object reference not set to an instance of an
+    /// object."</c> — an Error the user cannot act on, for legal C#.
+    /// <para>
+    /// The important half is that this is <b>not</b> a generator fault: the
+    /// argument shape is known and legal, so it gets its own message naming the
+    /// member and saying what to write instead. The <c>Exception</c> text stays
+    /// out of the diagnostic.
+    /// </para>
+    /// </summary>
+    public static readonly DiagnosticDescriptor NullParamsArrayArgument = new(
+        id: "PBGEN021",
+        title: "[Params] argument is a null array",
+        messageFormat: "[Params] on member '{0}' received a null value array, so no values can be read; list the values explicitly, for example [Params(1, 2)]",
+        category: "PicoBench.Generators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }
