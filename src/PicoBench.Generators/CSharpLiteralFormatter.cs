@@ -1,5 +1,14 @@
 namespace PicoBench.Generators;
 
+/// <summary>
+/// Turns a Roslyn <see cref="TypedConstant"/> into the C# literal text the
+/// emitter pastes into the generated source.
+/// <para>
+/// Batch 1 · 1.3 (B3-C4) moved every string/char escape into
+/// <see cref="CSharpLiterals"/>; this type no longer owns an escape table of its
+/// own (the copy here had already drifted from <c>Emitter.EscapeRaw</c>).
+/// </para>
+/// </summary>
 internal static class CSharpLiteralFormatter
 {
     internal static string FormatConstant(TypedConstant constant, ITypeSymbol? targetType)
@@ -13,16 +22,16 @@ internal static class CSharpLiteralFormatter
         var value = constant.Value;
         return value switch
         {
-            string s => FormatStringLiteral(s),
+            string s => CSharpLiterals.StringLiteral(s),
             bool b => b ? "true" : "false",
-            char c => FormatCharLiteral(c),
+            char c => CSharpLiterals.CharLiteral(c),
             float f => FormatFloatLiteral(f),
             double d => FormatDoubleLiteral(d),
             decimal m => m.ToString(System.Globalization.CultureInfo.InvariantCulture) + "m",
             long l => l.ToString(System.Globalization.CultureInfo.InvariantCulture) + "L",
             ulong ul => ul.ToString(System.Globalization.CultureInfo.InvariantCulture) + "UL",
             uint ui => ui.ToString(System.Globalization.CultureInfo.InvariantCulture) + "U",
-            _ => value?.ToString() ?? "default"
+            _ => value?.ToString() ?? "default",
         };
     }
 
@@ -44,46 +53,7 @@ internal static class CSharpLiteralFormatter
             uint ui => ui.ToString(System.Globalization.CultureInfo.InvariantCulture) + "U",
             long l => l.ToString(System.Globalization.CultureInfo.InvariantCulture) + "L",
             ulong ul => ul.ToString(System.Globalization.CultureInfo.InvariantCulture) + "UL",
-            _ => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "0"
-        };
-    }
-
-    private static string FormatStringLiteral(string s)
-    {
-        var sb = new StringBuilder("\"");
-        foreach (var c in s)
-        {
-            sb.Append(
-                c switch
-                {
-                    '"' => "\\\"",
-                    '\\' => "\\\\",
-                    '\n' => "\\n",
-                    '\r' => "\\r",
-                    '\t' => "\\t",
-                    '\0' => "\\0",
-                    _ when c < 0x20 => $"\\u{(int)c:X4}",
-                    _ => c.ToString()
-                }
-            );
-        }
-
-        sb.Append('"');
-        return sb.ToString();
-    }
-
-    private static string FormatCharLiteral(char c)
-    {
-        return c switch
-        {
-            '\'' => "'\\''",
-            '\\' => "'\\\\'",
-            '\n' => "'\\n'",
-            '\r' => "'\\r'",
-            '\t' => "'\\t'",
-            '\0' => "'\\0'",
-            _ when c < 0x20 || c > 0x7E => $"'\\u{(int)c:X4}'",
-            _ => $"'{c}'"
+            _ => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "0",
         };
     }
 

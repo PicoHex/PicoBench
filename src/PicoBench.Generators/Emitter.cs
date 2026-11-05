@@ -206,7 +206,7 @@ internal static class Emitter
 
         sb.AppendLine($"{m2}__sw.Stop();");
         sb.AppendLine($"{m2}var __suite = new {Bench}.BenchmarkSuite(");
-        sb.AppendLine($"{m2}    \"{EscapeRaw(model.ClassName)}\",");
+        sb.AppendLine($"{m2}    {CSharpLiterals.StringLiteral(model.ClassName)},");
         sb.AppendLine($"{m2}    new {Bench}.EnvironmentInfo");
         sb.AppendLine($"{m2}    {{");
         sb.AppendLine($"{m2}#if NET8_0_OR_GREATER");
@@ -335,26 +335,9 @@ internal static class Emitter
             : $"async () => {{ this.{Id(method.Name)}(); }}";
     }
 
-    private static string EscapeStringLiteral(string s) => $"\"{EscapeRaw(s)}\"";
-
-    private static string EscapeRaw(string s)
-    {
-        var sb = new StringBuilder(s.Length * 2); // worst-case: every char is a 2-char escape
-        foreach (var c in s)
-        {
-            sb.Append(
-                c switch
-                {
-                    '"' => "\\\"",
-                    '\\' => "\\\\",
-                    '\n' => "\\n",
-                    '\r' => "\\r",
-                    '\t' => "\\t",
-                    _ when c < 0x20 => $"\\u{(int)c:X4}",
-                    _ => c.ToString(),
-                }
-            );
-        }
-        return sb.ToString();
-    }
+    // Batch 1 · 1.3 (B3-C4): the description used to go through Emitter.EscapeRaw —
+    // a second copy of the escape table that, like the [Params] one in
+    // CSharpLiteralFormatter, stopped at 0x20 and let U+0085/U+2028/U+2029
+    // truncate the literal. Both call sites now share CSharpLiterals.
+    private static string EscapeStringLiteral(string s) => CSharpLiterals.StringLiteral(s);
 }
