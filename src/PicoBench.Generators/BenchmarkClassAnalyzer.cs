@@ -843,11 +843,32 @@ internal static class BenchmarkClassAnalyzer
     }
 }
 
+/// <summary>
+/// What one <c>[BenchmarkClass]</c> analysis produced: the emitter input, the
+/// diagnostics it wants reported, and where the class is.
+/// <para>
+/// Batch 1 · 1.8 (B3-M1): this type is the <b>only</b> thing flowing out of the
+/// transform step, so its equality decides whether the pipeline can cache at
+/// all. Every model below it (<see cref="BenchmarkClassModel"/> and friends)
+/// already implements value equality; this wrapper used to be a plain class,
+/// i.e. reference equality, so <b>every</b> compilation change — including
+/// editing a file that has nothing to do with benchmarks — re-ran the transform
+/// output, <c>Emitter.Generate</c> and <c>AddSource</c>. Hence
+/// <see cref="IEquatable{T}"/> here, and only here.
+/// </para>
+/// <para>
+/// Diagnostics are compared structurally too
+/// (<see cref="Diagnostic.Equals(Diagnostic)"/> does not do that: two
+/// <see cref="Diagnostic"/> instances are never equal), which is what makes a
+/// cached "class with PBGEN008" stay cached instead of being re-emitted on
+/// every keystroke elsewhere in the project.
+/// </para>
+/// </summary>
 internal sealed class GeneratorAnalysisResult(
     BenchmarkClassModel? model,
     ImmutableArray<Diagnostic> diagnostics,
     Location? location = null
-)
+) : IEquatable<GeneratorAnalysisResult>
 {
     public BenchmarkClassModel? Model { get; } = model;
 
@@ -861,4 +882,85 @@ internal sealed class GeneratorAnalysisResult(
     public Location Location { get; } = location ?? Location.None;
 
     public bool HasErrors => Diagnostics.Any(static d => d.Severity == DiagnosticSeverity.Error);
+
+    public bool Equals(GeneratorAnalysisResult? other)
+    {
+        if (other is null)
+            return false;
+        if (ReferenceEquals(this, other))
+            return true;
+
+        return Equals(Model, other.Model)
+            && LocationEquals(Location, other.Location)
+            && DiagnosticsEqual(Diagnostics, other.Diagnostics);
+    }
+
+    public override bool Equals(object? obj) => Equals(obj as GeneratorAnalysisResult);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            var hash = Model?.GetHashCode() ?? 0;
+            hash = (hash * 397) ^ Location.SourceSpan.GetHashCode();
+            hash = (hash * 397) ^ (Location.SourceTree?.FilePath.GetHashCode() ?? 0);
+            hash = (hash * 397) ^ Diagnostics.Length;
+            return hash;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Location.Equals(object)"/> is not a value comparison (a
+    /// <see cref="SourceLocation"/> holds the <see cref="SyntaxTree"/> instance),
+    /// so compare the three things that actually describe a position. Using the
+    /// file path rather than the tree instance is deliberate: re-parsing an
+    /// untouched file produces an equal position, and that is exactly the case
+    /// this comparison exists for.
+    /// </summary>
+    private static bool LocationEquals(Location left, Location right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left.Kind != right.Kind || left.SourceSpan != right.SourceSpan)
+            return false;
+
+        return string.Equals(
+            left.SourceTree?.FilePath,
+            right.SourceTree?.FilePath,
+            StringComparison.Ordinal
+        );
+    }
+
+    private static bool DiagnosticsEqual(
+        ImmutableArray<Diagnostic> left,
+        ImmutableArray<Diagnostic> right
+    )
+    {
+        if (left.Length != right.Length)
+            return false;
+
+        for (var i = 0; i < left.Length; i++)
+        {
+            var l = left[i];
+            var r = right[i];
+            if (ReferenceEquals(l, r))
+                continue;
+            if (l.Id != r.Id || l.Severity != r.Severity)
+                return false;
+            if (!LocationEquals(l.Location, r.Location))
+                return false;
+            // Same id and same span can still carry different values ({"300"}
+            // vs {"400"} on one member), and the message is user-facing text.
+            if (
+                !string.Equals(
+                    l.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+                    r.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+                    StringComparison.Ordinal
+                )
+            )
+                return false;
+        }
+
+        return true;
+    }
 }
