@@ -471,3 +471,48 @@ jobs:
             echo "== $sample"
             dotnet run --project "samples/$sample/$sample.csproj" --configuration Release --no-build
           done
+
+  # ------------------------------------------------ release scripting ------
+  # release.ps1, tools/release-build.sh, the tag gate, the package shape and the
+  # workflows themselves only run on release day - the worst moment to discover
+  # they are broken (B5-H1 was exactly that: y-version releases could not be cut
+  # for months and nothing noticed). These tests pin the contracts instead.
+  release-scripting:
+    name: Release scripting contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Lint the workflows (expressions, pinned actions, job contracts)
+        shell: bash
+        run: python3 scripts/tests/workflow_lint.py
+
+      - name: Release tag gate
+        shell: bash
+        run: bash scripts/tests/release-tag-validation.test.sh
+
+      - name: tools/release-build.sh exit-code contract
+        shell: bash
+        run: bash scripts/tests/release-build-exit-codes.test.sh
+
+      - name: scripts/release.ps1 exit-code contract
+        shell: pwsh
+        run: ./scripts/tests/release-ps1-exit-codes.ps1
+
+      - name: Package shape (snupkg, contents, dependencies)
+        shell: bash
+        run: bash scripts/tests/packaging-guard.test.sh
