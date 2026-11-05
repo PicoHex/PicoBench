@@ -94,8 +94,12 @@ public static class SummaryFormatter
 
             foreach (var group in byCategory)
             {
-                var avg = group.Average(c => c.Speedup);
-                sb.AppendLine($"▶ {group.Key}: {FormatterBase.FormatMetric(avg, 2)}x average speedup");
+                var groupRatios = SpeedupAggregate.From(group);
+                var groupNote =
+                    groupRatios.Excluded == 0 ? "" : " — " + groupRatios.DescribeExcluded();
+                sb.AppendLine(
+                    $"▶ {group.Key}: {FormatterBase.FormatSpeedupValue(groupRatios.Average, SummarySpeedupDecimals)} average speedup{groupNote}"
+                );
 
                 foreach (var c in group)
                 {
@@ -111,8 +115,11 @@ public static class SummaryFormatter
         // Overall stats
         var wins = list.Count(c => c.IsFaster);
         var total = list.Count;
-        var overallAvg = list.Average(c => c.Speedup);
-        var max = list.Max(c => c.Speedup);
+
+        // Batch 2 · 2.2 (B2-M2): a single ∞ (or NaN) scenario used to turn the
+        // whole box into ∞ and hide every other number. The aggregate only
+        // averages the ratios that exist, and the box says how many it skipped.
+        var ratios = SpeedupAggregate.From(list);
 
         AppendBoxLine(sb, options.BoxWidth, '╔', '═', '╗');
         AppendPaddedLine(
@@ -121,15 +128,18 @@ public static class SummaryFormatter
             options.BoxWidth
         );
         AppendPaddedLine(
-                sb,
-                $"  Average speedup: {FormatterBase.FormatMetric(overallAvg, 2)}x faster",
-                options.BoxWidth
-            );
+            sb,
+            $"  Average speedup: {FormatterBase.FormatSpeedupValue(ratios.Average, SummarySpeedupDecimals)} faster",
+            options.BoxWidth
+        );
         AppendPaddedLine(
-                sb,
-                $"  Maximum speedup: {FormatterBase.FormatMetric(max, 2)}x faster",
-                options.BoxWidth
-            );
+            sb,
+            $"  Maximum speedup: {FormatterBase.FormatSpeedupValue(ratios.Maximum, SummarySpeedupDecimals)} faster",
+            options.BoxWidth
+        );
+
+        if (ratios.Excluded > 0)
+            AppendPaddedLine(sb, $"  Note: {ratios.DescribeExcluded()}", options.BoxWidth);
 
         if (options.ShowDuration && duration.HasValue)
         {
@@ -187,6 +197,9 @@ public static class SummaryFormatter
     }
 
     #region Helpers
+
+    /// <summary>Decimals of every speedup figure the summary box prints.</summary>
+    private const int SummarySpeedupDecimals = 2;
 
     private static void AppendBoxLine(StringBuilder sb, int width, char left, char fill, char right)
     {

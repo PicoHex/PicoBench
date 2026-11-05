@@ -453,8 +453,10 @@ footer {
     {
         var wins = comparisons.Count(c => c.IsFaster);
         var total = comparisons.Count;
-        var avgSpeedup = comparisons.Average(c => c.Speedup);
-        var maxSpeedup = comparisons.Max(c => c.Speedup);
+
+        // Batch 2 · 2.2 (B2-M2): non-finite ratios are excluded from the aggregate
+        // and disclosed below the box instead of turning it into ∞/NaN.
+        var ratios = SpeedupAggregate.From(comparisons);
 
         sb.AppendLine("<div class=\"summary-box\">");
 
@@ -464,16 +466,23 @@ footer {
         sb.AppendLine("</div>");
 
         sb.AppendLine("<div class=\"summary-item\">");
-        sb.AppendLine($"<div class=\"value\">{FormatSpeedup(avgSpeedup)}</div>");
+        sb.AppendLine(
+            $"<div class=\"value\">{FormatSpeedupValue(ratios.Average, Options.SpeedupDecimalPlaces)}</div>"
+        );
         sb.AppendLine("<div class=\"label\">Average Speedup</div>");
         sb.AppendLine("</div>");
 
         sb.AppendLine("<div class=\"summary-item\">");
-        sb.AppendLine($"<div class=\"value\">{FormatSpeedup(maxSpeedup)}</div>");
+        sb.AppendLine(
+            $"<div class=\"value\">{FormatSpeedupValue(ratios.Maximum, Options.SpeedupDecimalPlaces)}</div>"
+        );
         sb.AppendLine("<div class=\"label\">Maximum Speedup</div>");
         sb.AppendLine("</div>");
 
         sb.AppendLine("</div>");
+
+        if (ratios.Excluded > 0)
+            sb.AppendLine($"<p class=\"note\">{Escape(ratios.DescribeExcluded())}</p>");
     }
 
     private void AppendComparisonsTable(StringBuilder sb, List<ComparisonResult> comparisons)

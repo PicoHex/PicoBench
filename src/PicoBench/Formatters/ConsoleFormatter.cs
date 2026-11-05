@@ -432,14 +432,16 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         AppendTable(sb, columns, rows);
 
-        // Summary
+        // Summary. Non-finite ratios are excluded from the aggregate and counted,
+        // so one scenario with a zero (or NaN) candidate cannot swallow the rest
+        // (Batch 2 · 2.2, B2-M2).
         var wins = comparisons.Count(c => c.IsFaster);
-        var avgSpeedup = comparisons.Average(c => c.Speedup);
-        var maxSpeedup = comparisons.Max(c => c.Speedup);
+        var ratios = SpeedupAggregate.From(comparisons);
+        var note = ratios.Excluded == 0 ? "" : " | " + ratios.DescribeExcluded();
 
         sb.AppendLine();
         sb.AppendLine(
-            $"Summary: Candidate wins {wins}/{comparisons.Count} | Avg: {FormatSpeedup(avgSpeedup)} | Max: {FormatSpeedup(maxSpeedup)}"
+            $"Summary: Candidate wins {wins}/{comparisons.Count} | Avg: {FormatSpeedupValue(ratios.Average, Options.SpeedupDecimalPlaces)} | Max: {FormatSpeedupValue(ratios.Maximum, Options.SpeedupDecimalPlaces)}{note}"
         );
     }
 

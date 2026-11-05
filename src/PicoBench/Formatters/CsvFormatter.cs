@@ -487,9 +487,18 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         return value;
     }
 
+    /// <summary>
+    /// Renders one numeric cell with the shortest round-trippable form
+    /// (<c>G</c>), invariant. A non-finite value is written as
+    /// <see cref="FormatterBase.NotCollected"/>: "Infinity"/"NaN" are not valid
+    /// numbers for a reader, and they are culture-dependent on top of it
+    /// (Batch 2 · 2.1 / 2.2).
+    /// </summary>
     private static string FormatNumber(double value)
     {
-        return value.ToString("G", CultureInfo.InvariantCulture);
+        return FormatterBase.IsFinite(value)
+            ? value.ToString("G", CultureInfo.InvariantCulture)
+            : FormatterBase.NotCollected;
     }
 
     #endregion

@@ -92,16 +92,24 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         // Summary
         var wins = suite.Comparisons.Count(c => c.IsFaster);
         var total = suite.Comparisons.Count;
-        var avgSpeedup = suite.Comparisons.Average(c => c.Speedup);
-        var maxSpeedup = suite.Comparisons.Max(c => c.Speedup);
+
+        // Batch 2 · 2.2 (B2-M2): the aggregate ignores the ratios that do not
+        // exist (NaN / ±∞) and the block says how many it ignored.
+        var ratios = SpeedupAggregate.From(suite.Comparisons);
 
         sb.AppendLine();
         sb.AppendLine("### Summary");
         sb.AppendLine();
         sb.AppendLine("```");
         sb.AppendLine($"Candidate wins: {wins} / {total}");
-        sb.AppendLine($"Average speedup: {FormatSpeedup(avgSpeedup)}");
-        sb.AppendLine($"Maximum speedup: {FormatSpeedup(maxSpeedup)}");
+        sb.AppendLine(
+            $"Average speedup: {FormatSpeedupValue(ratios.Average, Options.SpeedupDecimalPlaces)}"
+        );
+        sb.AppendLine(
+            $"Maximum speedup: {FormatSpeedupValue(ratios.Maximum, Options.SpeedupDecimalPlaces)}"
+        );
+        if (ratios.Excluded > 0)
+            sb.AppendLine($"Ratios: {ratios.DescribeExcluded()}");
         sb.AppendLine("```");
 
         return sb.ToString();

@@ -232,6 +232,13 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     /// metric with a format specifier again.
     /// </para>
     /// <para>
+    /// A non-finite value (NaN, ±∞) is <b>not</b> a number this library can
+    /// report: it renders as <see cref="NotCollected"/>. Batch 2 · 2.2 (B2-M2):
+    /// <c>("F1")</c> on a double returns the word "Infinity" under the invariant
+    /// culture and "∞"/"ليس رقم" under others, so a <c>+∞</c> ratio printed as the
+    /// pseudo token <c>Infinityx</c> in one column and <c>∞x</c> in the next.
+    /// </para>
+    /// <para>
     /// <c>internal</c> rather than <c>protected</c> because
     /// <see cref="SummaryFormatter"/> is a static helper outside the base class
     /// and prints the same speedup/duration figures the box of the other
@@ -239,10 +246,20 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     /// </para>
     /// </summary>
     internal static string FormatMetric(double value, int decimals) =>
-        value.ToString(
-            "F" + decimals.ToString(CultureInfo.InvariantCulture),
-            CultureInfo.InvariantCulture
-        );
+        IsFinite(value)
+            ? value.ToString(
+                "F" + decimals.ToString(CultureInfo.InvariantCulture),
+                CultureInfo.InvariantCulture
+            )
+            : NotCollected;
+
+    /// <summary>
+    /// True when <paramref name="value"/> is a real number. The library targets
+    /// <c>netstandard2.0</c>, where <c>double.IsFinite</c> does not exist, so the
+    /// two-part test lives here instead of being open-coded per formatter.
+    /// </summary>
+    internal static bool IsFinite(double value) =>
+        !double.IsNaN(value) && !double.IsInfinity(value);
 
     /// <summary>
     /// Timestamp of a run: Gregorian calendar, invariant culture, second
@@ -265,18 +282,22 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     /// two different decimal separators (Batch 2 · 2.1 / 2.2).
     /// </summary>
     internal static string FormatSpeedupValue(double? speedup, int decimals) =>
-        speedup is { } value
+        speedup is { } value && IsFinite(value)
             ? FormatMetric(value, decimals) + "x"
             : NotCollected;
 
     /// <summary>
     /// Format a speedup ratio using the configured precision.
+    /// <para>
+    /// A <c>NaN</c> ratio (0/0, or fewer paired rounds than the sign test needs)
+    /// and a <c>+∞</c> ratio (the candidate cost is zero) both render as
+    /// <see cref="NotCollected"/>: appending <c>x</c> to a non-finite number is
+    /// what produced the token <c>Infinityx</c> (Batch 2 · 2.2, B2-M2). The
+    /// comparison's verdict — <c>unknown (not measurable)</c> — carries the "why".
+    /// </para>
     /// </summary>
-    protected string FormatSpeedup(double speedup)
-    {
-        return speedup.ToString($"F{Options.SpeedupDecimalPlaces}", CultureInfo.InvariantCulture)
-            + "x";
-    }
+    protected string FormatSpeedup(double speedup) =>
+        FormatSpeedupValue(speedup, Options.SpeedupDecimalPlaces);
 
     /// <summary>
     /// Cell text every formatter uses for "this value was not collected".
@@ -311,6 +332,11 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     /// </summary>
     public static string GetSpeedupIndicator(double speedup)
     {
+        // A ratio that does not exist cannot be indicted as "fast" or "slow":
+        // no marker is attached to the N/A cell it renders as (Batch 2 · 2.2).
+        if (!IsFinite(speedup))
+            return "";
+
         return speedup switch
         {
             >= 10 => "***",
