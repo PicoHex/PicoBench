@@ -53,7 +53,10 @@ jobs:
             global.json
 
       - name: Show logical target
-        run: echo Testing ${{ matrix.logical-target }}
+        shell: bash
+        env:
+          LOGICAL_TARGET: ${{ matrix.logical-target }}
+        run: echo testing $LOGICAL_TARGET
 
       - name: Restore dependencies
         run: |
@@ -139,7 +142,10 @@ jobs:
             global.json
 
       - name: Show logical target
-        run: echo Validating AOT for ${{ matrix.logical-target }}
+        shell: bash
+        env:
+          LOGICAL_TARGET: ${{ matrix.logical-target }}
+        run: echo "validating AOT for $LOGICAL_TARGET"
 
       - name: Create local feed dir (NuGet.config local source)
         shell: bash
@@ -150,14 +156,30 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
       - name: Pack PicoBench for package-consumption validation
-        run: dotnet pack src/PicoBench/PicoBench.csproj --configuration Release --output ./artifacts/aot-pack -p:Version=0.0.0-ci.${{ github.run_number }} -p:UseProjectReferences=false -p:ContinuousIntegrationBuild=true -p:Deterministic=true
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          pack_args=(
+            src/PicoBench/PicoBench.csproj
+            --configuration Release
+            --output ./artifacts/aot-pack
+            -p:Version="$PACKAGE_VERSION"
+            -p:UseProjectReferences=false
+            -p:ContinuousIntegrationBuild=true
+            -p:Deterministic=true
+          )
+          dotnet pack "${pack_args[@]}"
 
       - name: Create temporary AOT validation app
         shell: pwsh
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
         run: |
           Remove-Item -Recurse -Force ./artifacts/aot-app -ErrorAction SilentlyContinue
           dotnet new console --framework net10.0 --output ./artifacts/aot-app
-          dotnet add ./artifacts/aot-app/aot-app.csproj package PicoBench --version 0.0.0-ci.${{ github.run_number }} --source ./artifacts/aot-pack
+          dotnet add ./artifacts/aot-app/aot-app.csproj package PicoBench --version $env:PACKAGE_VERSION --source ./artifacts/aot-pack
           @'
           using System.Threading;
           using PicoBench;
@@ -176,5 +198,49 @@ jobs:
           }
           '@ | Set-Content ./artifacts/aot-app/Program.cs
 
+      # A trim or AOT warning is the whole point of this job: it means the
+      # linker could not prove the library is safe, which is how an
+      # "AOT-compatible" claim quietly stops being true. Treat the IL2xxx /
+      # IL3xxx families as errors instead of a green build (B5-M4).
       - name: Publish AOT validation app
-        run: dotnet publish ./artifacts/aot-app/aot-app.csproj --configuration Release --framework net10.0 --runtime ${{ matrix.rid }} --self-contained -p:PublishAot=true
+        shell: bash
+        env:
+          RID: ${{ matrix.rid }}
+        run: |
+          set -euo pipefail
+          publish_args=(
+            ./artifacts/aot-app/aot-app.csproj
+            --configuration Release
+            --framework net10.0
+            --runtime "$RID"
+            --self-contained
+            -p:PublishAot=true
+            -p:TreatWarningsAsErrors=true
+            -p:ILLinkTreatWarningsAsErrors=true
+            -p:IlcTreatWarningsAsErrors=true
+          )
+          dotnet publish "${publish_args[@]}"
+
+      # Publishing only proves the linker ran. Executing the artifact is what
+      # proves the AOT claim: reflection the linker stripped, a missing
+      # analyzer, or a dead generated method all survive `publish` and fail
+      # here (B5-M4).
+      - name: Run the AOT artifact and assert its output
+        shell: bash
+        env:
+          RID: ${{ matrix.rid }}
+        run: |
+          set -euo pipefail
+          exe="./artifacts/aot-app/bin/Release/net10.0/$RID/publish/aot-app"
+          case "$RID" in win-*) exe="$exe.exe" ;; esac
+          if [ ! -x "$exe" ] && [ ! -f "$exe" ]; then
+            echo "::error::AOT artifact not found at $exe"
+            exit 1
+          fi
+          output="$("$exe")"
+          echo "$output"
+          if ! printf '%s' "$output" | grep -q 'Benchmarks: 2'; then
+            echo "::error::the AOT binary did not report the expected two benchmarks"
+            exit 1
+          fi
+          echo "AOT artifact ran and reported its benchmarks"
