@@ -2,11 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
-Une bibliothèque de benchmarking légère et sans dépendances pour .NET avec **deux API complémentaires** : une API impérative et une API basée sur des attributs, générée à partir du code source, entièrement **compatible AOT**.
+Une bibliothèque de benchmarking légère pour .NET avec **deux API complémentaires** : une API impérative et une API basée sur des attributs, générée à partir du code source, entièrement **compatible AOT**. La seule référence NuGet est un polyfill BCL (`System.Threading.Tasks.Extensions`) pour `ValueTask<T>` sur netstandard2.0.
 
 ## Caractéristiques
 
-- **Zéro Dépendance** - Implémentation pure .NET, aucun package externe requis
+- **Aucune dépendance tierce** — uniquement un polyfill BCL (`System.Threading.Tasks.Extensions`) pour `ValueTask<T>` sur netstandard2.0. Aucun package externe.
 - **Deux API** - Impérative (`Benchmark.Run`) pour les tests ad hoc ; basée sur les attributs (`[Benchmark]` + générateur de source) pour les suites structurées
 - **Générateur de Source Compatible AOT** - Le générateur incrémental émet des appels de méthode directs sans réflexion à l'exécution
 - **Multiplateforme** - Support complet pour Windows, Linux et macOS
@@ -14,7 +14,7 @@ Une bibliothèque de benchmarking légère et sans dépendances pour .NET avec *
 - **Limites Déclarées** - `OverheadNs`, `ResolutionLimitNanoseconds`, `ResolutionLimited` et `Unmeasured` disent ce qu'un run a pu résoudre et ce qu'il n'a pas pu résoudre, afin qu'un résultat au niveau du bruit ne puisse pas être lu comme une opération rapide
 - **Suivi GC** - Surveille les comptes de collection Gen0/Gen1/Gen2 pendant les benchmarks (setup/teardown exclus)
 - **Comptage de Cycles CPU** - Cycles mesurés à l'échelle du thread sur le chemin synchrone (`QueryThreadCycleTime` sous Windows ; `perf_event` sous Linux lorsque l'OS autorise l'accès non privilégié). Les benchmarks asynchrones lisent un compteur à l'échelle du processus, car un compteur par thread ne peut pas être suivi lors des changements de thread, et sont signalés `CpuCyclesAreApproximate` (`~` dans les quatre formats). macOS n'a pas de compteur de cycles : `mach_absolute_time` est un proxy *temporel* monotone, pas des cycles, et il est signalé de la même manière
-- **Analyse Statistique** - Moyenne, Médiane, P90, P95, P99, Minimum, Maximum, Écart Type, erreur standard et écart-type relatif Les percentiles utilisent une interpolation linéaire entre les deux échantillons voisins (la méthode dite *type 7* — `PERCENTILE.INC` d'Excel, valeur par défaut de NumPy) et la variance est la variance d'échantillon (`N-1`) ; en dessous d'une vingtaine d'échantillons, P99 est proche du maximum, donc les colonnes de queue ne décrivent pas une queue stable.
+- **Analyse Statistique** - `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError` et écart-type relatif (`RSD`). Les percentiles utilisent une interpolation linéaire entre les deux échantillons voisins (la méthode dite *type 7* — `PERCENTILE.INC` d'Excel, valeur par défaut de NumPy) et la variance est la variance d'échantillon (`N-1`) ; en dessous d'une vingtaine d'échantillons, P99 est proche du maximum, donc les colonnes de queue ne décrivent pas une queue stable.
 - **Formats de Sortie Multiples** - Quatre formateurs intégrés (`IFormatter`) (Console, Markdown, HTML, CSV) plus une sortie de résumé programmatique
 - **Benchmarks Paramétrés** - Attribut `[Params]` avec itération automatique du produit cartésien
 - **Support de Comparaison** - Base et candidat mesurés en rounds entrelacés ; le verdict est la médiane des ratios appariés par round et exige à la fois une bande morte de 5% et un intervalle sans hypothèse de distribution qui exclut la parité, afin que le bruit d'un round à l'autre ne soit pas publié comme une amélioration
@@ -219,14 +219,50 @@ var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 Les deux APIs prennent en charge le travail asynchrone. Les méthodes de benchmark asynchrones sont attendues (await) à chaque itération ; les méthodes de cycle de vie peuvent mélanger synchrone et asynchrone dans la même classe.
 
 ```csharp
+// Impérative
 var result = await Benchmark.RunAsync("Http call", async () =>
 {
     using var response = await httpClient.GetAsync(url);
 });
 
-var scoped = await Benchmark.RunScopedAsync("Scoped",
+// setup/teardown asynchrone par échantillon
+var result2 = await Benchmark.RunAsync(
+    "With lifecycle",
+    action: async () => await DoWorkAsync(),
+    warmup: async () => await DoWorkAsync(),
+    config: BenchmarkConfig.Quick,
+    setup: async () => await ResetStateAsync(),
+    teardown: async () => await DisposeStateAsync());
+
+// Avec état asynchrone (aucune allocation de fermeture ; pas de surcharge setup/teardown)
+var result3 = await Benchmark.RunAsync("Stateful", state, async s => await ProcessAsync(s));
+
+// Portées asynchrones (compatible DI)
+var result4 = await Benchmark.RunScopedAsync("Scoped",
     () => container.CreateScope(),
     async scope => await scope.Service.DoWorkAsync());
+```
+
+Les classes basées sur des attributs peuvent déclarer des benchmarks asynchrones et des méthodes de cycle de vie asynchrones :
+
+```csharp
+[BenchmarkClass]
+public partial class IoBenchmarks
+{
+    private string _path = "";
+
+    [GlobalSetup]
+    public async Task SetupAsync() => await File.WriteAllTextAsync(_path, "data");
+
+    [IterationSetup]
+    public async Task ResetAsync() => await Task.Yield();
+
+    [Benchmark(Baseline = true)]
+    public async Task ReadAsync() => await File.ReadAllTextAsync(_path);
+
+    [Benchmark]
+    public void ReadSync() => File.ReadAllText(_path);
+}
 ```
 
 - **Modes de mesure** – `AsyncTimingMode.WallClock` (par défaut) mesure la durée totale, suspensions await comprises ; `AsyncTimingMode.CpuOnly` mesure `Process.TotalProcessorTime` et exclut l'attente d'E/S. L'horloge CPU n'avance que par tics du minuteur (généralement 10–16 ms) ; l'auto-calibration relève donc son budget minimal d'échantillon à la granularité mesurée de l'horloge. Le mode CpuOnly ne collecte pas de données GC.
@@ -287,13 +323,16 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000,
-    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
+    ForceGcBeforeBenchmark = true,  // false ignore le GC complet forcé avant le benchmark
+    BoostPriorities     = true,   // relève la priorité du processus/thread pendant le run, puis la restaure
+    TimingMode          = AsyncTimingMode.WallClock, // ou CpuOnly (asynchrone uniquement)
+    CancellationToken   = default,                   // asynchrone uniquement ; les benchmarks synchrones l'ignorent
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-Lorsque l'auto-calibrage est activé, PicoBench augmente `IterationsPerSample` jusqu'à atteindre un budget minimal de temps par échantillon ou `MaxAutoIterationsPerSample`. C'est particulièrement utile pour les opérations très rapides autrement dominées par le bruit du minuteur. Définissez `ForceGcBeforeBenchmark = false` pour ignorer le GC complet forcé qui précède la phase de collecte — utile avec de nombreux benchmarks et combinaisons de paramètres.
+Lorsque l'auto-calibrage est activé, PicoBench augmente `IterationsPerSample` jusqu'à atteindre un budget minimal de temps par échantillon ou `MaxAutoIterationsPerSample`. C'est particulièrement utile pour les opérations très rapides autrement dominées par le bruit du minuteur. Définissez `ForceGcBeforeBenchmark = false` pour ignorer le GC complet forcé qui précède la phase de collecte — utile avec de nombreux benchmarks et combinaisons de paramètres.L'auto-calibrage est **optionnel** (`AutoCalibrateIterations` vaut `false` par défaut et la préconfiguration `Default` ne touche pas au nombre d'itérations configuré) : PicoBench ne gonfle jamais les itérations en silence pour faire paraître un résultat résoluble — en mode `CpuOnly`, le budget relevé est la granularité mesurée de l'horloge CPU, car toute valeur plus courte se lit comme zéro.
 
 ---
 
@@ -338,7 +377,7 @@ var options = new FormatterOptions
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
-    CandidateLabel        = "New"
+    CandidateLabel        = "New",
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -484,11 +523,13 @@ Sous macOS, le compteur CPU exporté est un proxy *temporel* monotone à haute r
 | `StringVsStringBuilder` | Impérative | Compare `string +=`, `StringBuilder` et `StringBuilder` avec capacité |
 | `AttributeBased` | Basée sur les attributs | Même comparaison en utilisant `[Benchmark]`, `[Params]` et le générateur de source |
 | `CollectionBenchmarks` | Basée sur les attributs | Recherche List vs Dictionary vs HashSet - montre chaque attribut |
+| `AsyncBenchmarks` | Attribut (asynchrone) | Point d'entrée asynchrone et cycle de vie mixte : `BenchmarkRunner.RunAsync<T>()`, `[GlobalSetup]`/`[IterationSetup]` asynchrones, `[Benchmark]` renvoyant `Task`, et `SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---
@@ -497,7 +538,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 | Caractéristique | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
-| Dépendances | 0 | Nombreuses |
+| Dépendances | 1 polyfill BCL | Nombreuses |
 | Taille du package | Petite | Grande |
 | Framework cible | netstandard2.0 | net6.0+ |
 | Support AOT | Générateur de source | Basé sur la réflexion |

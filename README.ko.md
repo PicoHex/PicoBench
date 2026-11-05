@@ -18,7 +18,7 @@
 - **공개된 한계** - `OverheadNs`, `ResolutionLimitNanoseconds`, `ResolutionLimited`, `Unmeasured`는 해당 실행이 무엇을 분해할 수 있었고 무엇을 분해할 수 없었는지를 알려주므로, 노이즈 수준의 결과를 빠른 작업으로 오독할 수 없습니다
 - **GC 추적** - 벤치마크 중 Gen0/Gen1/Gen2 수집 횟수를 모니터링합니다(설정/해제 제외)
 - **CPU 사이클 측정** - 동기 경로에서는 스레드 범위 사이클 수를 측정합니다(Windows `QueryThreadCycleTime`; Linux는 운영체제가 비특권 접근을 허용할 때 `perf_event`). 비동기 벤치마크는 프로세스 전역 카운터를 읽으며(스레드별 카운터는 스레드 전환을 넘어 추적할 수 없기 때문), `CpuCyclesAreApproximate`로 플래그가 지정됩니다(네 가지 형식 모두에서 `~`). macOS에는 사이클 카운터가 없습니다: `mach_absolute_time`은 사이클이 아닌 단조 *시간* 프록시이며 같은 방식으로 플래그가 지정됩니다
-- **통계 분석** - 평균, 중앙값, P90, P95, P99, 최소, 최대, 표준편차, 표준오차, 상대 표준편차 백분위수는 인접한 두 표본 사이의 선형 보간(통계 패키지가 *type 7*이라 부르는 방식, 즉 Excel `PERCENTILE.INC`와 NumPy 기본값)으로 계산하고 분산은 표본 분산(`N-1`)입니다. 표본 수가 약 20 미만이면 P99가 최댓값에 가까우므로 꼬리 열은 안정적인 꼬리를 뜻하지 않습니다.
+- **통계 분석** - `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError`와 상대 표준 편차(`RSD`). 백분위수는 인접한 두 표본 사이의 선형 보간(통계 패키지가 *type 7*이라 부르는 방식, 즉 Excel `PERCENTILE.INC`와 NumPy 기본값)으로 계산하고 분산은 표본 분산(`N-1`)입니다. 표본 수가 약 20 미만이면 P99가 최댓값에 가까우므로 꼬리 열은 안정적인 꼬리를 뜻하지 않습니다.
 - **다양한 출력 형식** - 4개의 내장 포맷터(Console, Markdown, HTML, CSV)와 프로그래밍 방식 요약 출력
 - **매개변수화된 벤치마크** - 자동 카테시안 곱 반복을 지원하는 `[Params]` 특성
 - **비교 지원** - 기준선과 후보를 교차 라운드로 측정하고, 판정은 라운드별 페어 비율의 중앙값으로 합니다. 5% 데드 밴드와 동등성을 배제하는 분포 비의존 구간이 모두 필요하므로, 라운드 간 노이즈가 개선으로 게시되지 않습니다
@@ -527,11 +527,13 @@ macOS에서 내보내는 CPU 카운터는 아키텍처 사이클 수가 아닌 �
 | `StringVsStringBuilder` | 명령형 | `string +=`, `StringBuilder`, 용량을 지정한 `StringBuilder` 비교 |
 | `AttributeBased` | 속성 | `[Benchmark]`, `[Params]`, 소스 생성기를 사용한 동일 비교 |
 | `CollectionBenchmarks` | 속성 | List vs Dictionary vs HashSet 조회 - 모든 특성 시연 |
+| `AsyncBenchmarks` | 특성(비동기) | 비동기 진입점과 혼합 수명 주기: `BenchmarkRunner.RunAsync<T>()`, 비동기 `[GlobalSetup]`/`[IterationSetup]`, `Task`를 반환하는 `[Benchmark]`, `SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---

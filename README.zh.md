@@ -6,11 +6,11 @@
 [![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-一个轻量级、零依赖的 .NET 基准测试库，提供 **两种互补的 API**：命令式 API 和基于属性、源生成的 API，完全 **AOT 兼容**。
+一个轻量级的 .NET 基准测试库，提供 **两种互补的 API**：命令式 API 和基于属性、源生成的 API，完全 **AOT 兼容**。除一个 BCL polyfill（`System.Threading.Tasks.Extensions`，用于在 netstandard2.0 上补回 `ValueTask<T>`）之外没有任何 NuGet 引用。
 
 ## 特性
 
-- **零依赖** - 纯 .NET 实现，无需外部包
+- **无第三方依赖** —— 只有 1 个 BCL polyfill（`System.Threading.Tasks.Extensions`），用于在 netstandard2.0 上补回 `ValueTask<T>`；没有其他外部包
 - **两种 API** - 命令式 (`Benchmark.Run`) 用于临时测试；基于属性 (`[Benchmark]` + 源生成器) 用于结构化测试套件
 - **AOT 兼容的源生成器** - 增量生成器在运行时生成直接方法调用，零反射
 - **跨平台** - 完全支持 Windows、Linux 和 macOS
@@ -18,7 +18,7 @@
 - **显式披露的极限** - `OverheadNs`、`ResolutionLimitNanoseconds`、`ResolutionLimited` 与 `Unmeasured` 说明了本次运行能够分辨与无法分辨什么，因此噪声级的结果不会被当作快速操作来读
 - **GC 跟踪** - 监控基准测试期间的 Gen0/Gen1/Gen2 回收计数（不含 setup/teardown）
 - **CPU 周期计数** - 同步路径使用线程级周期计数（Windows `QueryThreadCycleTime`；Linux 在操作系统允许非特权访问时使用 `perf_event`）。异步基准读取进程级计数器，因为线程级计数器无法跨线程切换跟踪，因此标记为 `CpuCyclesAreApproximate`（四种格式中均带 `~`）。macOS 没有周期计数器：`mach_absolute_time` 是单调的*时间*代理，而不是周期，同样会被标记
-- **统计分析** - 均值、中位数、P90、P95、P99、最小值、最大值、标准差、标准误和相对标准差 分位数采用最近两个样本之间的线性插值（统计软件称之为 *type 7*，即 Excel `PERCENTILE.INC` 与 NumPy 的默认口径），方差为样本方差（除以 `N-1`）；样本数少于约 20 时 P99 接近最大值，因此尾部分位数并不代表稳定的尾部。
+- **统计分析** - `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`（相对标准差 `RSD`）。分位数采用最近两个样本之间的线性插值（统计软件称之为 *type 7*，即 Excel `PERCENTILE.INC` 与 NumPy 的默认口径），方差为样本方差（除以 `N-1`）；样本数少于约 20 时 P99 接近最大值，因此尾部分位数并不代表稳定的尾部。
 - **多种输出格式** - 4 个内置 `IFormatter` 格式化器（Console、Markdown、HTML、CSV）以及程序化摘要输出
 - **参数化基准测试** - `[Params]` 属性，支持自动笛卡尔积迭代
 - **比较支持** - 基准与候选在交错轮次中测量；结论取每轮配对比值的中位数，并且必须同时满足 5% 死区与排除持平的无分布区间，因此轮次间的噪声不会被当作性能提升发布
@@ -223,14 +223,50 @@ var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 两种 API 都支持异步工作。异步基准方法按迭代 await；同一类中可混用同步与异步生命周期方法。
 
 ```csharp
+// 命令式
 var result = await Benchmark.RunAsync("Http call", async () =>
 {
     using var response = await httpClient.GetAsync(url);
 });
 
-var scoped = await Benchmark.RunScopedAsync("Scoped",
+// 逐样本异步 setup/teardown
+var result2 = await Benchmark.RunAsync(
+    "With lifecycle",
+    action: async () => await DoWorkAsync(),
+    warmup: async () => await DoWorkAsync(),
+    config: BenchmarkConfig.Quick,
+    setup: async () => await ResetStateAsync(),
+    teardown: async () => await DisposeStateAsync());
+
+// 带状态的异步（无闭包分配；没有 setup/teardown 重载）
+var result3 = await Benchmark.RunAsync("Stateful", state, async s => await ProcessAsync(s));
+
+// 异步作用域（对 DI 友好）
+var result4 = await Benchmark.RunScopedAsync("Scoped",
     () => container.CreateScope(),
     async scope => await scope.Service.DoWorkAsync());
+```
+
+属性式类可以声明异步基准与异步生命周期方法：
+
+```csharp
+[BenchmarkClass]
+public partial class IoBenchmarks
+{
+    private string _path = "";
+
+    [GlobalSetup]
+    public async Task SetupAsync() => await File.WriteAllTextAsync(_path, "data");
+
+    [IterationSetup]
+    public async Task ResetAsync() => await Task.Yield();
+
+    [Benchmark(Baseline = true)]
+    public async Task ReadAsync() => await File.ReadAllTextAsync(_path);
+
+    [Benchmark]
+    public void ReadSync() => File.ReadAllText(_path);
+}
 ```
 
 - **计时模式** —— `AsyncTimingMode.WallClock`（默认）统计包含 await 挂起的完整时长；`AsyncTimingMode.CpuOnly` 统计 `Process.TotalProcessorTime`，排除 I/O 等待。CPU 时钟以操作系统定时器刻度推进（通常 10–16 ms），因此该模式下自动校准会把最小采样预算提升到实测时钟粒度。CpuOnly 模式不收集 GC 数据。
@@ -267,8 +303,6 @@ PicoBench 采用进程内运行，CLR 配置会影响绝对值：
 
 ---
 
----
-
 ## 配置
 
 ### 预设
@@ -291,13 +325,16 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000,
-    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
+    ForceGcBeforeBenchmark = true,  // false 表示跳过基准前的强制完整 GC
+    BoostPriorities     = true,   // 仅在本次运行期间提升进程/线程优先级，结束后恢复
+    TimingMode          = AsyncTimingMode.WallClock, // 或 CpuOnly（仅异步）
+    CancellationToken   = default,                   // 仅异步；同步基准会忽略它
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-启用自动校准后，PicoBench 会自动增大 `IterationsPerSample`，直到达到最小样本耗时预算，或命中 `MaxAutoIterationsPerSample` 上限。这对极快操作特别有用，可减少计时噪声影响。 将 `ForceGcBeforeBenchmark` 设为 `false` 可跳过采样阶段之前的强制完整 GC——在运行大量基准与参数组合时很有用。
+启用自动校准后，PicoBench 会自动增大 `IterationsPerSample`，直到达到最小样本耗时预算，或命中 `MaxAutoIterationsPerSample` 上限。这对极快操作特别有用，可减少计时噪声影响。 将 `ForceGcBeforeBenchmark` 设为 `false` 可跳过采样阶段之前的强制完整 GC——在运行大量基准与参数组合时很有用。自动校准是**可选开启**的（`AutoCalibrateIterations` 默认为 `false`，`Default` 预设也不会改动所配置的迭代数）：PicoBench 从不悄悄放大迭代数来让结果看起来可分辨 —— 在 `CpuOnly` 模式下，抬高后的预算就是实测的 CPU 时钟粒度，因为更短的值一律被读作零。
 
 ---
 
@@ -342,7 +379,7 @@ var options = new FormatterOptions
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
-    CandidateLabel        = "New"
+    CandidateLabel        = "New",
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -413,7 +450,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | `BenchmarkSuite` | 名称、描述、结果、比较、环境、持续时间、时间戳 |
 | `ComparisonOutcome` | 枚举：`Unknown`（无法计算任何比值）、`Inconclusive`（落在 5% 死区内，或区间仍包含持平）、`Faster`、`Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() —— 中位配对比值的无分布 95% 区间 |
-| `Statistics` | 平均值、P50、P90、P95、P99、最小值、最大值、标准差、标准误、相对标准差百分比、每操作 CPU 周期、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GC 信息、HasHighVariance |
+| `Statistics` | `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`、`RelativeStdDevPercent`、`CpuCyclesPerOp`、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GC 信息、HasHighVariance |
 | `TimingSample` | 纳秒耗时、毫秒耗时、计时器滴答数、CPU 周期、**CpuCyclesAreApproximate**、GC 信息 |
 | `GcInfo` | Gen0、Gen1、Gen2、总计、是否为零、IsApproximate |
 | `EnvironmentInfo` | 操作系统、架构、运行时版本、处理器数量、执行模式、配置、CPU 计数器类型 / 可用性 / 是否有意义、自定义标签 |
@@ -488,11 +525,13 @@ src/
 | `StringVsStringBuilder` | 命令式 | 比较 `string +=`、`StringBuilder` 和带容量的 `StringBuilder` |
 | `AttributeBased` | 基于属性 | 使用 `[Benchmark]`、`[Params]` 和源生成器的相同比较 |
 | `CollectionBenchmarks` | 基于属性 | List vs Dictionary vs HashSet 查找 - 展示所有属性 |
+| `AsyncBenchmarks` | 属性（异步） | 异步入口与混合生命周期：`BenchmarkRunner.RunAsync<T>()`、异步 `[GlobalSetup]`/`[IterationSetup]`、返回 `Task` 的 `[Benchmark]`，以及 `SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---
@@ -501,7 +540,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 | 功能 | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
-| 依赖 | 0 | 多 |
+| 依赖 | 1 个 BCL polyfill | 多个 |
 | 包大小 | 小 | 大 |
 | 目标框架 | netstandard2.0 | net6.0+ |
 | AOT 支持 | 源生成器 | 基于反射 |

@@ -2,11 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
-軽量で依存関係ゼロの.NETベンチマークライブラリで、**2つの補完的API**を提供します：命令型APIと、属性ベースでソース生成される、完全に**AOT互換**のAPIです。
+軽量な.NETベンチマークライブラリで、**2つの補完的API**を提供します：命令型APIと、属性ベースでソース生成される、完全に**AOT互換**のAPIです。NuGet 参照は netstandard2.0 で `ValueTask<T>` を補う BCL polyfill（`System.Threading.Tasks.Extensions`）が 1 つだけです。
 
 ## 特徴
 
-- **依存関係ゼロ** - 純粋な.NET実装、外部パッケージ不要
+- **サードパーティ依存なし** — netstandard2.0 で `ValueTask<T>` を補う BCL polyfill（`System.Threading.Tasks.Extensions`）が 1 つだけ。外部パッケージはありません
 - **2つのAPI** - アドホックテスト用の命令型API (`Benchmark.Run`)；構造化されたスイート用の属性ベースAPI (`[Benchmark]` + ソースジェネレーター)
 - **AOT互換ソースジェネレーター** - インクリメンタルジェネレーターが実行時に直接メソッド呼び出しを生成、リフレクションゼロ
 - **クロスプラットフォーム** - Windows、Linux、macOSを完全サポート
@@ -14,7 +14,7 @@
 - **開示された限界** - `OverheadNs`、`ResolutionLimitNanoseconds`、`ResolutionLimited`、`Unmeasured` は、その実行が何を分解できて何を分解できなかったかを示すため、ノイズレベルの結果を高速な操作として読み違えることはありません
 - **GC追跡** - ベンチマーク中のGen0/Gen1/Gen2コレクション回数を監視（setup/teardown を除く）
 - **CPUサイクルカウント** - 同期パスではスレッドスコープのサイクル数を取得します（Windows `QueryThreadCycleTime`；Linux では OS が非特権アクセスを許可する場合 `perf_event`）。非同期ベンチマークはプロセス全体のカウンターを読み（スレッド単位のカウンターはスレッド遷移をまたいで追跡できないため）、`CpuCyclesAreApproximate` のフラグが立ちます（4つの全フォーマットで `~`）。macOS にはサイクルカウンターがなく、`mach_absolute_time` はサイクルではなく単調な*時間*プロキシであり、同じフラグが立ちます
-- **統計分析** - 平均、中央値、P90、P95、P99、最小値、最大値、標準偏差、標準誤差、相対標準偏差 パーセンタイルは隣接する 2 標本の線形補間（統計パッケージでいう *type 7*、Excel `PERCENTILE.INC` と NumPy の既定）で求め、分散は不偏分散（`N-1`）です。標本数が約 20 未満では P99 が最大値に近づくため、テール列は安定した裾を意味しません。
+- **統計分析** - `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`（相対標準偏差 `RSD`）。パーセンタイルは隣接する 2 標本の線形補間（統計パッケージでいう *type 7*、Excel `PERCENTILE.INC` と NumPy の既定）で求め、分散は不偏分散（`N-1`）です。標本数が約 20 未満では P99 が最大値に近づくため、テール列は安定した裾を意味しません。
 - **複数出力形式** - 4 つの組み込み `IFormatter` フォーマッター（Console、Markdown、HTML、CSV）とプログラム要約出力
 - **パラメータ化ベンチマーク** - `[Params]`属性で自動デカルト積反復
 - **比較サポート** - ベースラインと候補を交互のラウンドで計測し、判定にはラウンドごとのペア比の中央値を使います。5% のデッドバンドと、同等性を排除する分布非依存の区間の両方が必要なので、ラウンド間のノイズが改善として公表されることはありません
@@ -217,14 +217,50 @@ var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 両方の API が非同期処理をサポートします。非同期ベンチマークメソッドはイテレーションごとに await され、ライフサイクルメソッドは同じクラス内で同期と非同期を混在できます。
 
 ```csharp
+// 命令型
 var result = await Benchmark.RunAsync("Http call", async () =>
 {
     using var response = await httpClient.GetAsync(url);
 });
 
-var scoped = await Benchmark.RunScopedAsync("Scoped",
+// サンプルごとの非同期 setup/teardown
+var result2 = await Benchmark.RunAsync(
+    "With lifecycle",
+    action: async () => await DoWorkAsync(),
+    warmup: async () => await DoWorkAsync(),
+    config: BenchmarkConfig.Quick,
+    setup: async () => await ResetStateAsync(),
+    teardown: async () => await DisposeStateAsync());
+
+// 状態を持つ非同期（クロージャ割り当てなし。setup/teardown オーバーロードなし）
+var result3 = await Benchmark.RunAsync("Stateful", state, async s => await ProcessAsync(s));
+
+// 非同期スコープ（DI フレンドリー）
+var result4 = await Benchmark.RunScopedAsync("Scoped",
     () => container.CreateScope(),
     async scope => await scope.Service.DoWorkAsync());
+```
+
+属性ベースのクラスでは、非同期ベンチマークと非同期ライフサイクルメソッドを宣言できます:
+
+```csharp
+[BenchmarkClass]
+public partial class IoBenchmarks
+{
+    private string _path = "";
+
+    [GlobalSetup]
+    public async Task SetupAsync() => await File.WriteAllTextAsync(_path, "data");
+
+    [IterationSetup]
+    public async Task ResetAsync() => await Task.Yield();
+
+    [Benchmark(Baseline = true)]
+    public async Task ReadAsync() => await File.ReadAllTextAsync(_path);
+
+    [Benchmark]
+    public void ReadSync() => File.ReadAllText(_path);
+}
 ```
 
 - **計測モード** – `AsyncTimingMode.WallClock`（既定）は await による中断を含む総時間を計測します。`AsyncTimingMode.CpuOnly` は `Process.TotalProcessorTime` を計測し、I/O 待ちを除外します。CPU クロックは OS のタイマーティック（通常 10〜16 ms）単位でしか進まないため、自動キャリブレーションは最小サンプル予算を実測したクロック粒度まで引き上げます。CpuOnly モードでは GC データを収集しません。
@@ -285,13 +321,16 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000,
-    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
+    ForceGcBeforeBenchmark = true,  // false でベンチマーク前の強制フル GC をスキップ
+    BoostPriorities     = true,   // 実行中だけプロセス/スレッドの優先度を上げ、終了後に元へ戻す
+    TimingMode          = AsyncTimingMode.WallClock, // または CpuOnly（非同期のみ）
+    CancellationToken   = default,                   // 非同期のみ。同期ベンチマークは無視します
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-自動キャリブレーションを有効にすると、PicoBench は最小サンプル時間の予算に達するか、`MaxAutoIterationsPerSample` に達するまで `IterationsPerSample` を増やします。これは、タイマーノイズの影響を受けやすい極めて高速な処理で特に有効です。 多数のベンチマークとパラメーターの組み合わせを実行する場合、`ForceGcBeforeBenchmark = false` に設定するとコレクション段階前の強制フル GC をスキップできます。
+自動キャリブレーションを有効にすると、PicoBench は最小サンプル時間の予算に達するか、`MaxAutoIterationsPerSample` に達するまで `IterationsPerSample` を増やします。これは、タイマーノイズの影響を受けやすい極めて高速な処理で特に有効です。 多数のベンチマークとパラメーターの組み合わせを実行する場合、`ForceGcBeforeBenchmark = false` に設定するとコレクション段階前の強制フル GC をスキップできます。自動キャリブレーションは**オプトイン**です（`AutoCalibrateIterations` の既定値は `false` で、`Default` プリセットも設定された反復数を変更しません）。PicoBench が結果を解決可能に見せるために反復数を黙って水増しすることはありません — `CpuOnly` モードで引き上げられる予算は実測した CPU クロック粒度で、それより短い値はゼロとして読まれるためです。
 
 ---
 
@@ -336,7 +375,7 @@ var options = new FormatterOptions
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
-    CandidateLabel        = "New"
+    CandidateLabel        = "New",
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -482,11 +521,13 @@ macOS では、エクスポートされる CPU カウンターはアーキテク
 | `StringVsStringBuilder` | 命令型 | `string +=`、`StringBuilder`、容量指定`StringBuilder`の比較 |
 | `AttributeBased` | 属性ベース | `[Benchmark]`、`[Params]`、ソースジェネレーターを使用した同じ比較 |
 | `CollectionBenchmarks` | 属性ベース | List vs Dictionary vs HashSet検索 - すべての属性を展示 |
+| `AsyncBenchmarks` | 属性（非同期） | 非同期エントリーポイントと混在ライフサイクル：`BenchmarkRunner.RunAsync<T>()`、非同期 `[GlobalSetup]`/`[IterationSetup]`、`Task` を返す `[Benchmark]`、`SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---
@@ -495,7 +536,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 | 機能 | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
-| 依存関係 | 0 | 多数 |
+| 依存関係 | BCL polyfill 1 個 | 多数 |
 | パッケージサイズ | 小 | 大 |
 | ターゲットフレームワーク | netstandard2.0 | net6.0+ |
 | AOTサポート | ソースジェネレーター | リフレクションベース |

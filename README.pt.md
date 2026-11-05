@@ -14,7 +14,7 @@ Uma biblioteca de benchmarking leve para .NET com **duas APIs complementares**: 
 - **Limites Declarados** - `OverheadNs`, `ResolutionLimitNanoseconds`, `ResolutionLimited` e `Unmeasured` dizem o que uma execução pôde e não pôde resolver, para que um resultado em nível de ruído não possa ser lido como uma operação rápida
 - **Monitoramento de GC** - Monitora contagens de coleta Gen0/Gen1/Gen2 durante benchmarks (setup/teardown excluídos)
 - **Contagem de Ciclos de CPU** - Contagens de ciclos por thread no caminho síncrono (Windows `QueryThreadCycleTime`; Linux `perf_event` quando o SO permite acesso sem privilégios). Benchmarks assíncronos leem um contador de todo o processo, porque um contador por thread não pode ser seguido entre trocas de thread, e são marcados `CpuCyclesAreApproximate` (`~` nos quatro formatos). O macOS não tem contador de ciclos: `mach_absolute_time` é um proxy de *tempo* monotônico, não ciclos, e é marcado da mesma forma
-- **Análise Estatística** - Média, Mediana, P90, P95, P99, Mín, Máx, Desvio Padrão, erro padrão e desvio padrão relativo Os percentis usam interpolação linear entre as duas amostras vizinhas (o método que os pacotes estatísticos chamam de *tipo 7* — `PERCENTILE.INC` do Excel, padrão do NumPy) e a variância é a variância amostral (`N-1`); com menos de cerca de 20 amostras, o P99 fica próximo do máximo, então as colunas de cauda não descrevem uma cauda estável.
+- **Análise Estatística** - `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError` e desvio padrão relativo (`RSD`). Os percentis usam interpolação linear entre as duas amostras vizinhas (o método que os pacotes estatísticos chamam de *tipo 7* — `PERCENTILE.INC` do Excel, padrão do NumPy) e a variância é a variância amostral (`N-1`); com menos de cerca de 20 amostras, o P99 fica próximo do máximo, então as colunas de cauda não descrevem uma cauda estável.
 - **Múltiplos Formatos de Saída** - Quatro formatadores `IFormatter` integrados (Console, Markdown, HTML, CSV) mais saída de resumo programático
 - **Benchmarks Parametrizados** - Atributo `[Params]` com iteração automática de produto cartesiano
 - **Suporte a Comparações** - Baseline vs candidato medidos em rodadas intercaladas; o veredicto é a mediana das razões pareadas por rodada e exige tanto uma faixa morta de 5% quanto um intervalo livre de distribuição que exclua a paridade, para que o ruído entre rodadas não seja publicado como melhoria
@@ -219,14 +219,50 @@ var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 Ambas as APIs suportam trabalho assíncrono. Métodos de benchmark assíncronos são aguardados por iteração; métodos de ciclo de vida podem misturar sincronia e assincronia na mesma classe.
 
 ```csharp
+// Imperativa
 var result = await Benchmark.RunAsync("Http call", async () =>
 {
     using var response = await httpClient.GetAsync(url);
 });
 
-var scoped = await Benchmark.RunScopedAsync("Scoped",
+// setup/teardown assíncrono por amostra
+var result2 = await Benchmark.RunAsync(
+    "With lifecycle",
+    action: async () => await DoWorkAsync(),
+    warmup: async () => await DoWorkAsync(),
+    config: BenchmarkConfig.Quick,
+    setup: async () => await ResetStateAsync(),
+    teardown: async () => await DisposeStateAsync());
+
+// Com estado assíncrono (sem alocação de closure; sem sobrecarga de setup/teardown)
+var result3 = await Benchmark.RunAsync("Stateful", state, async s => await ProcessAsync(s));
+
+// Escopos assíncronos (amigável para DI)
+var result4 = await Benchmark.RunScopedAsync("Scoped",
     () => container.CreateScope(),
     async scope => await scope.Service.DoWorkAsync());
+```
+
+Classes baseadas em atributos podem declarar benchmarks assíncronos e métodos de ciclo de vida assíncronos:
+
+```csharp
+[BenchmarkClass]
+public partial class IoBenchmarks
+{
+    private string _path = "";
+
+    [GlobalSetup]
+    public async Task SetupAsync() => await File.WriteAllTextAsync(_path, "data");
+
+    [IterationSetup]
+    public async Task ResetAsync() => await Task.Yield();
+
+    [Benchmark(Baseline = true)]
+    public async Task ReadAsync() => await File.ReadAllTextAsync(_path);
+
+    [Benchmark]
+    public void ReadSync() => File.ReadAllText(_path);
+}
 ```
 
 - **Modos de medição** – `AsyncTimingMode.WallClock` (padrão) mede a duração total, incluindo suspensões de await; `AsyncTimingMode.CpuOnly` mede `Process.TotalProcessorTime` e exclui espera de E/S. O relógio de CPU avança apenas em ticks do temporizador (normalmente 10–16 ms); a autocalibração eleva seu orçamento mínimo de amostra à granularidade medida do relógio. No modo CpuOnly não há dados de GC.
@@ -287,13 +323,16 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000,
-    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
+    ForceGcBeforeBenchmark = true,  // false pula o GC completo forçado antes do benchmark
+    BoostPriorities     = true,   // eleva a prioridade do processo/thread só durante a execução e depois restaura
+    TimingMode          = AsyncTimingMode.WallClock, // ou CpuOnly (somente assíncrono)
+    CancellationToken   = default,                   // somente assíncrono; benchmarks síncronos o ignoram
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-Quando a auto-calibração está habilitada, o PicoBench aumenta `IterationsPerSample` até atingir um orçamento mínimo de tempo por amostra ou até alcançar `MaxAutoIterationsPerSample`. Isso é especialmente útil para operações muito rápidas dominadas por ruído do temporizador. Defina `ForceGcBeforeBenchmark = false` para pular o GC completo forçado que precede a fase de coleta — útil ao executar muitos benchmarks e combinações de parâmetros.
+Quando a auto-calibração está habilitada, o PicoBench aumenta `IterationsPerSample` até atingir um orçamento mínimo de tempo por amostra ou até alcançar `MaxAutoIterationsPerSample`. Isso é especialmente útil para operações muito rápidas dominadas por ruído do temporizador. Defina `ForceGcBeforeBenchmark = false` para pular o GC completo forçado que precede a fase de coleta — útil ao executar muitos benchmarks e combinações de parâmetros.A auto-calibração é **opcional** (`AutoCalibrateIterations` é `false` por padrão e a predefinição `Default` não altera a contagem de iterações configurada): o PicoBench nunca infla as iterações em silêncio para fazer um resultado parecer resolvível — no modo `CpuOnly` o orçamento elevado é a granularidade medida do relógio de CPU, porque qualquer valor mais curto é lido como zero.
 
 ---
 
@@ -338,7 +377,7 @@ var options = new FormatterOptions
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
-    CandidateLabel        = "New"
+    CandidateLabel        = "New",
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -484,11 +523,13 @@ No macOS, o contador de CPU exportado é um proxy de *tempo* monotônico de alta
 | `StringVsStringBuilder` | Imperativa | Compara `string +=`, `StringBuilder`, e `StringBuilder` com capacidade |
 | `AttributeBased` | Atributos | Mesma comparação usando `[Benchmark]`, `[Params]`, e o gerador de código fonte |
 | `CollectionBenchmarks` | Atributos | Busca em List vs Dictionary vs HashSet - mostra cada atributo |
+| `AsyncBenchmarks` | Atributo (assíncrono) | Ponto de entrada assíncrono e ciclo de vida misto: `BenchmarkRunner.RunAsync<T>()`, `[GlobalSetup]`/`[IterationSetup]` assíncronos, `[Benchmark]` que retorna `Task`, e `SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---

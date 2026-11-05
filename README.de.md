@@ -2,11 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
-Eine leichte, abhängigkeitsfreie Benchmarking-Bibliothek für .NET mit **zwei komplementären APIs**: einer imperativen API und einer attributbasierten, quellgenerierten API, die vollständig **AOT-kompatibel** ist.
+Eine leichte Benchmarking-Bibliothek für .NET mit **zwei komplementären APIs**: einer imperativen API und einer attributbasierten, quellgenerierten API, die vollständig **AOT-kompatibel** ist. Die einzige NuGet-Referenz ist ein BCL-Polyfill (`System.Threading.Tasks.Extensions`) für `ValueTask<T>` auf netstandard2.0.
 
 ## Funktionen
 
-- **Keine Abhängigkeiten** - Reine .NET-Implementierung, keine externen Pakete erforderlich
+- **Keine Drittanbieter-Abhängigkeiten** — nur ein BCL-Polyfill (`System.Threading.Tasks.Extensions`) für `ValueTask<T>` auf netstandard2.0. Keine externen Pakete.
 - **Zwei APIs** - Imperativ (`Benchmark.Run`) für Ad-hoc-Tests; attributbasiert (`[Benchmark]` + Quellgenerator) für strukturierte Suiten
 - **AOT-kompatibler Quellgenerator** - Der inkrementelle Generator erzeugt direkte Methodenaufrufe ohne Reflection zur Laufzeit
 - **Plattformübergreifend** - Vollständige Unterstützung für Windows, Linux und macOS
@@ -14,7 +14,7 @@ Eine leichte, abhängigkeitsfreie Benchmarking-Bibliothek für .NET mit **zwei k
 - **Offengelegte Grenzen** - `OverheadNs`, `ResolutionLimitNanoseconds`, `ResolutionLimited` und `Unmeasured` sagen, was ein Lauf auflösen konnte und was nicht, sodass ein Ergebnis auf Rauschniveau nicht als schnelle Operation gelesen werden kann
 - **GC-Tracking** - Überwacht Gen0/Gen1/Gen2-Sammlungszählungen während Benchmarks (ohne Setup/Teardown)
 - **CPU-Zykluszählung** - Thread-lokale Zykluszahlen auf dem synchronen Pfad (Windows `QueryThreadCycleTime`; Linux `perf_event`, wenn das Betriebssystem unprivilegierten Zugriff erlaubt). Asynchrone Benchmarks lesen einen prozessweiten Zähler, weil ein Thread-Zähler über Thread-Wechsel hinweg nicht verfolgt werden kann, und sind mit `CpuCyclesAreApproximate` markiert (`~` in allen vier Formaten). macOS hat keinen Zykluszähler: `mach_absolute_time` ist ein monotoner *Zeit*-Proxy, keine Zyklen, und wird genauso markiert
-- **Statistische Analyse** - Mittelwert, Median, P90, P95, P99, Minimum, Maximum, Standardabweichung, Standardfehler und relative Standardabweichung Perzentile werden durch lineare Interpolation zwischen den beiden benachbarten Stichproben gebildet (die Methode, die Statistikpakete *Typ 7* nennen — Excel `PERCENTILE.INC`, NumPy-Standard), und die Varianz ist die Stichprobenvarianz (`N-1`); unter etwa 20 Stichproben liegt P99 nahe am Maximum, die Tail-Spalten zeigen also keinen stabilen Tail.
+- **Statistische Analyse** - `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError` und relative Standardabweichung (`RSD`). Perzentile werden durch lineare Interpolation zwischen den beiden benachbarten Stichproben gebildet (die Methode, die Statistikpakete *Typ 7* nennen — Excel `PERCENTILE.INC`, NumPy-Standard), und die Varianz ist die Stichprobenvarianz (`N-1`); unter etwa 20 Stichproben liegt P99 nahe am Maximum, die Tail-Spalten zeigen also keinen stabilen Tail.
 - **Mehrere Ausgabeformate** - Vier integrierte `IFormatter`-Formatter (Console, Markdown, HTML, CSV) plus programmatische Zusammenfassung
 - **Parametrisierte Benchmarks** - `[Params]`-Attribut mit automatischer kartesischer Produktiteration
 - **Vergleichsunterstützung** - Baseline und Kandidat in verschränkten Runden gemessen; das Urteil ist der Median der paarweisen Verhältnisse pro Runde und benötigt sowohl ein 5%-Totband als auch ein verteilungsfreies Intervall, das Gleichstand ausschließt, damit Runden-zu-Runden-Rauschen nicht als Verbesserung veröffentlicht wird
@@ -219,14 +219,50 @@ var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 Beide APIs unterstützen asynchrone Arbeit. Asynchrone Benchmark-Methoden werden pro Iteration awaited; Lifecycle-Methoden dürfen im selben Klasse synchron und asynchron gemischt werden.
 
 ```csharp
+// Imperativ
 var result = await Benchmark.RunAsync("Http call", async () =>
 {
     using var response = await httpClient.GetAsync(url);
 });
 
-var scoped = await Benchmark.RunScopedAsync("Scoped",
+// Asynchrones Setup/Teardown pro Sample
+var result2 = await Benchmark.RunAsync(
+    "With lifecycle",
+    action: async () => await DoWorkAsync(),
+    warmup: async () => await DoWorkAsync(),
+    config: BenchmarkConfig.Quick,
+    setup: async () => await ResetStateAsync(),
+    teardown: async () => await DisposeStateAsync());
+
+// Zustandsbehaftet asynchron (keine Closure-Allokation; keine Setup/Teardown-Überladung)
+var result3 = await Benchmark.RunAsync("Stateful", state, async s => await ProcessAsync(s));
+
+// Asynchrone Scopes (DI-freundlich)
+var result4 = await Benchmark.RunScopedAsync("Scoped",
     () => container.CreateScope(),
     async scope => await scope.Service.DoWorkAsync());
+```
+
+Attributbasierte Klassen dürfen asynchrone Benchmarks und asynchrone Lifecycle-Methoden deklarieren:
+
+```csharp
+[BenchmarkClass]
+public partial class IoBenchmarks
+{
+    private string _path = "";
+
+    [GlobalSetup]
+    public async Task SetupAsync() => await File.WriteAllTextAsync(_path, "data");
+
+    [IterationSetup]
+    public async Task ResetAsync() => await Task.Yield();
+
+    [Benchmark(Baseline = true)]
+    public async Task ReadAsync() => await File.ReadAllTextAsync(_path);
+
+    [Benchmark]
+    public void ReadSync() => File.ReadAllText(_path);
+}
 ```
 
 - **Timing-Modi** – `AsyncTimingMode.WallClock` (Standard) misst die Gesamtdauer inklusive await-Unterbrechungen; `AsyncTimingMode.CpuOnly` misst `Process.TotalProcessorTime` und schließt I/O-Wartezeit aus. Die CPU-Uhr springt nur in Timer-Ticks (typisch 10–16 ms); die Auto-Kalibrierung hebt ihr Mindest-Sample-Budget daher auf die gemessene Uhr-Granularität an. Im CpuOnly-Modus entfallen GC-Daten.
@@ -287,13 +323,16 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000,
-    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
+    ForceGcBeforeBenchmark = true,  // false überspringt die erzwungene volle GC vor dem Benchmark
+    BoostPriorities     = true,   // hebt Prozess-/Thread-Priorität nur für den Lauf an und stellt sie danach wieder her
+    TimingMode          = AsyncTimingMode.WallClock, // oder CpuOnly (nur asynchron)
+    CancellationToken   = default,                   // nur asynchron; synchrone Benchmarks ignorieren ihn
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-Wenn die Auto-Kalibrierung aktiviert ist, erhöht PicoBench `IterationsPerSample`, bis ein minimales Zeitbudget pro Sample erreicht ist oder `MaxAutoIterationsPerSample` erreicht wird. Das ist besonders hilfreich bei extrem schnellen Operationen, die sonst vom Timerrauschen dominiert werden. Setzen Sie `ForceGcBeforeBenchmark = false`, um die erzwungene vollständige GC vor der Sammelphase zu überspringen — nützlich bei vielen Benchmarks und Parameterkombinationen.
+Wenn die Auto-Kalibrierung aktiviert ist, erhöht PicoBench `IterationsPerSample`, bis ein minimales Zeitbudget pro Sample erreicht ist oder `MaxAutoIterationsPerSample` erreicht wird. Das ist besonders hilfreich bei extrem schnellen Operationen, die sonst vom Timerrauschen dominiert werden. Setzen Sie `ForceGcBeforeBenchmark = false`, um die erzwungene vollständige GC vor der Sammelphase zu überspringen — nützlich bei vielen Benchmarks und Parameterkombinationen.Die Auto-Kalibrierung ist **opt-in** (`AutoCalibrateIterations` ist standardmäßig `false`, und die Voreinstellung `Default` lässt die konfigurierte Iterationszahl unverändert): PicoBench bläht Iterationen nie stillschweigend auf, damit ein Ergebnis auflösbar aussieht — im `CpuOnly`-Modus ist das angehobene Budget die gemessene Granularität der CPU-Uhr, weil alles Kürzere als null gelesen wird.
 
 ---
 
@@ -338,7 +377,7 @@ var options = new FormatterOptions
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
-    CandidateLabel        = "New"
+    CandidateLabel        = "New",
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -484,11 +523,13 @@ Unter macOS ist der exportierte CPU-Zähler ein hochauflösender monotoner *Zeit
 | `StringVsStringBuilder` | Imperativ | Vergleicht `string +=`, `StringBuilder` und `StringBuilder` mit Kapazität |
 | `AttributeBased` | Attributbasiert | Gleicher Vergleich mit `[Benchmark]`, `[Params]` und dem Quellgenerator |
 | `CollectionBenchmarks` | Attributbasiert | List vs Dictionary vs HashSet-Suche - zeigt jedes Attribut |
+| `AsyncBenchmarks` | Attributbasiert (asynchron) | Asynchroner Einstiegspunkt und gemischter Lifecycle: `BenchmarkRunner.RunAsync<T>()`, asynchrone `[GlobalSetup]`/`[IterationSetup]`, `Task`-rückgebende `[Benchmark]`, und `SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---
@@ -497,7 +538,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 | Funktion | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
-| Abhängigkeiten | 0 | Viele |
+| Abhängigkeiten | 1 BCL-Polyfill | Viele |
 | Paketgröße | Klein | Groß |
 | Zielframework | netstandard2.0 | net6.0+ |
 | AOT-Unterstützung | Quellgenerator | Reflection-basiert |
