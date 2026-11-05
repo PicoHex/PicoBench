@@ -354,7 +354,21 @@ var csv      = new CsvFormatter();         // CSV 用于数据分析
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-控制台、Markdown、HTML 和 CSV 输出会包含更偏精度分析的元数据，例如标准误、相对标准差，以及 CPU 计数器语义说明。
+四种格式化器都会展示同一组每操作指标 —— `Avg`、`P50`、`P90`、`P95`、`P99`、`StandardError` 与相对标准差（`RSD (%)` 列）—— 以及可用时的 CPU 计数器说明。Console 的套件表同样带有 `StdErr` 与 `RSD` 两列（此前缺失，噪声信号在默认输出里根本看不到）。Console、Markdown 与 HTML 对同一份数据打印同一个表格单位，而 CSV 始终以纳秒给出（见下文）。
+
+### 精度档案：raw 与 display
+
+同一个数值承担两项职责，格式化器把它们分开，而不是各自取一个折中：一个取值要么是 **raw** —— 按实测原样的纳秒数 —— 要么是 **display** —— 缩放到适合该表格的单位后的同一个值。
+
+- **Raw** (`MetricPrecision.Raw`): 裸露的纳秒数，并且列头（或 CSV 列名 `Avg_ns`、`StdErr_ns` 等）写明 `ns`。无论数据更适合哪个单位，`CsvFormatter` 永远写这一档 —— 单位随数据量级变化的数据文件不是机器可读的。
+- **Display** (`MetricPrecision.Display`): 整张表为其所有每操作列选**一个**单位 —— 小于 1 000 ns 用 `ns`，小于 1 000 µs 用 `µs`，小于 1 000 ms 用 `ms`，更大用秒 —— 并把该单位写进表头（`Avg (µs)`）。一个表一个单位、而不是一格一个单位，一列才继续可比：5 秒的基准在 `Avg (s)` 下读作 `5.0`，同一表头下 150 ns 的邻居读作 `0.0`，而不是被悄悄换算了单位。
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // 在 "Avg (ns)" 下输出 5000000000.0
+```
+
+Console、Markdown 与 HTML 显示的文本完全相同（有测试逐字符断言），而原始数字始终在 CSV 中，因此缩放后的显示永远不会成为某次测量的唯一副本。
 
 ### 格式化目标
 
@@ -380,6 +394,7 @@ var options = new FormatterOptions
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
     CandidateLabel        = "New",
+    PrecisionProfile      = MetricPrecision.Display, // 或 .Raw；CSV 恒写 raw
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -400,7 +415,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 列契约
 
-`CsvFormatter` 先写一行表头，再写数据行；套件会额外写入 `#` 注释行（`# Schema:` (contract line), `# key,value` metadata rows: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`）以及两个区段 `# Results` 与 `# Comparisons`，**每个区段都有自己的表头行**。因此一个文件中存在不止一行表头 —— `pandas.read_csv(path, comment='#')` 会跳过注释行，但两个区段需要你自己拆分。结果文件的首行就是这条 `# Schema: v2; …` 契约行，任何以 `#` 开头的行都是注释，解析器必须跳过。
+`CsvFormatter` 先写一行表头，再写数据行；套件会额外写入 `#` 注释行（`# Schema:` 契约行；`# key,value` 元数据行：`Suite`、`Description`、`Environment`、`CpuCounter`、`CpuCounterNote`、`GcInfoNote`、`Timestamp`、`Duration`、`NoiseNote`）以及两个区段 `# Results` 与 `# Comparisons`，**每个区段都有自己的表头行**。因此一个文件中存在不止一行表头 —— `pandas.read_csv(path, comment='#')` 会跳过注释行，但两个区段需要你自己拆分。结果文件的首行就是这条 `# Schema: v2; …` 契约行，任何以 `#` 开头的行都是注释，解析器必须跳过。
+
+元数据行永远不会延续到下一个物理行：取值中的换行会被写成两个字符 `\n`（CRLF、CR、LF 同等处理），需要时再按 CSV 规则加引号。这正是 `comment='#'` 对跨行描述也安全的原因。
 
 结果列，按以下顺序（默认选项；`IncludePercentiles`、`IncludeGcInfo`、`IncludeCpuCycles` 与 `IncludeTimestamp` 为 `false` 时会移除各自的列）：
 

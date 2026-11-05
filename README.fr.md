@@ -352,7 +352,21 @@ var csv      = new CsvFormatter();         // CSV pour l'analyse de données
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Les sorties Console, Markdown, HTML et CSV incluent des métadonnées orientées précision comme l'erreur standard, l'écart-type relatif et des notes sur le compteur CPU lorsqu'elles sont disponibles.
+Les quatre formateurs affichent le même jeu de métriques par opération — `Avg`, `P50`, `P90`, `P95`, `P99`, `StandardError` et l'écart-type relatif (colonne `RSD (%)`) — ainsi que les notes sur le compteur CPU lorsqu'elles existent. Le tableau de suites de Console porte aussi les colonnes `StdErr` et `RSD` (elles manquaient auparavant, si bien que le signal de bruit n'apparaissait pas dans la sortie par défaut) ; Console, Markdown et HTML utilisent la même unité de tableau pour les mêmes données, et le CSV reste toujours en nanosecondes (voir ci-dessous).
+
+### Profil de précision : raw versus display
+
+Un même chiffre a deux rôles, et les formateurs les séparent au lieu que chacun cherche son propre compromis : une valeur est soit **raw** — les nanosecondes telles que mesurées —, soit **display** — cette même valeur ramenée à l'unité qui convient au tableau.
+
+- **Raw** (`MetricPrecision.Raw`): des nanosecondes brutes, et l'en-tête de colonne (ou le nom de colonne CSV, `Avg_ns`, `StdErr_ns`, …) indique `ns`. `CsvFormatter` écrit toujours cette forme, quelle que soit l'unité que les données préféreraient, car un fichier dont l'unité change avec l'ordre de grandeur des données n'est pas lisible par une machine.
+- **Display** (`MetricPrecision.Display`): le tableau choisit **une** unité pour toutes ses colonnes par opération — `ns` en dessous de 1 000 ns, `µs` en dessous de 1 000 µs, `ms` en dessous de 1 000 ms, des secondes au-delà — et la nomme dans l'en-tête (`Avg (µs)`). Une unité par tableau, et non par cellule, pour que la colonne reste comparable : un benchmark de cinq secondes se lit `5.0` sous `Avg (s)` et son voisin à 150 ns se lit `0.0` sous le même en-tête, au lieu d'être remis à l'échelle en silence.
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // 5000000000.0 sous "Avg (ns)"
+```
+
+Le texte affiché est identique en Console, Markdown et HTML (un test le compare caractère par caractère) et le nombre brut est toujours dans le CSV : un affichage remis à l'échelle ne devient donc jamais la seule copie d'une mesure.
 
 ### Cibles de Formatage
 
@@ -378,6 +392,7 @@ var options = new FormatterOptions
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
     CandidateLabel        = "New",
+    PrecisionProfile      = MetricPrecision.Display, // ou .Raw ; le CSV écrit toujours raw
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -398,7 +413,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### Contrat des Colonnes CSV
 
-`CsvFormatter` écrit une ligne d'en-tête, puis des lignes de données ; une suite ajoute des lignes de commentaire `#` (`# Schema:` (contract line), `# key,value` metadata rows: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`) et deux sections, `# Results` et `# Comparisons`, **chacune avec sa propre ligne d'en-tête**. Un fichier a donc plus d'une ligne d'en-tête — `pandas.read_csv(path, comment='#')` ignore les commentaires, mais vous devez découper vous-même les deux sections. La première ligne d'un fichier de résultats est cette ligne de contrat `# Schema: v2; …`, et toute ligne commençant par `#` est un commentaire que le lecteur doit ignorer.
+`CsvFormatter` écrit une ligne d'en-tête, puis des lignes de données ; une suite ajoute des lignes de commentaire `#` (`# Schema:` ligne de contrat ; lignes de métadonnées `# key,value` : `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`) et deux sections, `# Results` et `# Comparisons`, **chacune avec sa propre ligne d'en-tête**. Un fichier a donc plus d'une ligne d'en-tête — `pandas.read_csv(path, comment='#')` ignore les commentaires, mais vous devez découper vous-même les deux sections. La première ligne d'un fichier de résultats est cette ligne de contrat `# Schema: v2; …`, et toute ligne commençant par `#` est un commentaire que le lecteur doit ignorer.
+
+Une ligne de métadonnées ne se poursuit jamais sur la ligne physique suivante : un saut de ligne dans une valeur est écrit sous forme des deux caractères `\n` (CRLF, CR et LF de la même façon), et la valeur est mise entre guillemets CSV si nécessaire. C'est ce qui rend `comment='#'` sûr pour une description sur plusieurs lignes.
 
 Colonnes de résultats, dans cet ordre (options par défaut ; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` et `IncludeTimestamp` suppriment leurs colonnes quand ils valent `false`) :
 

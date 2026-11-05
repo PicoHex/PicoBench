@@ -352,7 +352,21 @@ var csv      = new CsvFormatter();         // CSV für Datenanalyse
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console-, Markdown-, HTML- und CSV-Ausgaben enthalten präzisionsorientierte Metadaten wie Standardfehler, relative Standardabweichung und Hinweise zum CPU-Zähler, sofern verfügbar.
+Alle vier Formatierer zeigen denselben Satz an Metriken pro Vorgang — `Avg`, `P50`, `P90`, `P95`, `P99`, `StandardError` und die relative Standardabweichung (Spalte `RSD (%)`) — sowie, sofern verfügbar, die Hinweise zum CPU-Zähler. Die Console-Suite-Tabelle führt zusätzlich die Spalten `StdErr` und `RSD` (sie fehlten bisher, sodass das Rauschsignal in der Standardausgabe nicht sichtbar war); Console, Markdown und HTML verwenden dieselbe Tabelleneinheit für dieselben Daten, und CSV bleibt immer bei Nanosekunden (siehe unten).
+
+### Präzisionsprofil: raw gegenüber display
+
+Eine Zahl hat zwei Aufgaben, und die Formatierer halten sie auseinander, statt jeweils einen eigenen Kompromiss zu suchen: ein Wert ist entweder **raw** — Nanosekunden, genau wie gemessen — oder **display** — derselbe Wert, auf die Einheit der Tabelle skaliert.
+
+- **Raw** (`MetricPrecision.Raw`): schlichte Nanosekunden, und die Spaltenüberschrift (oder der CSV-Spaltenname `Avg_ns`, `StdErr_ns`, …) sagt `ns`. `CsvFormatter` schreibt immer diese Form, welche Einheit den Daten auch lieber wäre, denn eine Datei, deren Einheit sich mit der Größenordnung der Daten ändert, ist nicht maschinenlesbar.
+- **Display** (`MetricPrecision.Display`): die Tabelle wählt **eine** Einheit für alle ihre Spalten pro Vorgang — `ns` unter 1 000 ns, `µs` unter 1 000 µs, `ms` unter 1 000 ms, darüber Sekunden — und nennt sie in der Überschrift (`Avg (µs)`). Eine Einheit pro Tabelle, nicht pro Zelle, damit eine Spalte vergleichbar bleibt: ein Fünf-Sekunden-Benchmark steht als `5.0` unter `Avg (s)`, sein 150-ns-Nachbar als `0.0` unter derselben Überschrift, statt still umskaliert zu werden.
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // 5000000000.0 unter "Avg (ns)"
+```
+
+Der angezeigte Text ist in Console, Markdown und HTML identisch (ein Test vergleicht ihn Zeichen für Zeichen), und die Rohzahl steht immer in der CSV-Datei: eine skalierte Anzeige wird also nie die einzige Kopie einer Messung.
 
 ### Formatierungsziele
 
@@ -378,6 +392,7 @@ var options = new FormatterOptions
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
     CandidateLabel        = "New",
+    PrecisionProfile      = MetricPrecision.Display, // oder .Raw; CSV schreibt immer raw
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -398,7 +413,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV-Spaltenvertrag
 
-`CsvFormatter` schreibt eine Kopfzeile und dann Datenzeilen; eine Suite fügt `#`-Kommentarzeilen hinzu (`# Schema:` (contract line), `# key,value` metadata rows: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`) sowie zwei Abschnitte, `# Results` und `# Comparisons`, **jeweils mit eigener Kopfzeile**. Eine Datei hat daher mehr als eine Kopfzeile — `pandas.read_csv(path, comment='#')` überspringt die Kommentare, aber Sie müssen die beiden Abschnitte selbst trennen. Die erste Zeile einer Ergebnisdatei ist diese Vertragszeile `# Schema: v2; …`, und jede mit `#` beginnende Zeile ist ein Kommentar, den ein Parser überspringen muss.
+`CsvFormatter` schreibt eine Kopfzeile und dann Datenzeilen; eine Suite fügt `#`-Kommentarzeilen hinzu (`# Schema:` Vertragszeile; `# key,value`-Metadatenzeilen: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`) sowie zwei Abschnitte, `# Results` und `# Comparisons`, **jeweils mit eigener Kopfzeile**. Eine Datei hat daher mehr als eine Kopfzeile — `pandas.read_csv(path, comment='#')` überspringt die Kommentare, aber Sie müssen die beiden Abschnitte selbst trennen. Die erste Zeile einer Ergebnisdatei ist diese Vertragszeile `# Schema: v2; …`, und jede mit `#` beginnende Zeile ist ein Kommentar, den ein Parser überspringen muss.
+
+Eine Metadatenzeile läuft nie in die nächste physische Zeile weiter: ein Zeilenumbruch im Wert wird als die zwei Zeichen `\n` geschrieben (CRLF, CR und LF gleichermaßen), und der Wert wird bei Bedarf nach CSV-Regeln in Anführungszeichen gesetzt. Genau das macht `comment='#'` für eine mehrzeilige Beschreibung sicher.
 
 Ergebnisspalten, in dieser Reihenfolge (Standardoptionen; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` und `IncludeTimestamp` entfernen ihre Spalten bei `false`):
 

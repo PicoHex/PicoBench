@@ -350,7 +350,21 @@ var csv      = new CsvFormatter();         // データ分析用CSV
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console、Markdown、HTML、CSV の出力には、標準誤差、相対標準偏差、利用可能な場合の CPU カウンター注記など、精度指向のメタデータが含まれます。
+4 つのフォーマッターはすべて同じ 1 操作あたりの指標 — `Avg`、`P50`、`P90`、`P95`、`P99`、`StandardError`、相対標準偏差（`RSD (%)` 列）— と、利用可能な場合の CPU カウンター注記を表示します。Console のスイート表にも `StdErr` と `RSD` 列があります（以前は欠けていたため、ノイズの信号が既定の出力に現れませんでした）。Console、Markdown、HTML は同じデータに同じ表の単位を使い、CSV は常にナノ秒のままです（下記参照）。
+
+### 精度プロファイル：raw と display
+
+1 つの数値には 2 つの役割があり、フォーマッターはそれぞれが折衷するのではなく、両者を分けます。値は **raw**（実測そのままのナノ秒）か **display**（その表に合う単位へ換算した同じ値）のどちらかです。
+
+- **Raw** (`MetricPrecision.Raw`): 裸のナノ秒で、列見出し（または CSV 列名 `Avg_ns`、`StdErr_ns` など）が `ns` と明示します。データにどの単位が似合うかに関係なく `CsvFormatter` は常にこの形で書きます — 単位がデータの桁で変わるデータファイルは機械可読ではありません。
+- **Display** (`MetricPrecision.Display`): 表のすべての 1 操作あたり列に対して**1 つ**の単位を選び — 1 000 ns 未満は `ns`、1 000 µs 未満は `µs`、1 000 ms 未満は `ms`、それ以上は秒 — その単位を見出しに書きます（`Avg (µs)`）。セルごとではなく表ごとに 1 単位なので、列は比較可能なままです。5 秒のベンチマークは `Avg (s)` の下で `5.0` と読め、同じ見出しの下で 150 ns の隣は `0.0` と読めます（黙って単位が変わることはありません）。
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // "Avg (ns)" の下に 5000000000.0
+```
+
+Console、Markdown、HTML で表示される文字列は完全に同一で（テストが 1 文字ずつ照合します）、生の数値は常に CSV にあります。したがって換算後の表示だけが測定値の唯一のコピーになることはありません。
 
 ### フォーマット対象
 
@@ -376,6 +390,7 @@ var options = new FormatterOptions
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
     CandidateLabel        = "New",
+    PrecisionProfile      = MetricPrecision.Display, // または .Raw；CSV は常に raw
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -396,7 +411,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 列の契約
 
-`CsvFormatter` はヘッダー行を書き、続けてデータ行を書きます。スイートは `#` コメント行（`# Schema:` (contract line), `# key,value` metadata rows: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`）と2つのセクション `# Results` と `# Comparisons` を追加し、**それぞれが独自のヘッダー行**を持ちます。したがってファイルには複数のヘッダー行があるため、`pandas.read_csv(path, comment='#')` はコメントをスキップしますが、2つのセクションは自分で分割する必要があります。結果ファイルの先頭行はこの `# Schema: v2; …` 契約行であり、`#` で始まる行はすべてパーサーがスキップすべきコメントです。
+`CsvFormatter` はヘッダー行を書き、続けてデータ行を書きます。スイートは `#` コメント行（`# Schema:` 契約行、`# key,value` メタデータ行: `Suite`、`Description`、`Environment`、`CpuCounter`、`CpuCounterNote`、`GcInfoNote`、`Timestamp`、`Duration`、`NoiseNote`）と2つのセクション `# Results` と `# Comparisons` を追加し、**それぞれが独自のヘッダー行**を持ちます。したがってファイルには複数のヘッダー行があるため、`pandas.read_csv(path, comment='#')` はコメントをスキップしますが、2つのセクションは自分で分割する必要があります。結果ファイルの先頭行はこの `# Schema: v2; …` 契約行であり、`#` で始まる行はすべてパーサーがスキップすべきコメントです。
+
+メタデータ行が次の物理行に続くことはありません。値の中の改行は 2 文字 `\n`（CRLF・CR・LF を同様に）として書かれ、必要なら CSV の引用符が付きます。これにより、行をまたぐ説明でも `comment='#'` が安全になります。
 
 結果の列（この順序、既定オプション。`IncludePercentiles`、`IncludeGcInfo`、`IncludeCpuCycles`、`IncludeTimestamp` を `false` にすると対応する列が消えます）:
 

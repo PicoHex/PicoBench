@@ -356,7 +356,21 @@ var csv      = new CsvFormatter();         // CSV for data analysis
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console, Markdown, HTML, CSV 출력에는 표준오차, 상대 표준편차, 사용 가능한 경우 CPU 카운터 관련 참고 사항 등 정밀도 지향 메타데이터가 포함됩니다.
+네 포맷터 모두 동일한 작업당 지표 — `Avg`, `P50`, `P90`, `P95`, `P99`, `StandardError`, 상대 표준 편차(`RSD (%)` 열) — 와 사용 가능한 경우의 CPU 카운터 설명을 보여 줍니다. Console 스위트 표에도 `StdErr`와 `RSD` 열이 있습니다(이전에는 빠져 있어 노이즈 신호가 기본 출력에 보이지 않았습니다). Console·Markdown·HTML은 같은 데이터에 같은 표 단위를 쓰고, CSV는 항상 나노초로 남습니다(아래 참조).
+
+### 정밀도 프로파일: raw와 display
+
+같은 숫자가 두 가지 역할을 하므로, 포맷터는 각자 타협하지 않고 둘을 분리합니다. 값은 **raw** — 측정된 그대로의 나노초 — 이거나 **display** — 표에 맞는 단위로 환산한 같은 값 — 입니다.
+
+- **Raw** (`MetricPrecision.Raw`): 가공하지 않은 나노초이며, 열 머리글(또는 `Avg_ns`, `StdErr_ns` 같은 CSV 열 이름)이 `ns`라고 밝힙니다. 데이터에 어떤 단위가 어울리든 `CsvFormatter`는 항상 이 형태로 씁니다 — 단위가 데이터 크기에 따라 바뀌는 데이터 파일은 기계가 읽을 수 없습니다.
+- **Display** (`MetricPrecision.Display`): 표의 모든 작업당 열에 **하나**의 단위를 골라 — 1 000 ns 미만은 `ns`, 1 000 µs 미만은 `µs`, 1 000 ms 미만은 `ms`, 그 이상은 초 — 머리글에 그 단위를 적습니다(`Avg (µs)`). 셀이 아니라 표마다 하나의 단위이므로 열은 계속 비교 가능합니다. 5초 벤치마크는 `Avg (s)` 아래에서 `5.0`으로, 같은 머리글 아래의 150 ns 이웃은 `0.0`으로 읽히며 조용히 단위가 바뀌지 않습니다.
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // "Avg (ns)" 아래 5000000000.0
+```
+
+Console, Markdown, HTML에서 표시되는 문자열은 완전히 동일하고(테스트가 문자 단위로 단언합니다) 원래 숫자는 항상 CSV에 있으므로, 환산된 표시가 측정값의 유일한 사본이 되는 일은 없습니다.
 
 ### 포맷팅 대상
 
@@ -382,6 +396,7 @@ var options = new FormatterOptions
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
     CandidateLabel        = "New",
+    PrecisionProfile      = MetricPrecision.Display, // 또는 .Raw; CSV는 항상 raw
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -402,7 +417,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 열 계약
 
-`CsvFormatter`는 헤더 행을 쓰고 이어서 데이터 행을 씁니다. 스위트는 `#` 주석 행(`# Schema:` (contract line), `# key,value` metadata rows: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`)과 두 섹션 `# Results`, `# Comparisons`를 추가하며, **각 섹션은 자체 헤더 행**을 가집니다. 따라서 파일에는 헤더 행이 둘 이상 있으므로 `pandas.read_csv(path, comment='#')`는 주석을 건너뛰지만 두 섹션은 직접 분할해야 합니다. 결과 파일의 첫 행이 이 `# Schema: v2; …` 계약 행이며, `#`로 시작하는 모든 행은 파서가 건너뛰어야 하는 주석입니다.
+`CsvFormatter`는 헤더 행을 쓰고 이어서 데이터 행을 씁니다. 스위트는 `#` 주석 행(`# Schema:` 계약 행, `# key,value` 메타데이터 행: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`)과 두 섹션 `# Results`, `# Comparisons`를 추가하며, **각 섹션은 자체 헤더 행**을 가집니다. 따라서 파일에는 헤더 행이 둘 이상 있으므로 `pandas.read_csv(path, comment='#')`는 주석을 건너뛰지만 두 섹션은 직접 분할해야 합니다. 결과 파일의 첫 행이 이 `# Schema: v2; …` 계약 행이며, `#`로 시작하는 모든 행은 파서가 건너뛰어야 하는 주석입니다.
+
+메타데이터 행은 다음 물리적 행으로 이어지지 않습니다. 값 안의 줄바꿈은 두 문자 `\n`으로 기록되며(CRLF, CR, LF 모두 동일), 필요하면 CSV 규칙대로 인용됩니다. 덕분에 여러 줄 설명에서도 `comment='#'`가 안전합니다.
 
 결과 열(이 순서, 기본 옵션. `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles`, `IncludeTimestamp`를 `false`로 하면 해당 열이 사라집니다):
 

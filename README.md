@@ -358,7 +358,7 @@ var csv      = new CsvFormatter();         // CSV for data analysis
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console, Markdown, HTML, and CSV outputs include the same precision-oriented metrics — standard error, relative standard deviation, percentiles — and the CPU counter notes when available. Console, Markdown and HTML also print the same table unit for the same data (see below).
+All four formatters show the same per-operation metrics — `Avg`, `P50`, `P90`, `P95`, `P99`, `StandardError` and the relative standard deviation (`RSD (%)` column) — plus the CPU counter notes when available. The Console suite table carries `StdErr` and `RSD` columns as well; it used to omit them, so the noise signal was missing from the default rendering. Console, Markdown and HTML print the same table unit for the same data, and CSV always stays in nanoseconds (see below).
 
 ### Precision profile: raw versus display
 
@@ -420,6 +420,8 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 ### CSV Column Contract
 
 `CsvFormatter` writes a header row, then data rows; a suite adds `#` comment lines (`# Schema:` (contract line), `# key,value` metadata rows: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`) and two sections, `# Results` and `# Comparisons`, **each with its own header row**. A file therefore has more than one header line — `pandas.read_csv(path, comment='#')` skips the comments but you must split the two sections yourself. The first line of a results file is that `# Schema: v2; …` contract line, and every line starting with `#` is a comment a parser must skip.
+
+A metadata row never continues on the next physical line: a line break inside a value is written as the two characters `\n` (CRLF, CR and LF alike), and the value is CSV-quoted when it still needs to be. That is what makes `comment='#'` safe for a description that spans lines.
 
 Results columns, in this order (default options; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` and `IncludeTimestamp` remove their columns when `false`):
 
