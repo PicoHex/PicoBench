@@ -1,5 +1,6 @@
 namespace PicoBench.Tests.Batch1;
 
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using PicoBench.Tests.Batch0;
 
@@ -497,6 +498,13 @@ public class GeneratorIsolationTests
     /// Hint names must be stable across runs (the reason the short hash is a
     /// hand-rolled FNV-1a over the qualified name, never <c>GetHashCode()</c>,
     /// whose string seed is randomised per process) and must be legal file names.
+    /// <para>
+    /// F3 of <c>.review-2026-11/31-verify-b1.md</c>: this test used to accept any
+    /// suffix, so the hash could be deleted and only the collision test noticed.
+    /// The shape <c>&lt;sanitised stem&gt;_&lt;8 lowercase hex&gt;.g.cs</c> is now
+    /// asserted literally — the values themselves are pinned by
+    /// <see cref="HintName_IsFnv1aOfTheQualifiedName"/>.
+    /// </para>
     /// </summary>
     [Test]
     [Property("Category", "Batch1")]
@@ -533,5 +541,92 @@ public class GeneratorIsolationTests
                     .All(static c => char.IsLetterOrDigit(c) || c is '_' || c is '.')
             )
             .IsTrue();
+
+        // The suffix that makes the name unique: exactly eight lowercase hex
+        // digits behind an underscore. Without it two flattened names collide again.
+        await Assert
+            .That(Regex.IsMatch(hint, "^[A-Za-z0-9_.]+_[0-9a-f]{8}[.]g[.]cs$"))
+            .IsTrue()
+            .Because($"'{hint}' must end in _<8 lowercase hex digits>.g.cs");
+    }
+
+    /// <summary>
+    /// The hint name is <c>&lt;sanitised qualified name&gt;_&lt;FNV-1a(qualified
+    /// name) as 8 hex digits&gt;.g.cs</c>, and "stable across runs" has to mean
+    /// stable across <b>processes</b> — that is why the generator cannot use
+    /// <c>string.GetHashCode()</c> (randomised seed per process); otherwise every
+    /// incremental build would re-emit every file.
+    /// <para>
+    /// The expected values are computed independently of the implementation
+    /// (FNV-1a over UTF-16 code units, offset basis 2166136261, prime 16777619) and
+    /// agree with what the Batch 1 verifier reverse-engineered from outside
+    /// (<c>.review-2026-11/31-verify-b1.md</c> §1.1: <c>Demo.Perf.Marks</c> to
+    /// <c>26e6700b</c>, <c>Demo.Perf_Marks</c> to <c>c1f6d9c2</c>). Pinning the
+    /// literals turns a change of hash function into a failing test instead of a
+    /// silent cache invalidation for every consumer.
+    /// </para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch1")]
+    [Property("Batch1", "1.1/hint-hash")]
+    public async Task HintName_IsFnv1aOfTheQualifiedName()
+    {
+        const string source = """
+            using PicoBench;
+
+            namespace Demo
+            {
+                [BenchmarkClass]
+                public partial class Marks
+                {
+                    [Benchmark]
+                    public void Work() { }
+                }
+            }
+
+            namespace Demo.Perf
+            {
+                [BenchmarkClass]
+                public partial class Marks
+                {
+                    [Benchmark]
+                    public void Work() { }
+                }
+            }
+
+            namespace Demo
+            {
+                [BenchmarkClass]
+                public partial class Perf_Marks
+                {
+                    [Benchmark]
+                    public void Work() { }
+                }
+            }
+            """;
+
+        var output = GeneratorHarness.RunGenerator(source);
+        var compilerErrors = GeneratorHarness.CompileErrors(source, output);
+        Batch1Support.LogRun("hint hash", output, compilerErrors);
+
+        await Assert.That(Batch1Support.HasGeneratorFailure(output)).IsFalse();
+        await Assert.That(output.Sources.Length).IsEqualTo(3);
+
+        string[] expected =
+        [
+            "Demo_Marks_799ce18e.g.cs",
+            "Demo_Perf_Marks_26e6700b.g.cs",
+            "Demo_Perf_Marks_c1f6d9c2.g.cs",
+        ];
+
+        foreach (var expectedHint in expected)
+        {
+            await Assert
+                .That(output.HintNames.Contains(expectedHint, StringComparer.Ordinal))
+                .IsTrue()
+                .Because($"expected '{expectedHint}', got [{string.Join(", ", output.HintNames)}]");
+        }
+
+        await Assert.That(compilerErrors.Count).IsEqualTo(0);
     }
 }

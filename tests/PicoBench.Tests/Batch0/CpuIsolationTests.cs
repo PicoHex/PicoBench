@@ -18,16 +18,31 @@ namespace PicoBench.Tests.Batch0;
 /// <para>
 /// The shape of the assertion is deliberately independent of the absolute cycle
 /// cost: the same workload is measured twice — once alone, once while a second
-/// thread burns a core — and the cycles/op of the measured work must not move by
-/// more than 30%. A thread-scoped counter is unaffected by the neighbour; a
+/// thread burns a core — and the cycles/op of the measured work must stay inside
+/// a tolerance band. A thread-scoped counter is unaffected by the neighbour; a
 /// process-scoped counter roughly doubles (R0 measured <b>2.03×</b> at HEAD).
+/// </para>
+/// <para>
+/// The band is <b>0.65–1.35</b>, widened from 0.70–1.30 by G15 on the strength of
+/// <c>.review-2026-11/19-final-verification.md</c> §3 (77 runs, 0 failures, ratio
+/// min 0.845 / max 1.189, sd ≈ 0.072), which also showed which edge is at risk:
+/// with the whole suite running around it the mean drops to 0.928 (the solo half
+/// pays the first-call tier-0/JIT tax), so the <b>lower</b> edge is the binding
+/// one — 0.70 sat ≈3.9σ from the mean, and the verifier saw one unrelated red at
+/// that edge in 25 full-suite runs (<c>.review-2026-11/31-verify-b1.md</c> F4).
+/// </para>
+/// <para>
+/// The widening does not weaken the guard: a process-wide counter measures
+/// <b>1.92–2.03×</b>, still far outside 1.35 (42% of headroom left), so the
+/// red-at-HEAD property this test exists for survives intact.
 /// </para>
 /// </summary>
 public class CpuIsolationTests
 {
     /// <summary>
     /// Batch 0 · 0.4 — an idle (busy-spinning) neighbour thread must not change
-    /// cycles/op of the measured workload by more than 30%.
+    /// cycles/op of the measured workload beyond the 0.65–1.35 band (see the class
+    /// remarks for why that band, and why widening it keeps the red at HEAD).
     /// <para>Expected at HEAD: <b>RED</b> — the synchronous timing loop reads
     /// process-wide cycle counts (<c>Runner.Cpu.cs</c> <c>GetProcessCpuCycles</c>
     /// behind <c>Runner.cs</c>), so cycles/op roughly doubles (2.03× measured by
@@ -103,20 +118,21 @@ public class CpuIsolationTests
         Batch0Support.Log(
             $"solo cycles/op={soloPerOp:F0} (total {solo.CpuCycles}), "
                 + $"with busy neighbour cycles/op={loadedPerOp:F0} (total {loaded.CpuCycles}), "
-                + $"ratio={ratio:F3} (allowed 0.70-1.30)"
+                + $"ratio={ratio:F3} (allowed 0.65-1.35)"
         );
 
         await Assert.That(soloPerOp).IsGreaterThan(0);
 
         // 0.4: the counter must only see the measured thread, so the neighbour
-        // must be invisible in cycles/op within ±30%.
+        // must be invisible in cycles/op inside the tolerance band; a process-wide
+        // counter lands near 1.92-2.03x, i.e. well outside it.
         await Assert
             .That(ratio)
-            .IsLessThanOrEqualTo(1.30)
+            .IsLessThanOrEqualTo(1.35)
             .Because(
                 $"a busy neighbour thread changed cycles/op by {ratio:F2}× "
                     + $"(solo {soloPerOp:F0} → {loadedPerOp:F0}), i.e. the counter is process-wide"
             );
-        await Assert.That(ratio).IsGreaterThanOrEqualTo(0.70);
+        await Assert.That(ratio).IsGreaterThanOrEqualTo(0.65);
     }
 }
