@@ -1,0 +1,91 @@
+<Project>
+
+  <!-- ==========================================================================
+       B3-M2 — the source generator must be loaded exactly once.
+
+       buildTransitive/PicoBench.props adds the bundled generator as an
+       analyzer. A consumer that ALSO brings the same generator in — a
+       ProjectReference to PicoBench.Generators.csproj, a copy of
+       PicoBench.Generators.dll vendored into the repo, a second package that
+       bundles it — hands the compiler two analyzer paths for one assembly.
+       Roslyn then runs two generator instances, emits the same partial class
+       twice and the build dies with
+
+           error CS0111: Type 'X' already defines a member called
+           'RunBenchmarksAsync' with the same parameter types
+
+       MSBuild collapses duplicates that share a file *path*, and the .NET
+       SDK's package-conflict resolution (_HandlePackageFileConflicts) also
+       collapses equal file *names*. Neither covers one assembly arriving
+       under two different file names — the vendored / renamed copy — which
+       is the gap this target closes.
+
+       Rule: whenever the analyzer list holds more than one file belonging to
+       this generator, keep the copy that ships inside this package (the one
+       guaranteed to match the PicoBench runtime library the consumer
+       restored) and drop the others, with a message naming them.
+
+       Opt out — for deliberately testing your own build of the generator:
+
+           <PicoBenchDisableGeneratorDeduplication>true</PicoBenchDisableGeneratorDeduplication>
+       ========================================================================== -->
+
+  <PropertyGroup>
+    <!-- The generator assembly name; its file name starts with this. -->
+    <_PicoBenchGeneratorName>PicoBench.Generators</_PicoBenchGeneratorName>
+
+    <!-- Captured in this file's evaluation scope: $(MSBuildThisFileDirectory)
+         is not reliable inside a target body defined in an imported file. -->
+    <_PicoBenchPackagedGeneratorPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)PicoBench.Generators/analyzers/dotnet/cs/PicoBench.Generators.dll'))</_PicoBenchPackagedGeneratorPath>
+
+    <PicoBenchDisableGeneratorDeduplication Condition="'$(PicoBenchDisableGeneratorDeduplication)' == ''">false</PicoBenchDisableGeneratorDeduplication>
+  </PropertyGroup>
+
+  <!-- Runs here rather than at evaluation time so that analyzers a consumer
+       adds from its own targets are seen too; `@(Analyzer)` is what the Csc
+       task receives, so this is the last safe moment. -->
+  <Target
+    Name="_PicoBenchRemoveDuplicateGeneratorAnalyzers"
+    BeforeTargets="CoreCompile"
+    Condition="'$(PicoBenchDisableGeneratorDeduplication)' != 'true'"
+  >
+    <ItemGroup>
+      <!-- Every analyzer file that belongs to this generator, whichever
+           directory and file name it arrived under. -->
+      <_PicoBenchGeneratorCopy
+        Include="@(Analyzer)"
+        Condition="$([System.String]::Copy('%(Analyzer.Filename)').StartsWith('$(_PicoBenchGeneratorName)', StringComparison.OrdinalIgnoreCase))"
+      />
+
+      <!-- The one this package ships. -->
+      <_PicoBenchPackagedGeneratorCopy
+        Include="@(_PicoBenchGeneratorCopy)"
+        Condition="'%(FullPath)' == '$(_PicoBenchPackagedGeneratorPath)'"
+      />
+
+      <!-- Anything else of the same generator: the duplicate to drop. -->
+      <_PicoBenchForeignGeneratorCopy
+        Include="@(_PicoBenchGeneratorCopy)"
+        Condition="'%(FullPath)' != '$(_PicoBenchPackagedGeneratorPath)'"
+      />
+    </ItemGroup>
+
+    <ItemGroup Condition="'@(_PicoBenchPackagedGeneratorCopy)' != '' and '@(_PicoBenchForeignGeneratorCopy)' != ''">
+      <!-- Remove whole items: Analyzer removal matches on Identity, and the
+           duplicated file has a different path, so nothing else is touched. -->
+      <Analyzer Remove="@(_PicoBenchForeignGeneratorCopy)" />
+    </ItemGroup>
+
+    <Message
+      Importance="high"
+      Condition="'@(_PicoBenchPackagedGeneratorCopy)' != '' and '@(_PicoBenchForeignGeneratorCopy)' != ''"
+      Text="PicoBench: ignoring duplicate copy of the source generator at '%(_PicoBenchForeignGeneratorCopy.FullPath)' (two analyzers implementing assembly '$(_PicoBenchGeneratorName)' would generate the same members twice and fail with CS0111). Remove one of the two references; to keep that copy instead, delete the packaged one or set PicoBenchDisableGeneratorDeduplication=true."
+    />
+
+    <Warning
+      Condition="'@(_PicoBenchPackagedGeneratorCopy)' == '' and '@(_PicoBenchForeignGeneratorCopy->Count())' &gt; '1'"
+      Text="PicoBench: more than one analyzer implements assembly '$(_PicoBenchGeneratorName)' and none of them is the copy this package ships. They all run, generating the same members twice — expect CS0111 (duplicate 'RunBenchmarksAsync'). Keep one."
+    />
+  </Target>
+
+</Project>

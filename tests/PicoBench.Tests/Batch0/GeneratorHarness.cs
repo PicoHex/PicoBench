@@ -21,6 +21,14 @@ internal static class GeneratorHarness
     {
         public required ImmutableArray<Diagnostic> Diagnostics { get; init; }
 
+        /// <summary>
+        /// Driver-level diagnostics (<c>GeneratorDriverRunResult.Diagnostics</c>).
+        /// This is where a generator that throws lands: <c>CS8785</c> —
+        /// "Generator 'X' failed to generate source" — which the per-generator
+        /// <see cref="Diagnostics"/> array never contains.
+        /// </summary>
+        public required ImmutableArray<Diagnostic> DriverDiagnostics { get; init; }
+
         public required string[] HintNames { get; init; }
 
         public required string[] Sources { get; init; }
@@ -44,11 +52,13 @@ internal static class GeneratorHarness
         );
         driver = driver.RunGenerators(compilation);
 
-        var generatorResult = driver.GetRunResult().Results.Single();
+        var runResult = driver.GetRunResult();
+        var generatorResult = runResult.Results.Single();
 
         return new GeneratorOutput
         {
             Diagnostics = generatorResult.Diagnostics,
+            DriverDiagnostics = runResult.Diagnostics,
             HintNames = generatorResult.GeneratedSources.Select(static s => s.HintName).ToArray(),
             Sources = generatorResult
                 .GeneratedSources.Select(static s => s.SourceText.ToString())

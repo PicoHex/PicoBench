@@ -28,14 +28,14 @@ internal static class Emitter
         var indent = "";
         if (model.Namespace is not null)
         {
-            sb.AppendLine($"namespace {model.Namespace}");
+            sb.AppendLine($"namespace {IdentifierEscaping.EscapeQualifiedName(model.Namespace)}");
             sb.AppendLine("{");
             indent = "    ";
         }
 
         // ── Partial class + interface ────────────────────────────────
         sb.AppendLine(
-            $"{indent}{model.AccessModifier} partial class {model.ClassName} : {Bench}.IBenchmarkClass"
+            $"{indent}{model.AccessModifier} partial class {Id(model.ClassName)} : {Bench}.IBenchmarkClass"
         );
         sb.AppendLine($"{indent}{{");
 
@@ -72,7 +72,7 @@ internal static class Emitter
                 );
                 sb.AppendLine($"{bodyIndent}{{");
                 bodyIndent += "    ";
-                sb.AppendLine($"{bodyIndent}this.{p.Name} = __p_{p.Name};");
+                sb.AppendLine($"{bodyIndent}this.{Id(p.Name)} = __p_{p.Name};");
             }
 
             // Build the combined parameter label: "N=10, Mode=A"
@@ -85,7 +85,7 @@ internal static class Emitter
         if (model.GlobalSetupMethod is not null)
         {
             var awaitPrefix = model.GlobalSetupMethod.IsAsync ? "await " : "";
-            sb.AppendLine($"{bodyIndent}{awaitPrefix}this.{model.GlobalSetupMethod.Name}();");
+            sb.AppendLine($"{bodyIndent}{awaitPrefix}this.{Id(model.GlobalSetupMethod.Name)}();");
             sb.AppendLine();
         }
 
@@ -145,7 +145,7 @@ internal static class Emitter
             else
             {
                 sb.AppendLine(
-                    $"{contentIndent}var __r_{method.Name} = {Bench}.Benchmark.Run({nameExpr}, () => this.{method.Name}(), config);"
+                    $"{contentIndent}var __r_{method.Name} = {Bench}.Benchmark.Run({nameExpr}, () => this.{Id(method.Name)}(), config);"
                 );
             }
 
@@ -181,7 +181,9 @@ internal static class Emitter
             sb.AppendLine($"{bodyIndent}finally");
             sb.AppendLine($"{bodyIndent}{{");
             var awaitPrefix = model.GlobalCleanupMethod.IsAsync ? "await " : "";
-            sb.AppendLine($"{contentIndent}{awaitPrefix}this.{model.GlobalCleanupMethod.Name}();");
+            sb.AppendLine(
+                $"{contentIndent}{awaitPrefix}this.{Id(model.GlobalCleanupMethod.Name)}();"
+            );
             sb.AppendLine($"{bodyIndent}}}");
             sb.AppendLine();
         }
@@ -204,7 +206,7 @@ internal static class Emitter
 
         sb.AppendLine($"{m2}__sw.Stop();");
         sb.AppendLine($"{m2}var __suite = new {Bench}.BenchmarkSuite(");
-        sb.AppendLine($"{m2}    \"{EscapeRaw(model.ClassName)}\",");
+        sb.AppendLine($"{m2}    {CSharpLiterals.StringLiteral(model.ClassName)},");
         sb.AppendLine($"{m2}    new {Bench}.EnvironmentInfo");
         sb.AppendLine($"{m2}    {{");
         sb.AppendLine($"{m2}#if NET8_0_OR_GREATER");
@@ -235,9 +237,7 @@ internal static class Emitter
             // as FromResult (IValueTaskSource-free, same struct state).
             // The async path above is unchanged (`return __suite;` already uses the
             // same constructor through the implicit conversion).
-            sb.AppendLine(
-                $"{m2}return new {ValueTaskType}<{Bench}.BenchmarkSuite>(__suite);"
-            );
+            sb.AppendLine($"{m2}return new {ValueTaskType}<{Bench}.BenchmarkSuite>(__suite);");
         }
 
         // ── Close method / class / namespace ─────────────────────────
@@ -250,6 +250,15 @@ internal static class Emitter
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Batch 1 · 1.2 (B3-C3): every identifier this emitter writes goes through
+    /// here. <c>ISymbol.Name</c> drops the <c>@</c> that made a keyword name
+    /// legal (<c>@lock</c> arrives as <c>lock</c>), so pasting it straight into
+    /// the generated source produced <c>this.lock()</c> — CS1003, pointing at a
+    /// file the user never wrote.
+    /// </summary>
+    private static string Id(string name) => IdentifierEscaping.EscapeIdentifier(name);
+
     private static void EmitSyncBenchmarkWithIter(
         StringBuilder sb,
         BenchmarkClassModel model,
@@ -261,14 +270,14 @@ internal static class Emitter
     )
     {
         sb.AppendLine(
-            $"{bodyIndent}{SystemAction} __action_{method.Name} = () => this.{method.Name}();"
+            $"{bodyIndent}{SystemAction} __action_{method.Name} = () => this.{Id(method.Name)}();"
         );
 
         var setupArg = hasIterSetup
-            ? $"({SystemAction})(() => this.{model.IterationSetupMethod!.Name}())"
+            ? $"({SystemAction})(() => this.{Id(model.IterationSetupMethod!.Name)}())"
             : "null";
         var teardownArg = hasIterCleanup
-            ? $"({SystemAction})(() => this.{model.IterationCleanupMethod!.Name}())"
+            ? $"({SystemAction})(() => this.{Id(model.IterationCleanupMethod!.Name)}())"
             : "null";
 
         sb.AppendLine($"{bodyIndent}var __r_{method.Name} = {Bench}.Benchmark.Run(");
@@ -292,8 +301,8 @@ internal static class Emitter
     {
         // Always wrap in Func<Task> for async class
         var wrap = method.IsAsync
-            ? $"async () => {{ await this.{method.Name}(); }}"
-            : $"async () => {{ this.{method.Name}(); }}";
+            ? $"async () => {{ await this.{Id(method.Name)}(); }}"
+            : $"async () => {{ this.{Id(method.Name)}(); }}";
 
         var setupArg = GetAsyncIterArg(model.IterationSetupMethod);
         var teardownArg = GetAsyncIterArg(model.IterationCleanupMethod);
@@ -322,30 +331,13 @@ internal static class Emitter
             return "null";
 
         return method.IsAsync
-            ? $"async () => {{ await this.{method.Name}(); }}"
-            : $"async () => {{ this.{method.Name}(); }}";
+            ? $"async () => {{ await this.{Id(method.Name)}(); }}"
+            : $"async () => {{ this.{Id(method.Name)}(); }}";
     }
 
-    private static string EscapeStringLiteral(string s) => $"\"{EscapeRaw(s)}\"";
-
-    private static string EscapeRaw(string s)
-    {
-        var sb = new StringBuilder(s.Length * 2); // worst-case: every char is a 2-char escape
-        foreach (var c in s)
-        {
-            sb.Append(
-                c switch
-                {
-                    '"' => "\\\"",
-                    '\\' => "\\\\",
-                    '\n' => "\\n",
-                    '\r' => "\\r",
-                    '\t' => "\\t",
-                    _ when c < 0x20 => $"\\u{(int)c:X4}",
-                    _ => c.ToString(),
-                }
-            );
-        }
-        return sb.ToString();
-    }
+    // Batch 1 · 1.3 (B3-C4): the description used to go through Emitter.EscapeRaw —
+    // a second copy of the escape table that, like the [Params] one in
+    // CSharpLiteralFormatter, stopped at 0x20 and let U+0085/U+2028/U+2029
+    // truncate the literal. Both call sites now share CSharpLiterals.
+    private static string EscapeStringLiteral(string s) => CSharpLiterals.StringLiteral(s);
 }
