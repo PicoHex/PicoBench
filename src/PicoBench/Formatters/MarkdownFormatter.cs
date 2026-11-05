@@ -36,13 +36,15 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     {
         var sb = new StringBuilder();
 
-        // Title
-        sb.AppendLine($"# {suite.Name}");
+        // Title. Batch 2 · 2.5 (B2-H4): a name is data, not structure. A line break
+        // collapses to a space and `#` is escaped, so "S + break + ## Injected" can
+        // no longer become a real second-level heading of the generated document.
+        sb.AppendLine($"# {TextSanitizer.ForMarkdownLine(suite.Name)}");
         sb.AppendLine();
 
         if (!string.IsNullOrEmpty(suite.Description))
         {
-            sb.AppendLine(suite.Description);
+            sb.AppendLine(TextSanitizer.ForMarkdownLine(suite.Description!));
             sb.AppendLine();
         }
 
@@ -68,7 +70,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         if (Options.IncludeTimestamp)
         {
             sb.AppendLine(
-                $"> Benchmark run at {suite.Timestamp:yyyy-MM-dd HH:mm:ss} UTC ({suite.Duration.TotalSeconds:F2}s)"
+                $"> Benchmark run at {FormatTimestamp(suite.Timestamp)} UTC ({FormatDuration(suite.Duration)})"
             );
             sb.AppendLine();
         }
@@ -92,16 +94,24 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         // Summary
         var wins = suite.Comparisons.Count(c => c.IsFaster);
         var total = suite.Comparisons.Count;
-        var avgSpeedup = suite.Comparisons.Average(c => c.Speedup);
-        var maxSpeedup = suite.Comparisons.Max(c => c.Speedup);
+
+        // Batch 2 · 2.2 (B2-M2): the aggregate ignores the ratios that do not
+        // exist (NaN / ±∞) and the block says how many it ignored.
+        var ratios = SpeedupAggregate.From(suite.Comparisons);
 
         sb.AppendLine();
         sb.AppendLine("### Summary");
         sb.AppendLine();
         sb.AppendLine("```");
         sb.AppendLine($"Candidate wins: {wins} / {total}");
-        sb.AppendLine($"Average speedup: {FormatSpeedup(avgSpeedup)}");
-        sb.AppendLine($"Maximum speedup: {FormatSpeedup(maxSpeedup)}");
+        sb.AppendLine(
+            $"Average speedup: {FormatSpeedupValue(ratios.Average, Options.SpeedupDecimalPlaces)}"
+        );
+        sb.AppendLine(
+            $"Maximum speedup: {FormatSpeedupValue(ratios.Maximum, Options.SpeedupDecimalPlaces)}"
+        );
+        if (ratios.Excluded > 0)
+            sb.AppendLine($"Ratios: {ratios.DescribeExcluded()}");
         sb.AppendLine("```");
 
         return sb.ToString();
@@ -111,10 +121,17 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
 
     private void AppendResultsTable(StringBuilder sb, List<BenchmarkResult> results)
     {
+        // Batch 2 · 2.4 (B2-M5/M6): the same table unit as Console, chosen by the
+        // same rule and printed in the same place in the header, so the two formats
+        // cannot disagree about what a cell means.
+        var unit = TableUnit(PerOpValues(results));
+
         // Header
-        sb.Append("| Name | Avg (ns) | P50 (ns) ");
+        sb.Append($"| Name | Avg ({unit.Symbol}) | P50 ({unit.Symbol}) ");
         if (Options.IncludePercentiles)
-            sb.Append("| P90 (ns) | P95 (ns) | P99 (ns) | StdErr (ns) | RSD (%) ");
+            sb.Append(
+                $"| P90 ({unit.Symbol}) | P95 ({unit.Symbol}) | P99 ({unit.Symbol}) | StdErr ({unit.Symbol}) | RSD (%) "
+            );
         if (Options.IncludeCpuCycles)
             sb.Append("| CPU Cycle ");
         if (Options.IncludeGcInfo)
@@ -141,11 +158,11 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                     ? " (below resolution)"
                     : "";
             sb.Append(
-                $"| {Escape(result.Name)} | {FormatPerOp(s, s.Avg)}{below} | {FormatPerOp(s, s.P50)}{below} "
+                $"| {Escape(result.Name)} | {FormatPerOp(s, s.Avg, unit)}{below} | {FormatPerOp(s, s.P50, unit)}{below} "
             );
             if (Options.IncludePercentiles)
                 sb.Append(
-                    $"| {FormatPerOp(s, s.P90)}{below} | {FormatPerOp(s, s.P95)}{below} | {FormatPerOp(s, s.P99)}{below} | {FormatPerOp(s, s.StandardError)}{below} | {s.RelativeStdDevPercent:F1} "
+                    $"| {FormatPerOp(s, s.P90, unit)}{below} | {FormatPerOp(s, s.P95, unit)}{below} | {FormatPerOp(s, s.P99, unit)}{below} | {FormatPerOp(s, s.StandardError, unit)}{below} | {FormatMetric(s.RelativeStdDevPercent, 1)} "
                 );
             if (Options.IncludeCpuCycles)
                 sb.Append($"| {FormatCycles(s)} ");
@@ -178,7 +195,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                     + string.Join(
                         ", ",
                         noisy.Select(static r =>
-                            $"{Escape(r.Name)} ({r.Statistics.RelativeStdDevPercent:F1}% RSD)"
+                            $"{Escape(r.Name)} ({FormatMetric(r.Statistics.RelativeStdDevPercent, 1)}% RSD)"
                         )
                     )
                     + "; treat the difference as unresolved."
@@ -187,16 +204,35 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     }
 
     /// <summary>
-    /// Renders a per-operation cell. A value the run could not resolve above the
-    /// harness floor is written as an upper bound (<c>&lt;limit</c>), and a run
-    /// whose clock never advanced is written as "not measured".
+    /// Every per-operation figure the results table holds; the table's unit is
+    /// chosen from the largest of them (Batch 2 · 2.4).
     /// </summary>
-    private string FormatPerOp(Statistics statistics, double nanoseconds) =>
+    private static IEnumerable<double> PerOpValues(List<BenchmarkResult> results)
+    {
+        foreach (var result in results)
+        {
+            var s = result.Statistics;
+            yield return s.Avg;
+            yield return s.P50;
+            yield return s.P90;
+            yield return s.P95;
+            yield return s.P99;
+            yield return s.StandardError;
+        }
+    }
+
+    /// <summary>
+    /// Renders a per-operation cell in the table's unit. A value the run could not
+    /// resolve above the harness floor is written as an upper bound
+    /// (<c>&lt;limit</c>), and a run whose clock never advanced is written as "not
+    /// measured".
+    /// </summary>
+    private string FormatPerOp(Statistics statistics, double nanoseconds, TimeUnit unit) =>
         statistics.Unmeasured
-            ? "N/A"
+            ? NotCollected
             : statistics.ResolutionLimited
-                ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
-                : FormatTime(nanoseconds);
+                ? BoundCell(unit, statistics.ResolutionLimitNanoseconds)
+                : MetricCell(unit, nanoseconds);
 
     /// <summary>
     /// Renders the cycle cell. <c>~</c> marks a process-wide counter or a
@@ -204,8 +240,8 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     /// </summary>
     private static string FormatCycles(Statistics statistics) =>
         statistics.CpuCyclesAreApproximate
-            ? $"~{statistics.CpuCyclesPerOp:F0}"
-            : $"{statistics.CpuCyclesPerOp:F0}";
+            ? "~" + FormatMetric(statistics.CpuCyclesPerOp, 0)
+            : FormatMetric(statistics.CpuCyclesPerOp, 0);
 
     #endregion
 
@@ -229,10 +265,18 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
             rows.Add((c.Name, Options.BaselineLabel, c.Baseline.Statistics, ""));
         }
 
+        // Batch 2 · 2.4 (B2-M5): `P50 | P90 | P99 | StdErr` used to be bare headers
+        // in this table while Console wrote `Avg (ns)` — a reader had to guess the
+        // unit, and the four formats have to agree on it. One unit for the table,
+        // named in every per-operation header.
+        var unit = TableUnit(rows.Select(r => r.Stats).SelectMany(PerOpValues));
+
         // Header
-        sb.Append("| Test Case | Avg (ns) | Speedup |");
+        sb.Append($"| Test Case | Avg ({unit.Symbol}) | Speedup |");
         if (Options.IncludePercentiles)
-            sb.Append(" P50 | P90 | P99 | StdErr | RSD (%) |");
+            sb.Append(
+                $" P50 ({unit.Symbol}) | P90 ({unit.Symbol}) | P99 ({unit.Symbol}) | StdErr ({unit.Symbol}) | RSD (%) |"
+            );
         if (Options.IncludeCpuCycles)
             sb.Append(" CPU |");
         if (Options.IncludeGcInfo)
@@ -254,21 +298,21 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         {
             var testCase = $"{row.Provider} * {row.TestCase}";
             sb.Append($"| {Escape(testCase)} ");
-            sb.Append($"| {FormatTime(row.Stats.Avg)} ");
+            sb.Append($"| {PerOpCell(row.Stats, row.Stats.Avg, unit)} ");
             sb.Append($"| {row.Speedup} |");
 
             if (Options.IncludePercentiles)
             {
-                sb.Append($" {FormatTime(row.Stats.P50)} |");
-                sb.Append($" {FormatTime(row.Stats.P90)} |");
-                sb.Append($" {FormatTime(row.Stats.P99)} |");
-                sb.Append($" {FormatTime(row.Stats.StandardError)} |");
-                sb.Append($" {row.Stats.RelativeStdDevPercent:F1} |");
+                sb.Append($" {PerOpCell(row.Stats, row.Stats.P50, unit)} |");
+                sb.Append($" {PerOpCell(row.Stats, row.Stats.P90, unit)} |");
+                sb.Append($" {PerOpCell(row.Stats, row.Stats.P99, unit)} |");
+                sb.Append($" {PerOpCell(row.Stats, row.Stats.StandardError, unit)} |");
+                sb.Append($" {FormatMetric(row.Stats.RelativeStdDevPercent, 1)} |");
             }
 
             if (Options.IncludeCpuCycles)
             {
-                sb.Append($" {row.Stats.CpuCyclesPerOp:F0} |");
+                sb.Append($" {FormatMetric(row.Stats.CpuCyclesPerOp, 0)} |");
             }
 
             if (Options.IncludeGcInfo)
@@ -280,21 +324,34 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         }
     }
 
+    /// <summary>Every per-operation figure a statistics object contributes.</summary>
+    private static IEnumerable<double> PerOpValues(Statistics statistics)
+    {
+        yield return statistics.Avg;
+        yield return statistics.P50;
+        yield return statistics.P90;
+        yield return statistics.P99;
+        yield return statistics.StandardError;
+    }
+
+    /// <summary>
+    /// A comparison cell: per-operation value in the table's unit, with the same
+    /// <c>N/A</c> / <c>&lt;limit</c> states as the results table.
+    /// </summary>
+    private string PerOpCell(Statistics statistics, double nanoseconds, TimeUnit unit) =>
+        FormatPerOp(statistics, nanoseconds, unit);
+
     #endregion
 
     #region Helpers
 
-    private static string Escape(string value)
-    {
-        // Escape special markdown table characters; replace newlines so
-        // they cannot break a table row.
-        return value
-            .Replace("\\", "\\\\")
-            .Replace("|", "\\|")
-            .Replace("\r\n", "<br>")
-            .Replace("\n", "<br>")
-            .Replace("\r", "<br>");
-    }
+    /// <summary>
+    /// User text inside one table cell (Batch 2 · 2.5, B2-H4): structure characters
+    /// escaped, control characters replaced, a line break as <c>&lt;br&gt;</c> so the
+    /// row cannot be split. See <see cref="TextSanitizer"/> for the rules and for why
+    /// each character is on the list.
+    /// </summary>
+    private static string Escape(string value) => TextSanitizer.ForMarkdownCell(value);
 
     #endregion
 
@@ -368,7 +425,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
 
         foreach (var group in groups)
         {
-            sb.AppendLine($"### {group.Key}");
+            sb.AppendLine($"### {TextSanitizer.ForMarkdownLine(group.Key)}");
             sb.AppendLine();
             sb.AppendLine(formatter.Format(group.ToList()));
             sb.AppendLine();

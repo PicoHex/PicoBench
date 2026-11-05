@@ -127,8 +127,8 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
             if (Options.IncludeTimestamp)
             {
-                sb.AppendLine($"Timestamp: {suite.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
-                sb.AppendLine($"Duration: {suite.Duration.TotalSeconds:F2}s");
+                sb.AppendLine($"Timestamp: {FormatTimestamp(suite.Timestamp)} UTC");
+                sb.AppendLine($"Duration: {FormatDuration(suite.Duration)}");
             }
 
             // Results
@@ -158,38 +158,54 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
     private void AppendSingleResult(StringBuilder sb, BenchmarkResult result)
     {
-        sb.AppendLine($"Benchmark: {result.Name}{DescribeMeasurementLimit(result.Statistics)}");
-        sb.AppendLine($"  Avg: {FormatPerOpLine(result.Statistics, result.Statistics.Avg)}");
-        sb.AppendLine($"  P50: {FormatPerOpLine(result.Statistics, result.Statistics.P50)}");
+        // One unit for the whole single-result view, chosen from the figures it
+        // prints (Batch 2 · 2.4): a five-second benchmark reads "5.0 s" here as it
+        // does in the table, not "5000000000.0 ns" in one view and "5.0" in the other.
+        var unit = TableUnit(
+            [
+                result.Statistics.Avg,
+                result.Statistics.P50,
+                result.Statistics.P90,
+                result.Statistics.P95,
+                result.Statistics.P99,
+                result.Statistics.StandardError,
+            ]
+        );
+
+        sb.AppendLine(
+            $"Benchmark: {TextSanitizer.ForTerminal(result.Name)}{DescribeMeasurementLimit(result.Statistics)}"
+        );
+        sb.AppendLine($"  Avg: {FormatPerOpLine(result.Statistics, result.Statistics.Avg, unit)}");
+        sb.AppendLine($"  P50: {FormatPerOpLine(result.Statistics, result.Statistics.P50, unit)}");
 
         if (result.Statistics.Unmeasured)
         {
             sb.AppendLine(
                 $"  Unmeasured: the clock did not advance for {result.Statistics.UnmeasuredSampleCount} "
                     + $"sample(s); no per-operation value is reported (clock granularity "
-                    + $"~{result.Statistics.ResolutionLimitNanoseconds:F0} ns/op)"
+                    + $"~{FormatMetric(result.Statistics.ResolutionLimitNanoseconds, 0)} ns/op)"
             );
         }
         else if (result.Statistics.ResolutionLimited)
         {
             sb.AppendLine(
                 $"  Resolution: below the measurement floor (resolution limit "
-                    + $"~{result.Statistics.ResolutionLimitNanoseconds:F3} ns/op, "
-                    + $"harness overhead {result.Statistics.OverheadNs:F3} ns/op deducted)"
+                    + $"~{FormatMetric(result.Statistics.ResolutionLimitNanoseconds, 3)} ns/op, "
+                    + $"harness overhead {FormatMetric(result.Statistics.OverheadNs, 3)} ns/op deducted)"
             );
         }
         else if (result.Statistics.OverheadNs > 0)
         {
             sb.AppendLine(
-                $"  Overhead: {result.Statistics.OverheadNs:F3} ns/op deducted (delegate/loop floor)"
+                $"  Overhead: {FormatMetric(result.Statistics.OverheadNs, 3)} ns/op deducted (delegate/loop floor)"
             );
         }
 
         if (Options.IncludePercentiles)
         {
-            sb.AppendLine($"  P90: {FormatPerOpLine(result.Statistics, result.Statistics.P90)}");
-            sb.AppendLine($"  P95: {FormatPerOpLine(result.Statistics, result.Statistics.P95)}");
-            sb.AppendLine($"  P99: {FormatPerOpLine(result.Statistics, result.Statistics.P99)}");
+            sb.AppendLine($"  P90: {FormatPerOpLine(result.Statistics, result.Statistics.P90, unit)}");
+            sb.AppendLine($"  P95: {FormatPerOpLine(result.Statistics, result.Statistics.P95, unit)}");
+            sb.AppendLine($"  P99: {FormatPerOpLine(result.Statistics, result.Statistics.P99, unit)}");
         }
 
         if (Options.IncludeCpuCycles)
@@ -205,13 +221,13 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         // Per-operation figures like the ones above: the CSV/Markdown/HTML tables
         // print the same cells through the same rule, so an unmeasured run is "N/A"
         // in all four formats instead of a number in one of them.
-        sb.AppendLine($"  StdDev: {FormatPerOpLine(result.Statistics, result.Statistics.StdDev)}");
-        sb.AppendLine($"  StdErr: {FormatPerOpLine(result.Statistics, result.Statistics.StandardError)}");
+        sb.AppendLine($"  StdDev: {FormatPerOpLine(result.Statistics, result.Statistics.StdDev, unit)}");
+        sb.AppendLine($"  StdErr: {FormatPerOpLine(result.Statistics, result.Statistics.StandardError, unit)}");
 
         if (result.Statistics.HasHighVariance)
         {
             sb.AppendLine(
-                $"  Noise: High variance ({result.Statistics.RelativeStdDevPercent:F1}% RSD)"
+                $"  Noise: High variance ({FormatMetric(result.Statistics.RelativeStdDevPercent, 1)}% RSD)"
             );
         }
     }
@@ -222,32 +238,61 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
     private void AppendResultsTable(StringBuilder sb, List<BenchmarkResult> results)
     {
-        // Calculate column widths based on content
-        var nameWidth = Math.Max("Name".Length, results.Max(r => r.Name.Length));
+        // One unit for the whole table (Batch 2 · 2.4, B2-M6): the header says which
+        // unit the column is in, so every cell of that column is a plain number in
+        // that unit — a per-cell rescale would mix 2.5 and 0.0 down one column.
+        var unit = TableUnit(PerOpValues(results));
+
+        var avgHeader = $"Avg ({unit.Symbol})";
+        var p50Header = $"P50 ({unit.Symbol})";
+        var p90Header = $"P90 ({unit.Symbol})";
+        var p95Header = $"P95 ({unit.Symbol})";
+        var p99Header = $"P99 ({unit.Symbol})";
+        var stdErrHeader = $"StdErr ({unit.Symbol})";
+
+        // Name widths are counted in display cells, not chars: a CJK name is two
+        // cells wide but one char, and a control character must not survive into the
+        // cell at all (Batch 2 · 2.5, B2-L4).
+        var nameWidth = Math.Max(
+            "Name".Length,
+            results.Max(r => DisplayWidth.Of(TextSanitizer.ForTerminal(r.Name)))
+        );
         var avgWidth = Math.Max(
-            "Avg (ns)".Length,
-            results.Max(r => FormatPerOp(r.Statistics, r.Statistics.Avg).Length)
+            avgHeader.Length,
+            results.Max(r => FormatPerOp(r.Statistics, r.Statistics.Avg, unit).Length)
         );
         var p50Width = Math.Max(
-            "P50 (ns)".Length,
-            results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P50).Length)
+            p50Header.Length,
+            results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P50, unit).Length)
         );
         var p90Width = Options.IncludePercentiles
             ? Math.Max(
-                "P90 (ns)".Length,
-                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P90).Length)
+                p90Header.Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P90, unit).Length)
             )
             : 0;
         var p95Width = Options.IncludePercentiles
             ? Math.Max(
-                "P95 (ns)".Length,
-                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P95).Length)
+                p95Header.Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P95, unit).Length)
             )
             : 0;
         var p99Width = Options.IncludePercentiles
             ? Math.Max(
-                "P99 (ns)".Length,
-                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P99).Length)
+                p99Header.Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.P99, unit).Length)
+            )
+            : 0;
+        var stdErrWidth = Options.IncludePercentiles
+            ? Math.Max(
+                stdErrHeader.Length,
+                results.Max(r => FormatPerOp(r.Statistics, r.Statistics.StandardError, unit).Length)
+            )
+            : 0;
+        var rsdWidth = Options.IncludePercentiles
+            ? Math.Max(
+                RsdHeader.Length,
+                results.Max(r => FormatMetric(r.Statistics.RelativeStdDevPercent, 1).Length)
             )
             : 0;
         var cpuWidth = Options.IncludeCpuCycles
@@ -263,21 +308,37 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         // Build column definitions
         var columns = new List<TableColumn<BenchmarkResult>>
         {
-            new("Name", nameWidth, r => r.Name, leftAlign: true),
-            new("Avg (ns)", avgWidth, r => FormatPerOp(r.Statistics, r.Statistics.Avg)),
-            new("P50 (ns)", p50Width, r => FormatPerOp(r.Statistics, r.Statistics.P50))
+            new("Name", nameWidth, r => TextSanitizer.ForTerminal(r.Name), leftAlign: true),
+            new(avgHeader, avgWidth, r => FormatPerOp(r.Statistics, r.Statistics.Avg, unit)),
+            new(p50Header, p50Width, r => FormatPerOp(r.Statistics, r.Statistics.P50, unit))
         };
 
         if (Options.IncludePercentiles)
         {
             columns.Add(
-                new("P90 (ns)", p90Width, r => FormatPerOp(r.Statistics, r.Statistics.P90))
+                new(p90Header, p90Width, r => FormatPerOp(r.Statistics, r.Statistics.P90, unit))
             );
             columns.Add(
-                new("P95 (ns)", p95Width, r => FormatPerOp(r.Statistics, r.Statistics.P95))
+                new(p95Header, p95Width, r => FormatPerOp(r.Statistics, r.Statistics.P95, unit))
             );
             columns.Add(
-                new("P99 (ns)", p99Width, r => FormatPerOp(r.Statistics, r.Statistics.P99))
+                new(p99Header, p99Width, r => FormatPerOp(r.Statistics, r.Statistics.P99, unit))
+            );
+
+            // Batch 2 · 2.4 (B2-M5): the Console suite table — the one every sample
+            // and the README recommend — carried neither StdErr nor RSD, while
+            // Markdown and HTML carried both, so the noise signal was invisible in
+            // the default rendering. Both columns now sit where the other two
+            // formats put them (after the percentiles).
+            columns.Add(
+                new(
+                    stdErrHeader,
+                    stdErrWidth,
+                    r => FormatPerOp(r.Statistics, r.Statistics.StandardError, unit)
+                )
+            );
+            columns.Add(
+                new(RsdHeader, rsdWidth, r => FormatMetric(r.Statistics.RelativeStdDevPercent, 1))
             );
         }
 
@@ -321,7 +382,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
                     + string.Join(
                         ", ",
                         noisy.Select(static r =>
-                            $"{r.Name} {r.Statistics.RelativeStdDevPercent:F1}% RSD"
+                            $"{TextSanitizer.ForTerminal(r.Name)} {FormatMetric(r.Statistics.RelativeStdDevPercent, 1)}% RSD"
                         )
                     )
                     + "; treat the difference as unresolved"
@@ -329,25 +390,50 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
     }
 
+    /// <summary>Header of the RSD column: a percentage, never scaled.</summary>
+    private const string RsdHeader = "RSD (%)";
+
     /// <summary>
-    /// Renders a per-operation cell. A value the run could not resolve above
-    /// the harness floor is printed as an upper bound (<c>&lt;limit</c>) rather
-    /// than as a number that would look like a real measurement, and a run whose
-    /// clock never advanced is printed as "not measured".
+    /// Every per-operation figure the results table holds. The table's unit is
+    /// chosen from the largest of them, so no column can be scaled differently
+    /// from its neighbours.
     /// </summary>
-    private string FormatPerOp(Statistics statistics, double nanoseconds) =>
+    private static IEnumerable<double> PerOpValues(List<BenchmarkResult> results)
+    {
+        foreach (var result in results)
+        {
+            var s = result.Statistics;
+            yield return s.Avg;
+            yield return s.P50;
+            yield return s.P90;
+            yield return s.P95;
+            yield return s.P99;
+            yield return s.StandardError;
+        }
+    }
+
+    /// <summary>
+    /// Renders a per-operation cell in the table's unit. A value the run could not
+    /// resolve above the harness floor is printed as an upper bound
+    /// (<c>&lt;limit</c>) rather than as a number that would look like a real
+    /// measurement, and a run whose clock never advanced is printed as "not
+    /// measured".
+    /// </summary>
+    private string FormatPerOp(Statistics statistics, double nanoseconds, TimeUnit unit) =>
         statistics.Unmeasured
-            ? "N/A"
+            ? NotCollected
             : statistics.ResolutionLimited
-                ? $"<{FormatTime(statistics.ResolutionLimitNanoseconds)}"
-                : FormatTime(nanoseconds);
+                ? BoundCell(unit, statistics.ResolutionLimitNanoseconds)
+                : MetricCell(unit, nanoseconds);
 
     /// <summary>
     /// A per-operation value with its unit, or the "not measured" note when the
     /// timing source never advanced during the run.
     /// </summary>
-    private string FormatPerOpLine(Statistics statistics, double nanoseconds) =>
-        statistics.Unmeasured ? "N/A (unmeasured)" : $"{FormatPerOp(statistics, nanoseconds)} ns";
+    private string FormatPerOpLine(Statistics statistics, double nanoseconds, TimeUnit unit) =>
+        statistics.Unmeasured
+            ? NotCollected + " (unmeasured)"
+            : $"{FormatPerOp(statistics, nanoseconds, unit)} {unit.Symbol}";
 
     /// <summary>
     /// The measurement-quality marker printed next to a benchmark name:
@@ -367,8 +453,8 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     /// </summary>
     private static string FormatCycles(Statistics statistics) =>
         statistics.CpuCyclesAreApproximate
-            ? $"~{statistics.CpuCyclesPerOp:F0}"
-            : $"{statistics.CpuCyclesPerOp:F0}";
+            ? "~" + FormatMetric(statistics.CpuCyclesPerOp, 0)
+            : FormatMetric(statistics.CpuCyclesPerOp, 0);
 
     #endregion
 
@@ -378,12 +464,25 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     {
         var indicator = GetSpeedupIndicator(comparison.Speedup);
 
-        sb.AppendLine($"Comparison: {comparison.Name}");
+        // Same unit for both sides of the comparison and for every figure printed
+        // here, chosen from the two averages (Batch 2 · 2.4): a ratio whose two
+        // numbers are written in two different units is not a comparison a reader
+        // can check by eye.
+        var unit = TableUnit(
+            [
+                comparison.Baseline.Statistics.Avg,
+                comparison.Baseline.Statistics.P50,
+                comparison.Candidate.Statistics.Avg,
+                comparison.Candidate.Statistics.P50,
+            ]
+        );
+
+        sb.AppendLine($"Comparison: {TextSanitizer.ForTerminal(comparison.Name)}");
         sb.AppendLine(
-            $"  Baseline ({comparison.Baseline.Name}): {FormatTime(comparison.Baseline.Statistics.Avg)} ns"
+            $"  Baseline ({comparison.Baseline.Name}): {ComparisonValue(comparison.Baseline.Statistics, unit)}"
         );
         sb.AppendLine(
-            $"  Candidate ({comparison.Candidate.Name}): {FormatTime(comparison.Candidate.Statistics.Avg)} ns"
+            $"  Candidate ({comparison.Candidate.Name}): {ComparisonValue(comparison.Candidate.Statistics, unit)}"
         );
         sb.AppendLine($"  Speedup: {FormatSpeedup(comparison.Speedup)} {indicator}");
         if (comparison.Interval is { } interval)
@@ -391,8 +490,14 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             sb.AppendLine($"  Interval: {interval} (95% CI of the paired-round median)");
         }
 
-        sb.AppendLine($"  Winner: {DescribeWinner(comparison)}");
+        sb.AppendLine($"  Winner: {TextSanitizer.ForTerminal(DescribeWinner(comparison))}");
     }
+
+    /// <summary>One side of a comparison, per-operation value and unit.</summary>
+    private string ComparisonValue(Statistics statistics, TimeUnit unit) =>
+        statistics.Unmeasured
+            ? NotCollected + " (unmeasured)"
+            : $"{FormatPerOp(statistics, statistics.Avg, unit)} {unit.Symbol}";
 
     /// <summary>
     /// Names the winner of a comparison, or says why there is none: a difference
@@ -404,7 +509,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             ComparisonOutcome.Faster => comparison.Candidate.Name,
             ComparisonOutcome.Slower => comparison.Baseline.Name,
             ComparisonOutcome.Inconclusive =>
-                $"none (within the {ComparisonResult.DeadBand * 100:F0}% dead band — indistinguishable)",
+                $"none (within the {FormatMetric(ComparisonResult.DeadBand * 100, 0)}% dead band — indistinguishable)",
             _ => "unknown (not measurable)",
         };
 
@@ -432,14 +537,16 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         AppendTable(sb, columns, rows);
 
-        // Summary
+        // Summary. Non-finite ratios are excluded from the aggregate and counted,
+        // so one scenario with a zero (or NaN) candidate cannot swallow the rest
+        // (Batch 2 · 2.2, B2-M2).
         var wins = comparisons.Count(c => c.IsFaster);
-        var avgSpeedup = comparisons.Average(c => c.Speedup);
-        var maxSpeedup = comparisons.Max(c => c.Speedup);
+        var ratios = SpeedupAggregate.From(comparisons);
+        var note = ratios.Excluded == 0 ? "" : " | " + ratios.DescribeExcluded();
 
         sb.AppendLine();
         sb.AppendLine(
-            $"Summary: Candidate wins {wins}/{comparisons.Count} | Avg: {FormatSpeedup(avgSpeedup)} | Max: {FormatSpeedup(maxSpeedup)}"
+            $"Summary: Candidate wins {wins}/{comparisons.Count} | Avg: {FormatSpeedupValue(ratios.Average, Options.SpeedupDecimalPlaces)} | Max: {FormatSpeedupValue(ratios.Maximum, Options.SpeedupDecimalPlaces)}{note}"
         );
     }
 
@@ -470,53 +577,123 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     /// </summary>
     private List<TableColumn<ComparisonRow>> BuildComparisonColumns(List<ComparisonRow> rows)
     {
+        // Batch 2 · 2.4 (B2-M5): every per-operation column of the comparison table
+        // now names its unit — only `Avg` used to say `(ns)`, so `P50`, `P90` and
+        // `P99` were bare numbers whose unit a reader had to guess. StdErr and RSD
+        // joined the set as well, because Markdown and HTML already had them: the
+        // four formats must show the same metrics for the same data.
+        var unit = TableUnit(ComparisonPerOpValues(rows));
+
+        var avgHeader = $"Avg ({unit.Symbol})";
+        var p50Header = $"P50 ({unit.Symbol})";
+        var p90Header = $"P90 ({unit.Symbol})";
+        var p99Header = $"P99 ({unit.Symbol})";
+        var stdErrHeader = $"StdErr ({unit.Symbol})";
+
         var nameWidth = Math.Max(
             "Test Case".Length,
-            rows.Max(r => $"{r.Provider} * {r.Name}".Length)
+            rows.Max(r => DisplayWidth.Of(TextSanitizer.ForTerminal($"{r.Provider} * {r.Name}")))
         );
         var avgWidth = Math.Max(
-            "Avg (ns)".Length,
-            rows.Max(r => FormatTime(r.Result.Statistics.Avg).Length)
+            avgHeader.Length,
+            rows.Max(r => ComparisonPerOp(r.Result.Statistics, r.Result.Statistics.Avg, unit).Length)
         );
         var speedupWidth = Math.Max("Speedup".Length, rows.Max(r => r.Speedup.Length));
 
         var columns = new List<TableColumn<ComparisonRow>>
         {
-            new("Test Case", nameWidth, r => $"{r.Provider} * {r.Name}", leftAlign: true),
-            new("Avg (ns)", avgWidth, r => FormatTime(r.Result.Statistics.Avg)),
+            new(
+                "Test Case",
+                nameWidth,
+                r => TextSanitizer.ForTerminal($"{r.Provider} * {r.Name}"),
+                leftAlign: true
+            ),
+            new(
+                avgHeader,
+                avgWidth,
+                r => ComparisonPerOp(r.Result.Statistics, r.Result.Statistics.Avg, unit)
+            ),
             new("Speedup", speedupWidth, r => r.Speedup)
         };
 
         if (Options.IncludePercentiles)
         {
             var p50Width = Math.Max(
-                "P50".Length,
-                rows.Max(r => FormatTime(r.Result.Statistics.P50).Length)
+                p50Header.Length,
+                rows.Max(r => ComparisonPerOp(r.Result.Statistics, r.Result.Statistics.P50, unit).Length)
             );
             var p90Width = Math.Max(
-                "P90".Length,
-                rows.Max(r => FormatTime(r.Result.Statistics.P90).Length)
+                p90Header.Length,
+                rows.Max(r => ComparisonPerOp(r.Result.Statistics, r.Result.Statistics.P90, unit).Length)
             );
             var p99Width = Math.Max(
-                "P99".Length,
-                rows.Max(r => FormatTime(r.Result.Statistics.P99).Length)
+                p99Header.Length,
+                rows.Max(r => ComparisonPerOp(r.Result.Statistics, r.Result.Statistics.P99, unit).Length)
             );
-            columns.Add(new("P50", p50Width, r => FormatTime(r.Result.Statistics.P50)));
-            columns.Add(new("P90", p90Width, r => FormatTime(r.Result.Statistics.P90)));
-            columns.Add(new("P99", p99Width, r => FormatTime(r.Result.Statistics.P99)));
+            var stdErrWidth = Math.Max(
+                stdErrHeader.Length,
+                rows.Max(r =>
+                    ComparisonPerOp(r.Result.Statistics, r.Result.Statistics.StandardError, unit).Length
+                )
+            );
+            var rsdWidth = Math.Max(
+                RsdHeader.Length,
+                rows.Max(r => FormatMetric(r.Result.Statistics.RelativeStdDevPercent, 1).Length)
+            );
+
+            columns.Add(
+                new(
+                    p50Header,
+                    p50Width,
+                    r => ComparisonPerOp(r.Result.Statistics, r.Result.Statistics.P50, unit)
+                )
+            );
+            columns.Add(
+                new(
+                    p90Header,
+                    p90Width,
+                    r => ComparisonPerOp(r.Result.Statistics, r.Result.Statistics.P90, unit)
+                )
+            );
+            columns.Add(
+                new(
+                    p99Header,
+                    p99Width,
+                    r => ComparisonPerOp(r.Result.Statistics, r.Result.Statistics.P99, unit)
+                )
+            );
+            columns.Add(
+                new(
+                    stdErrHeader,
+                    stdErrWidth,
+                    r =>
+                        ComparisonPerOp(
+                            r.Result.Statistics,
+                            r.Result.Statistics.StandardError,
+                            unit
+                        )
+                )
+            );
+            columns.Add(
+                new(
+                    RsdHeader,
+                    rsdWidth,
+                    r => FormatMetric(r.Result.Statistics.RelativeStdDevPercent, 1)
+                )
+            );
         }
 
         if (Options.IncludeCpuCycles)
         {
             var cpuWidth = Math.Max(
                 "CPU".Length,
-                rows.Max(r => $"{r.Result.Statistics.CpuCyclesPerOp:F0}".Length)
+                rows.Max(r => FormatMetric(r.Result.Statistics.CpuCyclesPerOp, 0).Length)
             );
             columns.Add(
                 new TableColumn<ComparisonRow>(
                     "CPU",
                     cpuWidth,
-                    r => $"{r.Result.Statistics.CpuCyclesPerOp:F0}"
+                    r => FormatMetric(r.Result.Statistics.CpuCyclesPerOp, 0)
                 )
             );
         }
@@ -539,6 +716,27 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         return columns;
     }
 
+    /// <summary>
+    /// A per-operation cell of the comparison table: the same three states as the
+    /// results table (<c>N/A</c>, <c>&lt;limit</c>, number) in the table's unit.
+    /// </summary>
+    private string ComparisonPerOp(Statistics statistics, double nanoseconds, TimeUnit unit) =>
+        FormatPerOp(statistics, nanoseconds, unit);
+
+    /// <summary>Every per-operation figure a comparison table row holds.</summary>
+    private static IEnumerable<double> ComparisonPerOpValues(List<ComparisonRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            var s = row.Result.Statistics;
+            yield return s.Avg;
+            yield return s.P50;
+            yield return s.P90;
+            yield return s.P99;
+            yield return s.StandardError;
+        }
+    }
+
     #endregion
 
     #region Box Header
@@ -553,19 +751,60 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         if (!string.IsNullOrEmpty(description))
         {
-            sb.AppendLine($"║{CenterText(description ?? string.Empty, width - 2)}║");
+            // A description can be several lines. Each one is its own framed row, so
+            // a line break inside it cannot split the box (Batch 2 · 2.5).
+            foreach (var line in SplitLines(description!))
+                sb.AppendLine($"║{CenterText(line, width - 2)}║");
         }
 
         sb.AppendLine($"╚{border}╝");
     }
 
+    /// <summary>
+    /// Splits user text into the lines it will occupy, with control characters
+    /// already replaced (so a stray carriage return cannot rewind the terminal) and
+    /// empty lines preserved.
+    /// </summary>
+    private static IEnumerable<string> SplitLines(string text)
+    {
+        var current = new StringBuilder();
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (TextSanitizer.IsLineBreak(c))
+            {
+                // CR LF is one line break, not two: without this skip the box grows an
+                // empty row for every Windows line ending.
+                if (c == (char)13 && i + 1 < text.Length && text[i + 1] == (char)10)
+                    i++;
+
+                yield return current.ToString();
+                current.Clear();
+                continue;
+            }
+
+            current.Append(TextSanitizer.ForTerminal(c.ToString()));
+        }
+
+        yield return current.ToString();
+    }
+
+    /// <summary>
+    /// Centres text in a fixed-width frame, measured in display cells: a CJK title
+    /// is two cells wide per char, and truncating a 20-char CJK title at 78
+    /// <em>chars</em> would overflow the box by 20 cells (Batch 2 · 2.5, B2-L4).
+    /// </summary>
     private static string CenterText(string text, int width)
     {
-        if (text.Length >= width)
-            return text.Substring(0, width);
+        var sanitized = TextSanitizer.ForTerminal(text);
+        if (DisplayWidth.Of(sanitized) >= width)
+            return DisplayWidth.Truncate(sanitized, width);
 
-        var padding = (width - text.Length) / 2;
-        return text.PadLeft(padding + text.Length).PadRight(width);
+        var padding = (width - DisplayWidth.Of(sanitized)) / 2;
+        return DisplayWidth.PadRight(
+            DisplayWidth.PadLeft(sanitized, padding + DisplayWidth.Of(sanitized)),
+            width
+        );
     }
 
     #endregion
@@ -609,7 +848,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             sb.AppendLine("┐");
             // Title text
             sb.Append("│ ");
-            sb.Append(title.PadRight(totalWidth - 4));
+            sb.Append(DisplayWidth.PadRight(TextSanitizer.ForTerminal(title), totalWidth - 4));
             sb.AppendLine(" │");
             // Title-header separator with column dividers
             AppendTableBorder(sb, columns, '├', '┬', '┤');
@@ -659,9 +898,11 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         {
             var column = columns[i];
             var value = values[i];
+            // Padding is applied in display cells, so the frame closes whatever the
+            // script of the name (Batch 2 · 2.5, B2-L4).
             var text = column.LeftAlign
-                ? $" {value}".PadRight(column.Width)
-                : value.PadLeft(column.Width - 1) + " ";
+                ? DisplayWidth.PadRight($" {value}", column.Width)
+                : DisplayWidth.PadLeft(value, column.Width - 1) + " ";
             sb.Append(text);
             sb.Append('│');
         }
@@ -773,8 +1014,12 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     public static void WriteHeader(string title, int width = 111)
     {
         var border = new string('═', width - 2);
-        var padding = (width - 2 - title.Length) / 2;
-        var centeredTitle = title.PadLeft(padding + title.Length).PadRight(width - 2);
+        var text = TextSanitizer.ForTerminal(title);
+        var textWidth = DisplayWidth.Of(text);
+        var centeredTitle = DisplayWidth.PadRight(
+            DisplayWidth.PadLeft(text, (width - 2 - textWidth) / 2 + textWidth),
+            width - 2
+        );
 
         Console.WriteLine();
         Console.WriteLine($"╔{border}╗");

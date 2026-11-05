@@ -2,11 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
-Une bibliothèque de benchmarking légère et sans dépendances pour .NET avec **deux API complémentaires** : une API impérative et une API basée sur des attributs, générée à partir du code source, entièrement **compatible AOT**.
+Une bibliothèque de benchmarking légère pour .NET avec **deux API complémentaires** : une API impérative et une API basée sur des attributs, générée à partir du code source, entièrement **compatible AOT**. La seule référence NuGet est un polyfill BCL (`System.Threading.Tasks.Extensions`) pour `ValueTask<T>` sur netstandard2.0.
 
 ## Caractéristiques
 
-- **Zéro Dépendance** - Implémentation pure .NET, aucun package externe requis
+- **Aucune dépendance tierce** — uniquement un polyfill BCL (`System.Threading.Tasks.Extensions`) pour `ValueTask<T>` sur netstandard2.0. Aucun package externe.
 - **Deux API** - Impérative (`Benchmark.Run`) pour les tests ad hoc ; basée sur les attributs (`[Benchmark]` + générateur de source) pour les suites structurées
 - **Générateur de Source Compatible AOT** - Le générateur incrémental émet des appels de méthode directs sans réflexion à l'exécution
 - **Multiplateforme** - Support complet pour Windows, Linux et macOS
@@ -14,7 +14,7 @@ Une bibliothèque de benchmarking légère et sans dépendances pour .NET avec *
 - **Limites Déclarées** - `OverheadNs`, `ResolutionLimitNanoseconds`, `ResolutionLimited` et `Unmeasured` disent ce qu'un run a pu résoudre et ce qu'il n'a pas pu résoudre, afin qu'un résultat au niveau du bruit ne puisse pas être lu comme une opération rapide
 - **Suivi GC** - Surveille les comptes de collection Gen0/Gen1/Gen2 pendant les benchmarks (setup/teardown exclus)
 - **Comptage de Cycles CPU** - Cycles mesurés à l'échelle du thread sur le chemin synchrone (`QueryThreadCycleTime` sous Windows ; `perf_event` sous Linux lorsque l'OS autorise l'accès non privilégié). Les benchmarks asynchrones lisent un compteur à l'échelle du processus, car un compteur par thread ne peut pas être suivi lors des changements de thread, et sont signalés `CpuCyclesAreApproximate` (`~` dans les quatre formats). macOS n'a pas de compteur de cycles : `mach_absolute_time` est un proxy *temporel* monotone, pas des cycles, et il est signalé de la même manière
-- **Analyse Statistique** - Moyenne, Médiane, P90, P95, P99, Minimum, Maximum, Écart Type, erreur standard et écart-type relatif
+- **Analyse Statistique** - `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError` et écart-type relatif (`RSD`). Les percentiles utilisent une interpolation linéaire entre les deux échantillons voisins (la méthode dite *type 7* — `PERCENTILE.INC` d'Excel, valeur par défaut de NumPy) et la variance est la variance d'échantillon (`N-1`) ; en dessous d'une vingtaine d'échantillons, P99 est proche du maximum, donc les colonnes de queue ne décrivent pas une queue stable.
 - **Formats de Sortie Multiples** - Quatre formateurs intégrés (`IFormatter`) (Console, Markdown, HTML, CSV) plus une sortie de résumé programmatique
 - **Benchmarks Paramétrés** - Attribut `[Params]` avec itération automatique du produit cartésien
 - **Support de Comparaison** - Base et candidat mesurés en rounds entrelacés ; le verdict est la médiane des ratios appariés par round et exige à la fois une bande morte de 5% et un intervalle sans hypothèse de distribution qui exclut la parité, afin que le bruit d'un round à l'autre ne soit pas publié comme une amélioration
@@ -219,14 +219,50 @@ var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 Les deux APIs prennent en charge le travail asynchrone. Les méthodes de benchmark asynchrones sont attendues (await) à chaque itération ; les méthodes de cycle de vie peuvent mélanger synchrone et asynchrone dans la même classe.
 
 ```csharp
+// Impérative
 var result = await Benchmark.RunAsync("Http call", async () =>
 {
     using var response = await httpClient.GetAsync(url);
 });
 
-var scoped = await Benchmark.RunScopedAsync("Scoped",
+// setup/teardown asynchrone par échantillon
+var result2 = await Benchmark.RunAsync(
+    "With lifecycle",
+    action: async () => await DoWorkAsync(),
+    warmup: async () => await DoWorkAsync(),
+    config: BenchmarkConfig.Quick,
+    setup: async () => await ResetStateAsync(),
+    teardown: async () => await DisposeStateAsync());
+
+// Avec état asynchrone (aucune allocation de fermeture ; pas de surcharge setup/teardown)
+var result3 = await Benchmark.RunAsync("Stateful", state, async s => await ProcessAsync(s));
+
+// Portées asynchrones (compatible DI)
+var result4 = await Benchmark.RunScopedAsync("Scoped",
     () => container.CreateScope(),
     async scope => await scope.Service.DoWorkAsync());
+```
+
+Les classes basées sur des attributs peuvent déclarer des benchmarks asynchrones et des méthodes de cycle de vie asynchrones :
+
+```csharp
+[BenchmarkClass]
+public partial class IoBenchmarks
+{
+    private string _path = "";
+
+    [GlobalSetup]
+    public async Task SetupAsync() => await File.WriteAllTextAsync(_path, "data");
+
+    [IterationSetup]
+    public async Task ResetAsync() => await Task.Yield();
+
+    [Benchmark(Baseline = true)]
+    public async Task ReadAsync() => await File.ReadAllTextAsync(_path);
+
+    [Benchmark]
+    public void ReadSync() => File.ReadAllText(_path);
+}
 ```
 
 - **Modes de mesure** – `AsyncTimingMode.WallClock` (par défaut) mesure la durée totale, suspensions await comprises ; `AsyncTimingMode.CpuOnly` mesure `Process.TotalProcessorTime` et exclut l'attente d'E/S. L'horloge CPU n'avance que par tics du minuteur (généralement 10–16 ms) ; l'auto-calibration relève donc son budget minimal d'échantillon à la granularité mesurée de l'horloge. Le mode CpuOnly ne collecte pas de données GC.
@@ -287,13 +323,16 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000,
-    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
+    ForceGcBeforeBenchmark = true,  // false ignore le GC complet forcé avant le benchmark
+    BoostPriorities     = true,   // relève la priorité du processus/thread pendant le run, puis la restaure
+    TimingMode          = AsyncTimingMode.WallClock, // ou CpuOnly (asynchrone uniquement)
+    CancellationToken   = default,                   // asynchrone uniquement ; les benchmarks synchrones l'ignorent
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-Lorsque l'auto-calibrage est activé, PicoBench augmente `IterationsPerSample` jusqu'à atteindre un budget minimal de temps par échantillon ou `MaxAutoIterationsPerSample`. C'est particulièrement utile pour les opérations très rapides autrement dominées par le bruit du minuteur. Définissez `ForceGcBeforeBenchmark = false` pour ignorer le GC complet forcé qui précède la phase de collecte — utile avec de nombreux benchmarks et combinaisons de paramètres.
+Lorsque l'auto-calibrage est activé, PicoBench augmente `IterationsPerSample` jusqu'à atteindre un budget minimal de temps par échantillon ou `MaxAutoIterationsPerSample`. C'est particulièrement utile pour les opérations très rapides autrement dominées par le bruit du minuteur. Définissez `ForceGcBeforeBenchmark = false` pour ignorer le GC complet forcé qui précède la phase de collecte — utile avec de nombreux benchmarks et combinaisons de paramètres.L'auto-calibrage est **optionnel** (`AutoCalibrateIterations` vaut `false` par défaut et la préconfiguration `Default` ne touche pas au nombre d'itérations configuré) : PicoBench ne gonfle jamais les itérations en silence pour faire paraître un résultat résoluble — en mode `CpuOnly`, le budget relevé est la granularité mesurée de l'horloge CPU, car toute valeur plus courte se lit comme zéro.
 
 ---
 
@@ -313,7 +352,21 @@ var csv      = new CsvFormatter();         // CSV pour l'analyse de données
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Les sorties Console, Markdown, HTML et CSV incluent des métadonnées orientées précision comme l'erreur standard, l'écart-type relatif et des notes sur le compteur CPU lorsqu'elles sont disponibles.
+Les quatre formateurs affichent le même jeu de métriques par opération — `Avg`, `P50`, `P90`, `P95`, `P99`, `StandardError` et l'écart-type relatif (colonne `RSD (%)`) — ainsi que les notes sur le compteur CPU lorsqu'elles existent. Le tableau de suites de Console porte aussi les colonnes `StdErr` et `RSD` (elles manquaient auparavant, si bien que le signal de bruit n'apparaissait pas dans la sortie par défaut) ; Console, Markdown et HTML utilisent la même unité de tableau pour les mêmes données, et le CSV reste toujours en nanosecondes (voir ci-dessous).
+
+### Profil de précision : raw versus display
+
+Un même chiffre a deux rôles, et les formateurs les séparent au lieu que chacun cherche son propre compromis : une valeur est soit **raw** — les nanosecondes telles que mesurées —, soit **display** — cette même valeur ramenée à l'unité qui convient au tableau.
+
+- **Raw** (`MetricPrecision.Raw`): des nanosecondes brutes, et l'en-tête de colonne (ou le nom de colonne CSV, `Avg_ns`, `StdErr_ns`, …) indique `ns`. `CsvFormatter` écrit toujours cette forme, quelle que soit l'unité que les données préféreraient, car un fichier dont l'unité change avec l'ordre de grandeur des données n'est pas lisible par une machine.
+- **Display** (`MetricPrecision.Display`): le tableau choisit **une** unité pour toutes ses colonnes par opération — `ns` en dessous de 1 000 ns, `µs` en dessous de 1 000 µs, `ms` en dessous de 1 000 ms, des secondes au-delà — et la nomme dans l'en-tête (`Avg (µs)`). Une unité par tableau, et non par cellule, pour que la colonne reste comparable : un benchmark de cinq secondes se lit `5.0` sous `Avg (s)` et son voisin à 150 ns se lit `0.0` sous le même en-tête, au lieu d'être remis à l'échelle en silence.
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // 5000000000.0 sous "Avg (ns)"
+```
+
+Le texte affiché est identique en Console, Markdown et HTML (un test le compare caractère par caractère) et le nombre brut est toujours dans le CSV : un affichage remis à l'échelle ne devient donc jamais la seule copie d'une mesure.
 
 ### Cibles de Formatage
 
@@ -338,7 +391,8 @@ var options = new FormatterOptions
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
-    CandidateLabel        = "New"
+    CandidateLabel        = "New",
+    PrecisionProfile      = MetricPrecision.Display, // ou .Raw ; le CSV écrit toujours raw
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -359,7 +413,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### Contrat des Colonnes CSV
 
-`CsvFormatter` écrit une ligne d'en-tête, puis des lignes de données ; une suite ajoute des lignes de commentaire `#` (`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) et deux sections, `# Results` et `# Comparisons`, **chacune avec sa propre ligne d'en-tête**. Un fichier a donc plus d'une ligne d'en-tête — `pandas.read_csv(path, comment='#')` ignore les commentaires, mais vous devez découper vous-même les deux sections. La première ligne d'un fichier de résultats est cette ligne de contrat `# Schema: v2; …`, et toute ligne commençant par `#` est un commentaire que le lecteur doit ignorer.
+`CsvFormatter` écrit une ligne d'en-tête, puis des lignes de données ; une suite ajoute des lignes de commentaire `#` (`# Schema:` ligne de contrat ; lignes de métadonnées `# key,value` : `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`) et deux sections, `# Results` et `# Comparisons`, **chacune avec sa propre ligne d'en-tête**. Un fichier a donc plus d'une ligne d'en-tête — `pandas.read_csv(path, comment='#')` ignore les commentaires, mais vous devez découper vous-même les deux sections. La première ligne d'un fichier de résultats est cette ligne de contrat `# Schema: v2; …`, et toute ligne commençant par `#` est un commentaire que le lecteur doit ignorer.
+
+Une ligne de métadonnées ne se poursuit jamais sur la ligne physique suivante : un saut de ligne dans une valeur est écrit sous forme des deux caractères `\n` (CRLF, CR et LF de la même façon), et la valeur est mise entre guillemets CSV si nécessaire. C'est ce qui rend `comment='#'` sûr pour une description sur plusieurs lignes.
 
 Colonnes de résultats, dans cet ordre (options par défaut ; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` et `IncludeTimestamp` suppriment leurs colonnes quand ils valent `false`) :
 
@@ -387,13 +443,13 @@ Colonnes de résultats, dans cet ordre (options par défaut ; `IncludePercentile
 
 Deux conséquences pour les consommateurs : à cause de `<0.02`, une colonne par opération n'est **pas** garantie numérique, donc des lecteurs comme pandas infèrent `object` et vous devez traiter explicitement les lignes de borne ; et `GCApproximate` a été inséré en position 17, entre `GC2` et `SampleCount`, donc **les lecteurs positionnels doivent décaler `SampleCount`/`IterationsPerSample` d'une position** (les lecteurs par nom ne sont pas affectés).
 
-Colonnes de comparaisons : `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Chaque comparaison écrit deux lignes — le candidat d'abord, puis la base — et `Speedup` n'est renseigné que sur la ligne du candidat. Les cellules par opération des comparaisons passent par le même formateur que le tableau de résultats : `<limit` et `N/A` y apparaissent donc aussi, et `CpuCycles` porte le même marqueur `~` (`CpuCyclesAreApproximate`).
+Colonnes de comparaisons : `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`, `SampleCount`, `IterationsPerSample`. Chaque comparaison écrit deux lignes — le candidat d'abord, puis la base — et `Speedup` n'est renseigné que sur la ligne du candidat. Les cellules par opération des comparaisons passent par le même formateur que le tableau de résultats : `<limit` et `N/A` y apparaissent donc aussi, et `CpuCycles` porte le même marqueur `~` (`CpuCyclesAreApproximate`).
 
 La ligne `# Schema:` est livrée et occupe la **première ligne du fichier** : un fichier de résultats (et un fichier de suite qui contient des résultats) commence par le contrat qui décrit les colonnes qui suivent, et une section de comparaisons écrit sa propre ligne de contrat juste avant `# Comparisons` :
 
 ```
-# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
-# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg) | "N/A" (no finite ratio: 0/0 or too few paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
 ```
 
 `v2` est la forme du Batch 0 — les trois états de cellule par opération ci-dessus plus `GCApproximate`. La liste `columns=` est dérivée de la ligne d'en-tête réellement écrite : elle ne peut donc pas dériver des tableaux ci-dessus et ne nomme jamais une colonne qu'une option a retirée ; `section=` distingue les deux lignes de contrat. Un lecteur doit ignorer toute ligne commençant par `#` et lire l'ordre des colonnes dans la liste `columns=` au lieu de le coder en dur.
@@ -409,7 +465,7 @@ La ligne `# Schema:` est livrée et occupe la **première ligne du fichier** : u
 | `BenchmarkSuite` | Nom, Description, Résultats, Comparaisons, Environnement, Durée, Horodatage |
 | `ComparisonOutcome` | Énumération : `Unknown` (aucun ratio n'a pu être calculé), `Inconclusive` (à l'intérieur de la bande morte de 5%, ou l'intervalle contient encore la parité), `Faster`, `Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() — intervalle à 95% sans hypothèse de distribution de la médiane des ratios appariés |
-| `Statistics` | Moyenne, P50, P90, P95, P99, Minimum, Maximum, ÉcartType, StandardError, RelativeStdDevPercent, CyclesCpuParOp, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
+| `Statistics` | `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError`, `RelativeStdDevPercent`, `CpuCyclesPerOp`, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
 | `TimingSample` | NanosecondesÉcoulées, MillisecondesÉcoulées, TicksÉcoulés, CyclesCpu, **CpuCyclesAreApproximate**, GcInfo |
 | `GcInfo` | Gen0, Gen1, Gen2, Total, EstZéro, IsApproximate |
 | `EnvironmentInfo` | OS, Architecture, VersionRuntime, NombreProcesseurs, Mode d'exécution, Configuration, type / disponibilité / signification du compteur CPU, étiquettes personnalisées |
@@ -484,11 +540,13 @@ Sous macOS, le compteur CPU exporté est un proxy *temporel* monotone à haute r
 | `StringVsStringBuilder` | Impérative | Compare `string +=`, `StringBuilder` et `StringBuilder` avec capacité |
 | `AttributeBased` | Basée sur les attributs | Même comparaison en utilisant `[Benchmark]`, `[Params]` et le générateur de source |
 | `CollectionBenchmarks` | Basée sur les attributs | Recherche List vs Dictionary vs HashSet - montre chaque attribut |
+| `AsyncBenchmarks` | Attribut (asynchrone) | Point d'entrée asynchrone et cycle de vie mixte : `BenchmarkRunner.RunAsync<T>()`, `[GlobalSetup]`/`[IterationSetup]` asynchrones, `[Benchmark]` renvoyant `Task`, et `SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---
@@ -497,7 +555,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 | Caractéristique | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
-| Dépendances | 0 | Nombreuses |
+| Dépendances | 1 polyfill BCL | Nombreuses |
 | Taille du package | Petite | Grande |
 | Framework cible | netstandard2.0 | net6.0+ |
 | Support AOT | Générateur de source | Basé sur la réflexion |

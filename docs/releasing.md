@@ -11,7 +11,12 @@ copy.
 The rule is enforced in code, not in a wiki: `tools/release-build.sh` refuses to
 produce artifacts unless `HEAD` is `main` and the tree is clean.
 
-Consumer-visible changes for the package you are about to ship are in [release-notes/batch0.md](release-notes/batch0.md).
+Consumer-visible changes for the package you are about to ship are in
+[release-notes/batch0.md](release-notes/batch0.md) (the measurement contract) and
+[release-notes/batch2.md](release-notes/batch2.md) (output fidelity: invariant
+numbers, `N/A` for a non-finite ratio, a legal CSV, the precision profile, escaped
+user text and the percentile definition).
+
 ## Build with `tools/release-build.sh`
 
 ```bash

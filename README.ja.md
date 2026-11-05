@@ -2,11 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
-軽量で依存関係ゼロの.NETベンチマークライブラリで、**2つの補完的API**を提供します：命令型APIと、属性ベースでソース生成される、完全に**AOT互換**のAPIです。
+軽量な.NETベンチマークライブラリで、**2つの補完的API**を提供します：命令型APIと、属性ベースでソース生成される、完全に**AOT互換**のAPIです。NuGet 参照は netstandard2.0 で `ValueTask<T>` を補う BCL polyfill（`System.Threading.Tasks.Extensions`）が 1 つだけです。
 
 ## 特徴
 
-- **依存関係ゼロ** - 純粋な.NET実装、外部パッケージ不要
+- **サードパーティ依存なし** — netstandard2.0 で `ValueTask<T>` を補う BCL polyfill（`System.Threading.Tasks.Extensions`）が 1 つだけ。外部パッケージはありません
 - **2つのAPI** - アドホックテスト用の命令型API (`Benchmark.Run`)；構造化されたスイート用の属性ベースAPI (`[Benchmark]` + ソースジェネレーター)
 - **AOT互換ソースジェネレーター** - インクリメンタルジェネレーターが実行時に直接メソッド呼び出しを生成、リフレクションゼロ
 - **クロスプラットフォーム** - Windows、Linux、macOSを完全サポート
@@ -14,7 +14,7 @@
 - **開示された限界** - `OverheadNs`、`ResolutionLimitNanoseconds`、`ResolutionLimited`、`Unmeasured` は、その実行が何を分解できて何を分解できなかったかを示すため、ノイズレベルの結果を高速な操作として読み違えることはありません
 - **GC追跡** - ベンチマーク中のGen0/Gen1/Gen2コレクション回数を監視（setup/teardown を除く）
 - **CPUサイクルカウント** - 同期パスではスレッドスコープのサイクル数を取得します（Windows `QueryThreadCycleTime`；Linux では OS が非特権アクセスを許可する場合 `perf_event`）。非同期ベンチマークはプロセス全体のカウンターを読み（スレッド単位のカウンターはスレッド遷移をまたいで追跡できないため）、`CpuCyclesAreApproximate` のフラグが立ちます（4つの全フォーマットで `~`）。macOS にはサイクルカウンターがなく、`mach_absolute_time` はサイクルではなく単調な*時間*プロキシであり、同じフラグが立ちます
-- **統計分析** - 平均、中央値、P90、P95、P99、最小値、最大値、標準偏差、標準誤差、相対標準偏差
+- **統計分析** - `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`（相対標準偏差 `RSD`）。パーセンタイルは隣接する 2 標本の線形補間（統計パッケージでいう *type 7*、Excel `PERCENTILE.INC` と NumPy の既定）で求め、分散は不偏分散（`N-1`）です。標本数が約 20 未満では P99 が最大値に近づくため、テール列は安定した裾を意味しません。
 - **複数出力形式** - 4 つの組み込み `IFormatter` フォーマッター（Console、Markdown、HTML、CSV）とプログラム要約出力
 - **パラメータ化ベンチマーク** - `[Params]`属性で自動デカルト積反復
 - **比較サポート** - ベースラインと候補を交互のラウンドで計測し、判定にはラウンドごとのペア比の中央値を使います。5% のデッドバンドと、同等性を排除する分布非依存の区間の両方が必要なので、ラウンド間のノイズが改善として公表されることはありません
@@ -217,14 +217,50 @@ var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 両方の API が非同期処理をサポートします。非同期ベンチマークメソッドはイテレーションごとに await され、ライフサイクルメソッドは同じクラス内で同期と非同期を混在できます。
 
 ```csharp
+// 命令型
 var result = await Benchmark.RunAsync("Http call", async () =>
 {
     using var response = await httpClient.GetAsync(url);
 });
 
-var scoped = await Benchmark.RunScopedAsync("Scoped",
+// サンプルごとの非同期 setup/teardown
+var result2 = await Benchmark.RunAsync(
+    "With lifecycle",
+    action: async () => await DoWorkAsync(),
+    warmup: async () => await DoWorkAsync(),
+    config: BenchmarkConfig.Quick,
+    setup: async () => await ResetStateAsync(),
+    teardown: async () => await DisposeStateAsync());
+
+// 状態を持つ非同期（クロージャ割り当てなし。setup/teardown オーバーロードなし）
+var result3 = await Benchmark.RunAsync("Stateful", state, async s => await ProcessAsync(s));
+
+// 非同期スコープ（DI フレンドリー）
+var result4 = await Benchmark.RunScopedAsync("Scoped",
     () => container.CreateScope(),
     async scope => await scope.Service.DoWorkAsync());
+```
+
+属性ベースのクラスでは、非同期ベンチマークと非同期ライフサイクルメソッドを宣言できます:
+
+```csharp
+[BenchmarkClass]
+public partial class IoBenchmarks
+{
+    private string _path = "";
+
+    [GlobalSetup]
+    public async Task SetupAsync() => await File.WriteAllTextAsync(_path, "data");
+
+    [IterationSetup]
+    public async Task ResetAsync() => await Task.Yield();
+
+    [Benchmark(Baseline = true)]
+    public async Task ReadAsync() => await File.ReadAllTextAsync(_path);
+
+    [Benchmark]
+    public void ReadSync() => File.ReadAllText(_path);
+}
 ```
 
 - **計測モード** – `AsyncTimingMode.WallClock`（既定）は await による中断を含む総時間を計測します。`AsyncTimingMode.CpuOnly` は `Process.TotalProcessorTime` を計測し、I/O 待ちを除外します。CPU クロックは OS のタイマーティック（通常 10〜16 ms）単位でしか進まないため、自動キャリブレーションは最小サンプル予算を実測したクロック粒度まで引き上げます。CpuOnly モードでは GC データを収集しません。
@@ -285,13 +321,16 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000,
-    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
+    ForceGcBeforeBenchmark = true,  // false でベンチマーク前の強制フル GC をスキップ
+    BoostPriorities     = true,   // 実行中だけプロセス/スレッドの優先度を上げ、終了後に元へ戻す
+    TimingMode          = AsyncTimingMode.WallClock, // または CpuOnly（非同期のみ）
+    CancellationToken   = default,                   // 非同期のみ。同期ベンチマークは無視します
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-自動キャリブレーションを有効にすると、PicoBench は最小サンプル時間の予算に達するか、`MaxAutoIterationsPerSample` に達するまで `IterationsPerSample` を増やします。これは、タイマーノイズの影響を受けやすい極めて高速な処理で特に有効です。 多数のベンチマークとパラメーターの組み合わせを実行する場合、`ForceGcBeforeBenchmark = false` に設定するとコレクション段階前の強制フル GC をスキップできます。
+自動キャリブレーションを有効にすると、PicoBench は最小サンプル時間の予算に達するか、`MaxAutoIterationsPerSample` に達するまで `IterationsPerSample` を増やします。これは、タイマーノイズの影響を受けやすい極めて高速な処理で特に有効です。 多数のベンチマークとパラメーターの組み合わせを実行する場合、`ForceGcBeforeBenchmark = false` に設定するとコレクション段階前の強制フル GC をスキップできます。自動キャリブレーションは**オプトイン**です（`AutoCalibrateIterations` の既定値は `false` で、`Default` プリセットも設定された反復数を変更しません）。PicoBench が結果を解決可能に見せるために反復数を黙って水増しすることはありません — `CpuOnly` モードで引き上げられる予算は実測した CPU クロック粒度で、それより短い値はゼロとして読まれるためです。
 
 ---
 
@@ -311,7 +350,21 @@ var csv      = new CsvFormatter();         // データ分析用CSV
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console、Markdown、HTML、CSV の出力には、標準誤差、相対標準偏差、利用可能な場合の CPU カウンター注記など、精度指向のメタデータが含まれます。
+4 つのフォーマッターはすべて同じ 1 操作あたりの指標 — `Avg`、`P50`、`P90`、`P95`、`P99`、`StandardError`、相対標準偏差（`RSD (%)` 列）— と、利用可能な場合の CPU カウンター注記を表示します。Console のスイート表にも `StdErr` と `RSD` 列があります（以前は欠けていたため、ノイズの信号が既定の出力に現れませんでした）。Console、Markdown、HTML は同じデータに同じ表の単位を使い、CSV は常にナノ秒のままです（下記参照）。
+
+### 精度プロファイル：raw と display
+
+1 つの数値には 2 つの役割があり、フォーマッターはそれぞれが折衷するのではなく、両者を分けます。値は **raw**（実測そのままのナノ秒）か **display**（その表に合う単位へ換算した同じ値）のどちらかです。
+
+- **Raw** (`MetricPrecision.Raw`): 裸のナノ秒で、列見出し（または CSV 列名 `Avg_ns`、`StdErr_ns` など）が `ns` と明示します。データにどの単位が似合うかに関係なく `CsvFormatter` は常にこの形で書きます — 単位がデータの桁で変わるデータファイルは機械可読ではありません。
+- **Display** (`MetricPrecision.Display`): 表のすべての 1 操作あたり列に対して**1 つ**の単位を選び — 1 000 ns 未満は `ns`、1 000 µs 未満は `µs`、1 000 ms 未満は `ms`、それ以上は秒 — その単位を見出しに書きます（`Avg (µs)`）。セルごとではなく表ごとに 1 単位なので、列は比較可能なままです。5 秒のベンチマークは `Avg (s)` の下で `5.0` と読め、同じ見出しの下で 150 ns の隣は `0.0` と読めます（黙って単位が変わることはありません）。
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // "Avg (ns)" の下に 5000000000.0
+```
+
+Console、Markdown、HTML で表示される文字列は完全に同一で（テストが 1 文字ずつ照合します）、生の数値は常に CSV にあります。したがって換算後の表示だけが測定値の唯一のコピーになることはありません。
 
 ### フォーマット対象
 
@@ -336,7 +389,8 @@ var options = new FormatterOptions
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
-    CandidateLabel        = "New"
+    CandidateLabel        = "New",
+    PrecisionProfile      = MetricPrecision.Display, // または .Raw；CSV は常に raw
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -357,7 +411,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 列の契約
 
-`CsvFormatter` はヘッダー行を書き、続けてデータ行を書きます。スイートは `#` コメント行（`# Schema:`, `# Suite:`、`# Environment:`、`# CpuCounter:`、`# CpuCounterNote:`、`# GcInfoNote:`、`# Timestamp:`、`# Duration:`）と2つのセクション `# Results` と `# Comparisons` を追加し、**それぞれが独自のヘッダー行**を持ちます。したがってファイルには複数のヘッダー行があるため、`pandas.read_csv(path, comment='#')` はコメントをスキップしますが、2つのセクションは自分で分割する必要があります。結果ファイルの先頭行はこの `# Schema: v2; …` 契約行であり、`#` で始まる行はすべてパーサーがスキップすべきコメントです。
+`CsvFormatter` はヘッダー行を書き、続けてデータ行を書きます。スイートは `#` コメント行（`# Schema:` 契約行、`# key,value` メタデータ行: `Suite`、`Description`、`Environment`、`CpuCounter`、`CpuCounterNote`、`GcInfoNote`、`Timestamp`、`Duration`、`NoiseNote`）と2つのセクション `# Results` と `# Comparisons` を追加し、**それぞれが独自のヘッダー行**を持ちます。したがってファイルには複数のヘッダー行があるため、`pandas.read_csv(path, comment='#')` はコメントをスキップしますが、2つのセクションは自分で分割する必要があります。結果ファイルの先頭行はこの `# Schema: v2; …` 契約行であり、`#` で始まる行はすべてパーサーがスキップすべきコメントです。
+
+メタデータ行が次の物理行に続くことはありません。値の中の改行は 2 文字 `\n`（CRLF・CR・LF を同様に）として書かれ、必要なら CSV の引用符が付きます。これにより、行をまたぐ説明でも `comment='#'` が安全になります。
 
 結果の列（この順序、既定オプション。`IncludePercentiles`、`IncludeGcInfo`、`IncludeCpuCycles`、`IncludeTimestamp` を `false` にすると対応する列が消えます）:
 
@@ -385,13 +441,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 消費側への2つの影響: `<0.02` のため、1操作あたりの列が**数値であることは保証されません**。そのため pandas のようなリーダーは `object` と推論し、上限の行を明示的に扱う必要があります。また `GCApproximate` は `GC2` と `SampleCount` の間の位置17に挿入されたため、**位置ベースのリーダーは `SampleCount`/`IterationsPerSample` を1つずらす必要があります**（名前ベースのリーダーは影響を受けません）。
 
-比較の列: `TestCase`、`Provider`、`Avg_ns`、`Speedup`、`P50_ns`、`P90_ns`、`P99_ns`、`StdErr_ns`、`RSD_pct`、`CpuCycles`、`GC0`、`GC1`、`GC2`、`GCApproximate`。各比較は2行（候補が先、ベースラインが後）を書き、`Speedup` は候補の行にのみ入ります。比較の1操作あたりのセルは結果テーブルと同じフォーマッターを通るため、`<limit` と `N/A` はそこにも現れ、`CpuCycles` には同じ `~` マーカー（`CpuCyclesAreApproximate`）が付きます。
+比較の列: `TestCase`、`Provider`、`Avg_ns`、`Speedup`、`P50_ns`、`P90_ns`、`P99_ns`、`StdErr_ns`、`RSD_pct`、`CpuCycles`、`GC0`、`GC1`、`GC2`、`GCApproximate`、`SampleCount`、`IterationsPerSample`。各比較は2行（候補が先、ベースラインが後）を書き、`Speedup` は候補の行にのみ入ります。比較の1操作あたりのセルは結果テーブルと同じフォーマッターを通るため、`<limit` と `N/A` はそこにも現れ、`CpuCycles` には同じ `~` マーカー（`CpuCyclesAreApproximate`）が付きます。
 
 `# Schema:` 行はすでに実装済みで、**ファイルの先頭行**です。結果ファイル（および結果を持つスイートファイル）は、続く列を説明する契約行から始まり、比較セクションは `# Comparisons` の直前に自分自身の契約行を書きます:
 
 ```
-# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
-# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg) | "N/A" (no finite ratio: 0/0 or too few paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
 ```
 
 `v2` は Batch 0 の形 — 上記の1操作あたりの3つのセル状態に `GCApproximate` を加えたものです。`columns=` の一覧は実際に書かれるヘッダー行から生成されるため、上記の表とずれることはなく、オプションで消えた列を挙げることもありません。`section=` が2つの契約行を区別します。パーサーは `#` で始まるすべての行をスキップし、列順はハードコードせず `columns=` の一覧から読む必要があります。
@@ -407,7 +463,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | `BenchmarkSuite` | 名前、説明、結果、比較、環境、期間、タイムスタンプ |
 | `ComparisonOutcome` | 列挙型: `Unknown`（比率を計算できなかった）、`Inconclusive`（5% デッドバンド内、または区間が依然として同等性を含む）、`Faster`、`Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() — 中央値ペア比の分布非依存な95%区間 |
-| `Statistics` | 平均、P50、P90、P95、P99、最小、最大、標準偏差、StandardError、RelativeStdDevPercent、操作あたりCPUサイクル、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GcInfo、HasHighVariance |
+| `Statistics` | `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`、`RelativeStdDevPercent`、`CpuCyclesPerOp`、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GcInfo、HasHighVariance |
 | `TimingSample` | 経過ナノ秒、経過ミリ秒、経過ティック、CPUサイクル、**CpuCyclesAreApproximate**、GcInfo |
 | `GcInfo` | Gen0、Gen1、Gen2、合計、ゼロか、IsApproximate |
 | `EnvironmentInfo` | OS、アーキテクチャ、ランタイムバージョン、プロセッサ数、実行モード、設定、CPUカウンター種別 / 可用性 / 意味の有無、カスタムタグ |
@@ -482,11 +538,13 @@ macOS では、エクスポートされる CPU カウンターはアーキテク
 | `StringVsStringBuilder` | 命令型 | `string +=`、`StringBuilder`、容量指定`StringBuilder`の比較 |
 | `AttributeBased` | 属性ベース | `[Benchmark]`、`[Params]`、ソースジェネレーターを使用した同じ比較 |
 | `CollectionBenchmarks` | 属性ベース | List vs Dictionary vs HashSet検索 - すべての属性を展示 |
+| `AsyncBenchmarks` | 属性（非同期） | 非同期エントリーポイントと混在ライフサイクル：`BenchmarkRunner.RunAsync<T>()`、非同期 `[GlobalSetup]`/`[IterationSetup]`、`Task` を返す `[Benchmark]`、`SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---
@@ -495,7 +553,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 | 機能 | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
-| 依存関係 | 0 | 多数 |
+| 依存関係 | BCL polyfill 1 個 | 多数 |
 | パッケージサイズ | 小 | 大 |
 | ターゲットフレームワーク | netstandard2.0 | net6.0+ |
 | AOTサポート | ソースジェネレーター | リフレクションベース |

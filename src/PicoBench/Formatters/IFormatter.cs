@@ -82,6 +82,20 @@ public sealed class FormatterOptions
                     );
     } = 2;
 
+    /// <summary>
+    /// How per-operation figures are rendered, or <c>null</c> for the formatter's
+    /// own default (Batch 2 · 2.4, B2-M5/M6).
+    /// <para>
+    /// <see cref="MetricPrecision.Display"/> scales a table to its readable unit
+    /// and names that unit in the header; <see cref="MetricPrecision.Raw"/> stays
+    /// in nanoseconds. The default is per format on purpose: Console, Markdown and
+    /// HTML are read by a human (<c>Display</c>), while CSV is read by a program
+    /// and its columns are named <c>_ns</c>, so <see cref="CsvFormatter"/> always
+    /// writes raw nanoseconds and ignores this setting.
+    /// </para>
+    /// </summary>
+    public MetricPrecision? PrecisionProfile { get; init; }
+
     /// <summary>Label for the baseline result in comparisons.</summary>
     public string BaselineLabel { get; init; } = "Baseline";
 
@@ -213,21 +227,171 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     #endregion
 
     /// <summary>
-    /// Format a nanosecond value using the configured precision.
+    /// Format a nanosecond value using the configured precision, <b>without</b> any
+    /// unit scaling: the raw tier.
+    /// <para>
+    /// Batch 2 · 2.4 (B2-M6): the built-in display formatters no longer call this
+    /// for a table cell — a cell goes through <see cref="MetricCell"/> under the
+    /// table's <see cref="TimeUnit"/>, so a five-second benchmark reads
+    /// <c>5.0</c> under an <c>(s)</c> header instead of <c>5000000000.0</c> under
+    /// an <c>(ns)</c> one. It stays available (a custom formatter may want the raw
+    /// nanoseconds in a fixed unit) and stays in nanoseconds on purpose.
+    /// </para>
     /// </summary>
-    protected string FormatTime(double nanoseconds)
+    protected string FormatTime(double nanoseconds) =>
+        FormatMetric(nanoseconds, Options.TimeDecimalPlaces);
+
+    /// <summary>
+    /// Invariant fixed-point rendering of one metric: nanoseconds, RSD percent,
+    /// CPU cycles or seconds.
+    /// <para>
+    /// Batch 2 · 2.1 (B2-H1): the library's "invariant culture" policy used to
+    /// live in <see cref="FormatTime"/> and <see cref="FormatSpeedup"/> only,
+    /// while the RSD/cycle/duration/speedup figures the four formatters
+    /// <em>also</em> print went through <c>$"{x:F1}"</c>, i.e. through
+    /// <see cref="CultureInfo.CurrentCulture"/>. A de-DE machine therefore wrote
+    /// <c>12,3</c> into a column whose neighbours used <c>.</c>. Every numeric
+    /// cell now goes through this one method, and no formatter may interpolate a
+    /// metric with a format specifier again.
+    /// </para>
+    /// <para>
+    /// A non-finite value (NaN, ±∞) is <b>not</b> a number this library can
+    /// report: it renders as <see cref="NotCollected"/>. Batch 2 · 2.2 (B2-M2):
+    /// <c>("F1")</c> on a double returns the word "Infinity" under the invariant
+    /// culture and "∞"/"ليس رقم" under others, so a <c>+∞</c> ratio printed as the
+    /// pseudo token <c>Infinityx</c> in one column and <c>∞x</c> in the next.
+    /// </para>
+    /// <para>
+    /// <c>internal</c> rather than <c>protected</c> because
+    /// <see cref="SummaryFormatter"/> is a static helper outside the base class
+    /// and prints the same speedup/duration figures the box of the other
+    /// formatters does.
+    /// </para>
+    /// </summary>
+    internal static string FormatMetric(double value, int decimals) =>
+        IsFinite(value)
+            ? value.ToString(
+                "F" + decimals.ToString(CultureInfo.InvariantCulture),
+                CultureInfo.InvariantCulture
+            )
+            : NotCollected;
+
+    /// <summary>
+    /// True when <paramref name="value"/> is a real number. The library targets
+    /// <c>netstandard2.0</c>, where <c>double.IsFinite</c> does not exist, so the
+    /// two-part test lives here instead of being open-coded per formatter.
+    /// </summary>
+    internal static bool IsFinite(double value) =>
+        !double.IsNaN(value) && !double.IsInfinity(value);
+
+    /// <summary>
+    /// Timestamp of a run: Gregorian calendar, invariant culture, second
+    /// precision. Interpolating a <see cref="DateTime"/> with
+    /// <c>yyyy-MM-dd HH:mm:ss</c> formats it in
+    /// <see cref="CultureInfo.CurrentCulture"/>'s <em>calendar</em>, which turns
+    /// "2026-11-02 UTC" into "2569-11-02 UTC" on th-TH and "1448-05-22 UTC" on
+    /// ar-SA — a wrong date wearing a UTC label (Batch 2 · 2.1).
+    /// </summary>
+    internal static string FormatTimestamp(DateTime timestamp) =>
+        timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The precision profile actually in effect: the caller's
+    /// <see cref="FormatterOptions.PrecisionProfile"/>, or this format's own
+    /// default. Batch 2 · 2.4 (B2-M5/M6).
+    /// </summary>
+    internal MetricPrecision Precision => Options.PrecisionProfile ?? DefaultPrecision;
+
+    /// <summary>
+    /// This format's own precision profile when the caller did not ask for one.
+    /// <c>Display</c> for the three human-readable formats, <c>Raw</c> for
+    /// <see cref="CsvFormatter"/> (whose columns are named <c>_ns</c>).
+    /// <c>internal</c> rather than <c>protected</c> so that choosing a default is
+    /// not a new public extension point.
+    /// </summary>
+    internal virtual MetricPrecision DefaultPrecision => MetricPrecision.Display;
+
+    /// <summary>
+    /// The unit one per-operation table is written in: nanoseconds under the
+    /// <see cref="MetricPrecision.Raw"/> profile, otherwise the readable unit of
+    /// the table's largest value. Every per-operation column of one table must use
+    /// the same <see cref="TimeUnit"/>, so the unit is computed from the whole
+    /// column set once instead of per cell.
+    /// </summary>
+    internal TimeUnit TableUnit(IEnumerable<double> perOpValues) =>
+        Precision == MetricPrecision.Raw
+            ? TimeUnit.Nanoseconds
+            : TimeUnit.For(MaxFinite(perOpValues));
+
+    /// <summary>The largest finite value of a sequence; 0 when there is none.</summary>
+    internal static double MaxFinite(IEnumerable<double> values)
     {
-        return nanoseconds.ToString($"F{Options.TimeDecimalPlaces}", CultureInfo.InvariantCulture);
+        var max = 0.0;
+        foreach (var value in values)
+        {
+            if (IsFinite(value) && value > max)
+                max = value;
+        }
+        return max;
     }
 
     /// <summary>
-    /// Format a speedup ratio using the configured precision.
+    /// One per-operation cell under a table's unit: the metric with
+    /// <see cref="FormatterOptions.TimeDecimalPlaces"/> decimals, or
+    /// <see cref="NotCollected"/> when the value is not a number.
     /// </summary>
-    protected string FormatSpeedup(double speedup)
+    internal string MetricCell(TimeUnit unit, double nanoseconds) =>
+        FormatMetric(unit.Of(nanoseconds), Options.TimeDecimalPlaces);
+
+    /// <summary>
+    /// An upper bound (<c>&lt;limit</c>) under a table's unit. The bound is a floor,
+    /// not a round number: under a coarse unit (a <c>0.345 ns</c> limit in a
+    /// <c>µs</c> column) one decimal would print <c>&lt;0.0</c>, which claims the
+    /// value is bounded by zero. The precision therefore widens until the first
+    /// significant digit appears, and never narrows below the configured one.
+    /// </summary>
+    internal string BoundCell(TimeUnit unit, double nanoseconds) =>
+        "<" + BoundCellValue(unit, nanoseconds);
+
+    /// <summary>
+    /// The number of an upper bound, without the <c>&lt;</c>: HTML has to write the
+    /// sign as an entity, so each format adds its own marker to the same number.
+    /// </summary>
+    internal string BoundCellValue(TimeUnit unit, double nanoseconds)
     {
-        return speedup.ToString($"F{Options.SpeedupDecimalPlaces}", CultureInfo.InvariantCulture)
-            + "x";
+        var scaled = unit.Of(nanoseconds);
+        var decimals = Options.TimeDecimalPlaces;
+        while (decimals < 9 && scaled != 0 && Math.Abs(scaled) < Math.Pow(10, -decimals) / 2)
+            decimals++;
+        return FormatMetric(scaled, decimals);
     }
+
+    /// <summary>Duration as seconds with two decimals plus its unit (invariant).</summary>
+    internal static string FormatDuration(TimeSpan duration) =>
+        FormatMetric(duration.TotalSeconds, 2) + "s";
+
+    /// <summary>
+    /// Invariant speedup ratio with its <c>x</c> suffix. Shared so the four
+    /// formatters cannot render the same ratio with two different precisions or
+    /// two different decimal separators (Batch 2 · 2.1 / 2.2).
+    /// </summary>
+    internal static string FormatSpeedupValue(double? speedup, int decimals) =>
+        speedup is { } value && IsFinite(value)
+            ? FormatMetric(value, decimals) + "x"
+            : NotCollected;
+
+    /// <summary>
+    /// Format a speedup ratio using the configured precision.
+    /// <para>
+    /// A <c>NaN</c> ratio (0/0, or fewer paired rounds than the sign test needs)
+    /// and a <c>+∞</c> ratio (the candidate cost is zero) both render as
+    /// <see cref="NotCollected"/>: appending <c>x</c> to a non-finite number is
+    /// what produced the token <c>Infinityx</c> (Batch 2 · 2.2, B2-M2). The
+    /// comparison's verdict — <c>unknown (not measurable)</c> — carries the "why".
+    /// </para>
+    /// </summary>
+    protected string FormatSpeedup(double speedup) =>
+        FormatSpeedupValue(speedup, Options.SpeedupDecimalPlaces);
 
     /// <summary>
     /// Cell text every formatter uses for "this value was not collected".
@@ -262,6 +426,11 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     /// </summary>
     public static string GetSpeedupIndicator(double speedup)
     {
+        // A ratio that does not exist cannot be indicted as "fast" or "slow":
+        // no marker is attached to the N/A cell it renders as (Batch 2 · 2.2).
+        if (!IsFinite(speedup))
+            return "";
+
         return speedup switch
         {
             >= 10 => "***",

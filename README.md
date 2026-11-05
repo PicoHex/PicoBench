@@ -18,7 +18,7 @@ A lightweight benchmarking library for .NET with **two complementary APIs**: an 
 - **Disclosed Limits** - `OverheadNs`, `ResolutionLimitNanoseconds`, `ResolutionLimited` and `Unmeasured` say what a run could and could not resolve, so a noise-level result cannot be read as a fast operation
 - **GC Tracking** - Monitors Gen0/Gen1/Gen2 collection counts during benchmarks (setup/teardown excluded)
 - **CPU Cycle Counting** - Thread-scoped cycle counts on the synchronous path (Windows `QueryThreadCycleTime`; Linux `perf_event` when the OS permits unprivileged access). Asynchronous benchmarks read a process-wide counter, because a per-thread counter cannot be followed across thread hops, and are flagged `CpuCyclesAreApproximate` (`~` in all four formats). macOS has no cycle counter: `mach_absolute_time` is a monotonic *time* proxy, not cycles, and is flagged the same way
-- **Statistical Analysis** - Mean, Median, P90, P95, P99, Min, Max, StdDev, StdErr, and relative standard deviation
+- **Statistical Analysis** - `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError` and relative standard deviation (`RSD`). Percentiles use linear interpolation between the two nearest samples (the method statistics packages call *type 7* — Excel `PERCENTILE.INC`, NumPy's default) and the variance is the sample variance (`N-1`); below about 20 samples P99 sits close to Max, so the tail columns do not describe a stable tail.
 - **Multiple Output Formats** - Four built-in formatters (Console, Markdown, HTML, CSV) plus programmatic summary output
 - **Parameterised Benchmarks** - `[Params]` attribute with automatic Cartesian product iteration
 - **Comparison Support** - Baseline vs candidate measured in interleaved rounds; the verdict is the median of the paired per-round ratios and needs both a 5% dead band and a distribution-free interval that excludes parity, so round-to-round noise is not published as an improvement
@@ -358,7 +358,21 @@ var csv      = new CsvFormatter();         // CSV for data analysis
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console, Markdown, HTML, and CSV outputs include precision-oriented metadata such as standard error, relative standard deviation, and CPU counter notes when available.
+All four formatters show the same per-operation metrics — `Avg`, `P50`, `P90`, `P95`, `P99`, `StandardError` and the relative standard deviation (`RSD (%)` column) — plus the CPU counter notes when available. The Console suite table carries `StdErr` and `RSD` columns as well; it used to omit them, so the noise signal was missing from the default rendering. Console, Markdown and HTML print the same table unit for the same data, and CSV always stays in nanoseconds (see below).
+
+### Precision profile: raw versus display
+
+One figure has two jobs, and the formatters keep them apart instead of each picking its own compromise. A value is either **raw** — nanoseconds, exactly as measured — or **display** — the same value scaled to the unit that fits the table.
+
+- **Raw** (`MetricPrecision.Raw`): plain nanoseconds, and the column header (or the CSV column name, `Avg_ns`, `StdErr_ns`, …) says `ns`. `CsvFormatter` always writes this, whatever unit the data would prefer, because a data file whose unit changes with the magnitude of the data is not machine-readable.
+- **Display** (`MetricPrecision.Display`): the table picks one unit for all of its per-operation columns — `ns` below 1 000 ns, `µs` below 1 000 µs, `ms` below 1 000 ms, seconds above that — and names it in the header (`Avg (µs)`). One unit per table, not per cell, so a column stays comparable: a five-second benchmark reads `5.0` under `Avg (s)` and its 150 ns neighbour reads `0.0` under the same header instead of being silently rescaled.
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // 5000000000.0 in "Avg (ns)"
+```
+
+The displayed value is the same text in Console, Markdown and HTML (a test asserts it character for character), and the raw number is always in the CSV, so a scaled display never becomes the only copy of a measurement.
 
 ### Formatting Targets
 
@@ -382,6 +396,7 @@ var options = new FormatterOptions
     IncludePercentiles    = true,
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
+    PrecisionProfile      = MetricPrecision.Display, // or .Raw; CSV always writes raw
     BaselineLabel         = "Old",
     CandidateLabel        = "New",
     OutputDirectory       = "results", // Used by WriteToFile methods
@@ -404,7 +419,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV Column Contract
 
-`CsvFormatter` writes a header row, then data rows; a suite adds `#` comment lines (`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`) and two sections, `# Results` and `# Comparisons`, **each with its own header row**. A file therefore has more than one header line — `pandas.read_csv(path, comment='#')` skips the comments but you must split the two sections yourself. The first line of a results file is that `# Schema: v2; …` contract line, and every line starting with `#` is a comment a parser must skip.
+`CsvFormatter` writes a header row, then data rows; a suite adds `#` comment lines (`# Schema:` (contract line), `# key,value` metadata rows: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`) and two sections, `# Results` and `# Comparisons`, **each with its own header row**. A file therefore has more than one header line — `pandas.read_csv(path, comment='#')` skips the comments but you must split the two sections yourself. The first line of a results file is that `# Schema: v2; …` contract line, and every line starting with `#` is a comment a parser must skip.
+
+A metadata row never continues on the next physical line: a line break inside a value is written as the two characters `\n` (CRLF, CR and LF alike), and the value is CSV-quoted when it still needs to be. That is what makes `comment='#'` safe for a description that spans lines.
 
 Results columns, in this order (default options; `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles` and `IncludeTimestamp` remove their columns when `false`):
 
@@ -432,13 +449,13 @@ Cell states of a per-operation column:
 
 Two consequences for consumers: because of `<0.02` a per-operation column is **not** guaranteed to be numeric, so readers such as pandas infer `object` and you have to handle the bound rows explicitly; and `GCApproximate` was inserted at position 17, between `GC2` and `SampleCount`, so **positional readers must shift `SampleCount`/`IterationsPerSample` by one** (name-based readers are unaffected).
 
-Comparisons columns: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. Each comparison writes two rows — candidate first, then baseline — and `Speedup` is filled only on the candidate row. The comparison per-operation cells go through the same formatter as the results table, so `<limit` and `N/A` appear there too, and `CpuCycles` carries the same `~` marker (`CpuCyclesAreApproximate`).
+Comparisons columns: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`, `SampleCount`, `IterationsPerSample`. Each comparison writes two rows — candidate first, then baseline — and `Speedup` is filled only on the candidate row. The comparison per-operation cells go through the same formatter as the results table, so `<limit` and `N/A` appear there too, and `CpuCycles` carries the same `~` marker (`CpuCyclesAreApproximate`).
 
 The `# Schema:` line has landed, and it is the plain **first line of the file**: a results file (and a suite file that has results) opens with the contract that describes the columns below it, and a comparisons section writes its own contract line just before `# Comparisons`:
 
 ```
-# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
-# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg) | "N/A" (no finite ratio: 0/0 or too few paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
 ```
 
 `v2` is the Batch 0 shape — the three per-operation cell states above plus `GCApproximate`. The `columns=` list is derived from the header row that is really written, so it cannot drift from the tables above and never names a column an option removed; `section=` separates the two contract lines. A parser must skip every line that starts with `#` and read the column order from the `columns=` list instead of hard-coding it.
@@ -529,11 +546,13 @@ On macOS the exported CPU counter is a high-resolution monotonic *time* proxy ra
 | `StringVsStringBuilder` | Imperative | Compares `string +=`, `StringBuilder`, and `StringBuilder` with capacity |
 | `AttributeBased` | Attribute | Same comparison using `[Benchmark]`, `[Params]`, and the source generator |
 | `CollectionBenchmarks` | Attribute | List vs Dictionary vs HashSet lookup - showcases every attribute |
+| `AsyncBenchmarks` | Attribute (async) | Async entry point and mixed lifecycle: `BenchmarkRunner.RunAsync<T>()`, async `[GlobalSetup]`/`[IterationSetup]`, `[Benchmark]` returning `Task`, and `SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---

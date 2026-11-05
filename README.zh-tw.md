@@ -2,11 +2,11 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
-一個輕量級、零依賴的 .NET 基準測試庫，提供 **兩種互補的 API**：命令式 API 和基於屬性、源生成的 API，完全 **AOT 相容**。
+一個輕量級的 .NET 基準測試庫，提供 **兩種互補的 API**：命令式 API 和基於屬性、源生成的 API，完全 **AOT 相容**。除了一個 BCL polyfill（`System.Threading.Tasks.Extensions`，用於在 netstandard2.0 補回 `ValueTask<T>`）以外沒有任何 NuGet 引用。
 
 ## 特性
 
-- **零依賴** - 純 .NET 實現，無需外部套件
+- **無第三方依賴** —— 只有 1 個 BCL polyfill（`System.Threading.Tasks.Extensions`），用於在 netstandard2.0 補回 `ValueTask<T>`；沒有其他外部套件
 - **兩種 API** - 命令式 (`Benchmark.Run`) 用於臨時測試；基於屬性 (`[Benchmark]` + 源生成器) 用於結構化測試套件
 - **AOT 相容的源生成器** - 增量生成器在執行時生成直接方法呼叫，零反射
 - **跨平台** - 完全支援 Windows、Linux 和 macOS
@@ -14,7 +14,7 @@
 - **顯式揭露的極限** - `OverheadNs`、`ResolutionLimitNanoseconds`、`ResolutionLimited` 與 `Unmeasured` 說明了本次執行能夠解析與無法解析什麼，因此雜訊級的結果不會被當作快速操作來讀
 - **GC 追蹤** - 監控基準測試期間的 Gen0/Gen1/Gen2 回收計數（不含 setup/teardown）
 - **CPU 週期計數** - 同步路徑使用執行緒級週期計數（Windows `QueryThreadCycleTime`；Linux 在作業系統允許非特權存取時使用 `perf_event`）。非同步基準讀取進程級計數器，因為執行緒級計數器無法跨執行緒切換追蹤，因此標記為 `CpuCyclesAreApproximate`（四種格式中均帶 `~`）。macOS 沒有週期計數器：`mach_absolute_time` 是單調的*時間*代理，而不是週期，同樣會被標記
-- **統計分析** - 均值、中位數、P90、P95、P99、最小值、最大值、標準差、標準誤和相對標準差
+- **統計分析** - `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`（相對標準差 `RSD`）。分位數採用最近兩個樣本之間的線性插值（統計軟體稱之為 *type 7*，即 Excel `PERCENTILE.INC` 與 NumPy 的預設口徑），變異數為樣本變異數（除以 `N-1`）；樣本數少於約 20 時 P99 接近最大值，因此尾部分位數並不代表穩定的尾部。
 - **多種輸出格式** - 4 個內建 `IFormatter` 格式化器（Console、Markdown、HTML、CSV）以及程式化摘要輸出
 - **參數化基準測試** - `[Params]` 屬性，支援自動笛卡爾積迭代
 - **比較支援** - 基準與候選在交錯輪次中測量；結論取每輪配對比值的中位數，並且必須同時滿足 5% 死區與排除持平的分佈無關區間，因此輪次間的雜訊不會被當作效能提升發佈
@@ -219,14 +219,50 @@ var suite2 = BenchmarkRunner.Run(instance, BenchmarkConfig.Quick);
 兩種 API 都支援非同步工作。非同步基準方法按迭代 await；同一類中可混用同步與非同步生命週期方法。
 
 ```csharp
+// 命令式
 var result = await Benchmark.RunAsync("Http call", async () =>
 {
     using var response = await httpClient.GetAsync(url);
 });
 
-var scoped = await Benchmark.RunScopedAsync("Scoped",
+// 逐樣本非同步 setup/teardown
+var result2 = await Benchmark.RunAsync(
+    "With lifecycle",
+    action: async () => await DoWorkAsync(),
+    warmup: async () => await DoWorkAsync(),
+    config: BenchmarkConfig.Quick,
+    setup: async () => await ResetStateAsync(),
+    teardown: async () => await DisposeStateAsync());
+
+// 帶狀態的非同步（無閉包配置；沒有 setup/teardown 多載）
+var result3 = await Benchmark.RunAsync("Stateful", state, async s => await ProcessAsync(s));
+
+// 非同步作用域（對 DI 友善）
+var result4 = await Benchmark.RunScopedAsync("Scoped",
     () => container.CreateScope(),
     async scope => await scope.Service.DoWorkAsync());
+```
+
+屬性式類別可以宣告非同步基準與非同步生命週期方法：
+
+```csharp
+[BenchmarkClass]
+public partial class IoBenchmarks
+{
+    private string _path = "";
+
+    [GlobalSetup]
+    public async Task SetupAsync() => await File.WriteAllTextAsync(_path, "data");
+
+    [IterationSetup]
+    public async Task ResetAsync() => await Task.Yield();
+
+    [Benchmark(Baseline = true)]
+    public async Task ReadAsync() => await File.ReadAllTextAsync(_path);
+
+    [Benchmark]
+    public void ReadSync() => File.ReadAllText(_path);
+}
 ```
 
 - **計時模式** —— `AsyncTimingMode.WallClock`（預設）統計包含 await 掛起的完整時長；`AsyncTimingMode.CpuOnly` 統計 `Process.TotalProcessorTime`，排除 I/O 等待。CPU 時鐘以作業系統定時器刻度推進（通常 10–16 ms），因此該模式下自動校準會把最小採樣預算提升到實測時鐘粒度。CpuOnly 模式不收集 GC 資料。
@@ -287,13 +323,16 @@ var config = new BenchmarkConfig
     AutoCalibrateIterations = true,
     MinSampleTime       = TimeSpan.FromMilliseconds(0.5),
     MaxAutoIterationsPerSample = 1_000_000,
-    ForceGcBeforeBenchmark = true,  // false skips the pre-benchmark full GC
+    ForceGcBeforeBenchmark = true,  // false 表示跳過基準前的強制完整 GC
+    BoostPriorities     = true,   // 僅在本次執行期間提升進程/執行緒優先級，結束後還原
+    TimingMode          = AsyncTimingMode.WallClock, // 或 CpuOnly（僅非同步）
+    CancellationToken   = default,                   // 僅非同步；同步基準會忽略它
 };
 
 var result = Benchmark.Run("Test", action, config);
 ```
 
-啟用自動校準後，PicoBench 會自動增加 `IterationsPerSample`，直到達到最小樣本耗時預算，或命中 `MaxAutoIterationsPerSample` 上限。這對極快操作特別有用，可降低計時噪聲影響。 將 `ForceGcBeforeBenchmark` 設為 `false` 可跳過取樣階段之前的強制完整 GC——在執行大量基準與參數組合時很有用。
+啟用自動校準後，PicoBench 會自動增加 `IterationsPerSample`，直到達到最小樣本耗時預算，或命中 `MaxAutoIterationsPerSample` 上限。這對極快操作特別有用，可降低計時噪聲影響。 將 `ForceGcBeforeBenchmark` 設為 `false` 可跳過取樣階段之前的強制完整 GC——在執行大量基準與參數組合時很有用。自動校準是**選擇性開啟**的（`AutoCalibrateIterations` 預設為 `false`，`Default` 預設也不會改動所配置的迭代數）：PicoBench 從不悄悄放大迭代數來讓結果看起來可解析 —— 在 `CpuOnly` 模式下，抬高後的預算就是實測的 CPU 時鐘粒度，因為更短的值一律被讀作零。
 
 ---
 
@@ -313,7 +352,21 @@ var csv      = new CsvFormatter();         // CSV 用於數據分析
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-控制台、Markdown、HTML 和 CSV 輸出會包含更偏精度分析的元資料，例如標準誤、相對標準差，以及 CPU 計數器語義說明。
+四種格式化器都會展示同一組每操作指標 —— `Avg`、`P50`、`P90`、`P95`、`P99`、`StandardError` 與相對標準差（`RSD (%)` 欄）—— 以及可用時的 CPU 計數器說明。Console 的套件表同樣帶有 `StdErr` 與 `RSD` 兩欄（先前缺漏，雜訊訊號在預設輸出裡根本看不到）。Console、Markdown 與 HTML 對同一份資料列印同一個表格單位，而 CSV 始終以奈秒給出（見下文）。
+
+### 精度檔案：raw 與 display
+
+同一個數值承擔兩項職責，格式化器把它們分開，而不是各自取一個折衷：一個取值不是 **raw** —— 按實測原樣的奈秒數 —— 就是 **display** —— 縮放到適合該表格的單位後的同一個值。
+
+- **Raw** (`MetricPrecision.Raw`): 裸露的奈秒數，並且欄標題（或 CSV 欄名 `Avg_ns`、`StdErr_ns` 等）寫明 `ns`。無論資料更適合哪個單位，`CsvFormatter` 永遠寫這一檔 —— 單位隨資料量級變化的資料檔案不是機器可讀的。
+- **Display** (`MetricPrecision.Display`): 整張表為其所有每操作欄選**一個**單位 —— 小於 1 000 ns 用 `ns`，小於 1 000 µs 用 `µs`，小於 1 000 ms 用 `ms`，更大用秒 —— 並把該單位寫進欄標題（`Avg (µs)`）。一個表一個單位、而不是一格一個單位，欄才繼續可比：5 秒的基準在 `Avg (s)` 下讀作 `5.0`，同一標題下 150 ns 的鄰居讀作 `0.0`，而不是被悄悄換算了單位。
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // 在 "Avg (ns)" 下輸出 5000000000.0
+```
+
+Console、Markdown 與 HTML 顯示的文字完全相同（有測試逐字元斷言），而原始數字始終在 CSV 中，因此縮放後的顯示永遠不會成為某次測量的唯一副本。
 
 ### 格式化目標
 
@@ -338,7 +391,8 @@ var options = new FormatterOptions
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
-    CandidateLabel        = "New"
+    CandidateLabel        = "New",
+    PrecisionProfile      = MetricPrecision.Display, // 或 .Raw；CSV 恆寫 raw
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -359,7 +413,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 欄契約
 
-`CsvFormatter` 先寫一行表頭，再寫資料列；套件會額外寫入 `#` 註解行（`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`）以及兩個區段 `# Results` 與 `# Comparisons`，**每個區段都有自己的表頭行**。因此一個檔案中存在不止一行表頭 —— `pandas.read_csv(path, comment='#')` 會跳過註解行，但兩個區段需要你自己拆分。結果檔案的首行就是這條 `# Schema: v2; …` 契約行，任何以 `#` 開頭的行都是註解，解析器必須跳過。
+`CsvFormatter` 先寫一行表頭，再寫資料列；套件會額外寫入 `#` 註解行（`# Schema:` 契約行；`# key,value` 中繼資料列：`Suite`、`Description`、`Environment`、`CpuCounter`、`CpuCounterNote`、`GcInfoNote`、`Timestamp`、`Duration`、`NoiseNote`）以及兩個區段 `# Results` 與 `# Comparisons`，**每個區段都有自己的表頭行**。因此一個檔案中存在不止一行表頭 —— `pandas.read_csv(path, comment='#')` 會跳過註解行，但兩個區段需要你自己拆分。結果檔案的首行就是這條 `# Schema: v2; …` 契約行，任何以 `#` 開頭的行都是註解，解析器必須跳過。
+
+中繼資料列永遠不會延續到下一個實體行：值中的換行會寫成兩個字元 `\n`（CRLF、CR、LF 同等處理），需要時再依 CSV 規則加引號。這正是 `comment='#'` 對跨行描述也安全的原因。
 
 結果欄，按以下順序（預設選項；`IncludePercentiles`、`IncludeGcInfo`、`IncludeCpuCycles` 與 `IncludeTimestamp` 為 `false` 時會移除各自的欄）：
 
@@ -387,13 +443,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 對使用者而言有兩點後果：由於 `<0.02` 的存在，每操作欄**不保證是數值型**，因此 pandas 之類的讀取器會推斷為 `object`，你必須顯式處理上界列；而 `GCApproximate` 被插入到第 17 位，位於 `GC2` 與 `SampleCount` 之間，所以**按位置讀取的程式碼必須把 `SampleCount`/`IterationsPerSample` 後移一位**（按欄名讀取不受影響）。
 
-比較欄：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`。每個比較會寫出兩列 —— 候選在前，基準在後 —— 並且 `Speedup` 只填在候選列。比較的每操作儲存格與結果表走同一個格式化器，因此 `<limit` 與 `N/A` 也會出現在那裡，`CpuCycles` 帶同樣的 `~` 標記（`CpuCyclesAreApproximate`）。
+比較欄：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`, `SampleCount`, `IterationsPerSample`。每個比較會寫出兩列 —— 候選在前，基準在後 —— 並且 `Speedup` 只填在候選列。比較的每操作儲存格與結果表走同一個格式化器，因此 `<limit` 與 `N/A` 也會出現在那裡，`CpuCycles` 帶同樣的 `~` 標記（`CpuCyclesAreApproximate`）。
 
 `# Schema:` 行已經落地，並且就是**檔案首行**：結果檔案（以及含結果的套件檔案）以這段描述後續欄位的契約行開頭，比較區段則在 `# Comparisons` 之前再寫一條自己的契約行：
 
 ```
-# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
-# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg) | "N/A" (no finite ratio: 0/0 or too few paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
 ```
 
 `v2` 即 Batch 0 的形態 —— 上文的每操作三態加上 `GCApproximate`。`columns=` 清單由實際寫出的表頭行推導，因此不會與上面的表偏離，也不會列出被選項關掉的欄；`section=` 用來區分兩條契約行。解析器必須跳過所有以 `#` 開頭的行，並從 `columns=` 清單讀取欄序，而不是硬編碼。
@@ -409,7 +465,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | `BenchmarkSuite` | 名稱、描述、結果、比較、環境、持續時間、時間戳 |
 | `ComparisonOutcome` | 列舉：`Unknown`（無法計算任何比值）、`Inconclusive`（落在 5% 死區內，或區間仍包含持平）、`Faster`、`Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() —— 中位配對比值的分佈無關 95% 區間 |
-| `Statistics` | 平均值、P50、P90、P95、P99、最小值、最大值、標準差、標準誤、相對標準差百分比、每操作 CPU 週期、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GC 信息、HasHighVariance |
+| `Statistics` | `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`、`RelativeStdDevPercent`、`CpuCyclesPerOp`、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、`GcInfo`、HasHighVariance |
 | `TimingSample` | 奈秒耗時、毫秒耗時、計時器滴答數、CPU 週期、**CpuCyclesAreApproximate**、GC 信息 |
 | `GcInfo` | Gen0、Gen1、Gen2、總計、是否為零、IsApproximate |
 | `EnvironmentInfo` | 操作系統、架構、執行時版本、處理器數量、執行模式、配置、CPU 計數器類型 / 可用性 / 是否有意義、自訂標籤 |
@@ -484,11 +540,13 @@ src/
 | `StringVsStringBuilder` | 命令式 | 比較 `string +=`、`StringBuilder` 和帶容量的 `StringBuilder` |
 | `AttributeBased` | 基於屬性 | 使用 `[Benchmark]`、`[Params]` 和源生成器的相同比較 |
 | `CollectionBenchmarks` | 基於屬性 | List vs Dictionary vs HashSet 查找 - 展示所有屬性 |
+| `AsyncBenchmarks` | 屬性（非同步） | 非同步入口與混合生命週期：`BenchmarkRunner.RunAsync<T>()`、非同步 `[GlobalSetup]`/`[IterationSetup]`、回傳 `Task` 的 `[Benchmark]`，以及 `SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---
@@ -497,7 +555,7 @@ dotnet run --project samples/CollectionBenchmarks -c Release
 
 | 功能 | PicoBench | BenchmarkDotNet |
 |---------|-----------|----------------|
-| 依賴 | 0 | 多 |
+| 依賴 | 1 個 BCL polyfill | 多個 |
 | 套件大小 | 小 | 大 |
 | 目標框架 | netstandard2.0 | net6.0+ |
 | AOT 支援 | 源生成器 | 基於反射 |

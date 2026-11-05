@@ -18,7 +18,7 @@
 - **공개된 한계** - `OverheadNs`, `ResolutionLimitNanoseconds`, `ResolutionLimited`, `Unmeasured`는 해당 실행이 무엇을 분해할 수 있었고 무엇을 분해할 수 없었는지를 알려주므로, 노이즈 수준의 결과를 빠른 작업으로 오독할 수 없습니다
 - **GC 추적** - 벤치마크 중 Gen0/Gen1/Gen2 수집 횟수를 모니터링합니다(설정/해제 제외)
 - **CPU 사이클 측정** - 동기 경로에서는 스레드 범위 사이클 수를 측정합니다(Windows `QueryThreadCycleTime`; Linux는 운영체제가 비특권 접근을 허용할 때 `perf_event`). 비동기 벤치마크는 프로세스 전역 카운터를 읽으며(스레드별 카운터는 스레드 전환을 넘어 추적할 수 없기 때문), `CpuCyclesAreApproximate`로 플래그가 지정됩니다(네 가지 형식 모두에서 `~`). macOS에는 사이클 카운터가 없습니다: `mach_absolute_time`은 사이클이 아닌 단조 *시간* 프록시이며 같은 방식으로 플래그가 지정됩니다
-- **통계 분석** - 평균, 중앙값, P90, P95, P99, 최소, 최대, 표준편차, 표준오차, 상대 표준편차
+- **통계 분석** - `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError`와 상대 표준 편차(`RSD`). 백분위수는 인접한 두 표본 사이의 선형 보간(통계 패키지가 *type 7*이라 부르는 방식, 즉 Excel `PERCENTILE.INC`와 NumPy 기본값)으로 계산하고 분산은 표본 분산(`N-1`)입니다. 표본 수가 약 20 미만이면 P99가 최댓값에 가까우므로 꼬리 열은 안정적인 꼬리를 뜻하지 않습니다.
 - **다양한 출력 형식** - 4개의 내장 포맷터(Console, Markdown, HTML, CSV)와 프로그래밍 방식 요약 출력
 - **매개변수화된 벤치마크** - 자동 카테시안 곱 반복을 지원하는 `[Params]` 특성
 - **비교 지원** - 기준선과 후보를 교차 라운드로 측정하고, 판정은 라운드별 페어 비율의 중앙값으로 합니다. 5% 데드 밴드와 동등성을 배제하는 분포 비의존 구간이 모두 필요하므로, 라운드 간 노이즈가 개선으로 게시되지 않습니다
@@ -356,7 +356,21 @@ var csv      = new CsvFormatter();         // CSV for data analysis
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console, Markdown, HTML, CSV 출력에는 표준오차, 상대 표준편차, 사용 가능한 경우 CPU 카운터 관련 참고 사항 등 정밀도 지향 메타데이터가 포함됩니다.
+네 포맷터 모두 동일한 작업당 지표 — `Avg`, `P50`, `P90`, `P95`, `P99`, `StandardError`, 상대 표준 편차(`RSD (%)` 열) — 와 사용 가능한 경우의 CPU 카운터 설명을 보여 줍니다. Console 스위트 표에도 `StdErr`와 `RSD` 열이 있습니다(이전에는 빠져 있어 노이즈 신호가 기본 출력에 보이지 않았습니다). Console·Markdown·HTML은 같은 데이터에 같은 표 단위를 쓰고, CSV는 항상 나노초로 남습니다(아래 참조).
+
+### 정밀도 프로파일: raw와 display
+
+같은 숫자가 두 가지 역할을 하므로, 포맷터는 각자 타협하지 않고 둘을 분리합니다. 값은 **raw** — 측정된 그대로의 나노초 — 이거나 **display** — 표에 맞는 단위로 환산한 같은 값 — 입니다.
+
+- **Raw** (`MetricPrecision.Raw`): 가공하지 않은 나노초이며, 열 머리글(또는 `Avg_ns`, `StdErr_ns` 같은 CSV 열 이름)이 `ns`라고 밝힙니다. 데이터에 어떤 단위가 어울리든 `CsvFormatter`는 항상 이 형태로 씁니다 — 단위가 데이터 크기에 따라 바뀌는 데이터 파일은 기계가 읽을 수 없습니다.
+- **Display** (`MetricPrecision.Display`): 표의 모든 작업당 열에 **하나**의 단위를 골라 — 1 000 ns 미만은 `ns`, 1 000 µs 미만은 `µs`, 1 000 ms 미만은 `ms`, 그 이상은 초 — 머리글에 그 단위를 적습니다(`Avg (µs)`). 셀이 아니라 표마다 하나의 단위이므로 열은 계속 비교 가능합니다. 5초 벤치마크는 `Avg (s)` 아래에서 `5.0`으로, 같은 머리글 아래의 150 ns 이웃은 `0.0`으로 읽히며 조용히 단위가 바뀌지 않습니다.
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // "Avg (ns)" 아래 5000000000.0
+```
+
+Console, Markdown, HTML에서 표시되는 문자열은 완전히 동일하고(테스트가 문자 단위로 단언합니다) 원래 숫자는 항상 CSV에 있으므로, 환산된 표시가 측정값의 유일한 사본이 되는 일은 없습니다.
 
 ### 포맷팅 대상
 
@@ -382,6 +396,7 @@ var options = new FormatterOptions
     SpeedupDecimalPlaces  = 2,
     BaselineLabel         = "Old",
     CandidateLabel        = "New",
+    PrecisionProfile      = MetricPrecision.Display, // 또는 .Raw; CSV는 항상 raw
     OutputDirectory       = "results", // Used by WriteToFile methods
 };
 
@@ -402,7 +417,9 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 열 계약
 
-`CsvFormatter`는 헤더 행을 쓰고 이어서 데이터 행을 씁니다. 스위트는 `#` 주석 행(`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`)과 두 섹션 `# Results`, `# Comparisons`를 추가하며, **각 섹션은 자체 헤더 행**을 가집니다. 따라서 파일에는 헤더 행이 둘 이상 있으므로 `pandas.read_csv(path, comment='#')`는 주석을 건너뛰지만 두 섹션은 직접 분할해야 합니다. 결과 파일의 첫 행이 이 `# Schema: v2; …` 계약 행이며, `#`로 시작하는 모든 행은 파서가 건너뛰어야 하는 주석입니다.
+`CsvFormatter`는 헤더 행을 쓰고 이어서 데이터 행을 씁니다. 스위트는 `#` 주석 행(`# Schema:` 계약 행, `# key,value` 메타데이터 행: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`)과 두 섹션 `# Results`, `# Comparisons`를 추가하며, **각 섹션은 자체 헤더 행**을 가집니다. 따라서 파일에는 헤더 행이 둘 이상 있으므로 `pandas.read_csv(path, comment='#')`는 주석을 건너뛰지만 두 섹션은 직접 분할해야 합니다. 결과 파일의 첫 행이 이 `# Schema: v2; …` 계약 행이며, `#`로 시작하는 모든 행은 파서가 건너뛰어야 하는 주석입니다.
+
+메타데이터 행은 다음 물리적 행으로 이어지지 않습니다. 값 안의 줄바꿈은 두 문자 `\n`으로 기록되며(CRLF, CR, LF 모두 동일), 필요하면 CSV 규칙대로 인용됩니다. 덕분에 여러 줄 설명에서도 `comment='#'`가 안전합니다.
 
 결과 열(이 순서, 기본 옵션. `IncludePercentiles`, `IncludeGcInfo`, `IncludeCpuCycles`, `IncludeTimestamp`를 `false`로 하면 해당 열이 사라집니다):
 
@@ -430,13 +447,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 소비자에게 두 가지 영향이 있습니다: `<0.02` 때문에 작업당 열은 **숫자임이 보장되지 않으므로** pandas 같은 리더는 `object`로 추론하며 상한 행을 명시적으로 처리해야 합니다. 또한 `GCApproximate`가 `GC2`와 `SampleCount` 사이인 17번 위치에 삽입되었으므로 **위치 기반 리더는 `SampleCount`/`IterationsPerSample`을 하나씩 밀어야 합니다**(이름 기반 리더는 영향을 받지 않음).
 
-비교 열: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`. 각 비교는 두 행(후보가 먼저, 기준선이 다음)을 쓰고 `Speedup`은 후보 행에만 채워집니다. 비교의 작업당 셀은 결과 테이블과 동일한 포맷터를 거치므로 `<limit`와 `N/A`가 거기에도 나타나며, `CpuCycles`에는 동일한 `~` 표시(`CpuCyclesAreApproximate`)가 붙습니다.
+비교 열: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`, `SampleCount`, `IterationsPerSample`. 각 비교는 두 행(후보가 먼저, 기준선이 다음)을 쓰고 `Speedup`은 후보 행에만 채워집니다. 비교의 작업당 셀은 결과 테이블과 동일한 포맷터를 거치므로 `<limit`와 `N/A`가 거기에도 나타나며, `CpuCycles`에는 동일한 `~` 표시(`CpuCyclesAreApproximate`)가 붙습니다.
 
 `# Schema:` 행은 이미 반영되었고 **파일의 첫 행**입니다. 결과 파일(그리고 결과가 있는 스위트 파일)은 뒤따르는 열을 설명하는 계약 행으로 시작하며, 비교 섹션은 `# Comparisons` 바로 앞에 자체 계약 행을 씁니다:
 
 ```
-# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
-# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg) | "N/A" (no finite ratio: 0/0 or too few paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
 ```
 
 `v2`는 Batch 0의 형태 — 위의 작업당 세 가지 셀 상태에 `GCApproximate`를 더한 것입니다. `columns=` 목록은 실제로 쓰이는 헤더 행에서 파생되므로 위 표와 어긋날 수 없고, 옵션으로 빠진 열을 나열하지도 않습니다. `section=`이 두 계약 행을 구분합니다. 파서는 `#`로 시작하는 모든 행을 건너뛰고, 열 순서는 하드코딩하지 말고 `columns=` 목록에서 읽어야 합니다.
@@ -527,11 +544,13 @@ macOS에서 내보내는 CPU 카운터는 아키텍처 사이클 수가 아닌 �
 | `StringVsStringBuilder` | 명령형 | `string +=`, `StringBuilder`, 용량을 지정한 `StringBuilder` 비교 |
 | `AttributeBased` | 속성 | `[Benchmark]`, `[Params]`, 소스 생성기를 사용한 동일 비교 |
 | `CollectionBenchmarks` | 속성 | List vs Dictionary vs HashSet 조회 - 모든 특성 시연 |
+| `AsyncBenchmarks` | 특성(비동기) | 비동기 진입점과 혼합 수명 주기: `BenchmarkRunner.RunAsync<T>()`, 비동기 `[GlobalSetup]`/`[IterationSetup]`, `Task`를 반환하는 `[Benchmark]`, `SummaryFormatter` |
 
 ```bash
 dotnet run --project samples/StringVsStringBuilder -c Release
 dotnet run --project samples/AttributeBased -c Release
 dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -c Release
 ```
 
 ---
