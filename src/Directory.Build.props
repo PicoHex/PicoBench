@@ -36,15 +36,7 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
-  <!-- Symbol packages (snupkg) -->
-  <PropertyGroup Condition="'$(IsPackable)' == 'true'">
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-  </PropertyGroup>
-
-  <!-- SourceLink for source-level debugging -->
-  <ItemGroup Condition="'$(IsPackable)' == 'true'">
-    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
-  </ItemGroup>
+  <!-- Symbol packages (snupkg) and SourceLink live in Directory.Build.targets:
+       a props file is evaluated before the project body, so it cannot see the
+       `<IsPackable>true</IsPackable>` that PicoBench.csproj declares (B5-M1). -->
 </Project>
