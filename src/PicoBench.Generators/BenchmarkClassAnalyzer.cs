@@ -688,7 +688,7 @@ internal static class BenchmarkClassAnalyzer
                             Diagnostic.Create(
                                 DiagnosticDescriptors.IncompatibleParamsValue,
                                 GetAttributeLocation(attr, ct),
-                                element.ToCSharpString(),
+                                CSharpLiteralFormatter.DescribeConstant(element),
                                 memberName,
                                 memberType.ToDisplayString()
                             )
