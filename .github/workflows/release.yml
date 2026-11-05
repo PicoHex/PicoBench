@@ -1,9 +1,24 @@
 name: Release
 
+# A release is a `v<year>.<x>.<y>` tag on main (see docs/releasing.md).
+#
+# The tag name is DATA, never code (B5-H2). git accepts names such as
+# `v1.0.0$(id)` or `v1.0.0";id;"`, and this workflow used to strip `refs/tags/v`
+# off the trigger and paste the remainder into `run:` scripts - in a job that
+# can mint a nuget.org API key. The name now arrives through `env:`, is
+# validated by a strict pattern in the very first step, and every later step
+# reads it as the shell variable `$RELEASE_VERSION`. No `${{ ... }}` expression
+# appears inside a shell block anywhere in this file.
+
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 2026.4.0 - the tag v<version> must already exist on main'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,12 +38,105 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
 
     steps:
+      # First step, before the checkout on purpose: a malformed tag fails the
+      # workflow before anything is fetched, restored, built or packed, so the
+      # value never reaches a job that holds write permissions.
+      #
+      # The body is a copy of scripts/validate-release-tag.sh (the file is not
+      # on disk before the checkout); scripts/tests/release-tag-validation.test.sh
+      # extracts this block and fails if the two drift apart.
+      - name: Validate the release tag
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          # Validates the release trigger before anything else runs (review item B5-H2).
+          #
+          # git allows tag names like `v1.0.0$(id)` or `v1.0.0";id;"`, and the release
+          # workflow used to strip the `refs/tags/v` prefix and inline the remainder into
+          # `run:` scripts. This script never interpolates the trigger text into a shell:
+          # every value arrives through the environment, is checked against a strict
+          # pattern, and only the validated version leaves the script (as a step output).
+          #
+          # Inputs (environment):
+          #   EVENT_NAME     github.event_name
+          #   REF_NAME       github.ref_name
+          #   REF_TYPE       github.ref_type
+          #   INPUT_VERSION  inputs.version (workflow_dispatch only)
+          #   GITHUB_OUTPUT  step output file (optional, written when set)
+          #
+          # Outputs: `version=<year>.<x>.<y>` and `tag=v<year>.<x>.<y>`.
+          set -euo pipefail
+
+          fail() {
+              echo "::error::$1" >&2
+              exit 1
+          }
+
+          event="${EVENT_NAME:-}"
+          ref_name="${REF_NAME:-}"
+          ref_type="${REF_TYPE:-}"
+          input_version="${INPUT_VERSION:-}"
+
+          case "$event" in
+              push)
+                  [ "$ref_type" = "tag" ] ||
+                      fail "the release workflow must run on a tag (ref_type='$ref_type')"
+                  tag="$ref_name"
+                  version="${tag#v}"
+                  ;;
+              workflow_dispatch)
+                  [ -n "$input_version" ] ||
+                      fail "workflow_dispatch requires the 'version' input (e.g. 2026.4.0); the release is cut from the existing v<version> tag"
+                  version="$input_version"
+                  tag="v$version"
+                  ;;
+              *)
+                  fail "unsupported release trigger '$event'"
+                  ;;
+          esac
+
+          # <four-digit year>.<x>.<y>, exactly the shape scripts/release.ps1 produces.
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]{4}\.[0-9]+\.[0-9]+$'; then
+              fail "malformed release version '$version': expected <year>.<x>.<y>, e.g. 2026.4.0"
+          fi
+
+          if [ "$tag" != "v$version" ]; then
+              fail "tag '$tag' does not match version '$version'"
+          fi
+
+          echo "release version: $version (tag $tag)"
+
+          if [ -n "${GITHUB_OUTPUT:-}" ]; then
+              {
+                  printf 'version=%s\n' "$version"
+                  printf 'tag=%s\n' "$tag"
+              } >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ steps.version.outputs.tag }}
+
+      # docs/releasing.md: every artifact is built from a commit on main. Until
+      # now nothing checked that, so a tag on a side branch packed stale code
+      # (B5-M2).
+      - name: Verify the release commit is on main
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: ./scripts/verify-release-commit-on-main.sh
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -39,38 +147,61 @@ jobs:
             **/*.csproj
             global.json
 
-      - name: Extract version from tag
-        id: version
-        shell: bash
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
-
       - name: Restore dependencies
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           mkdir -p ./artifacts/nupkg
-          dotnet restore PicoBench.slnx -p:Version=${{ steps.version.outputs.version }} -p:UseProjectReferences=true
+          dotnet restore PicoBench.slnx -p:Version="$RELEASE_VERSION" -p:UseProjectReferences=true
 
       - name: Build
-        run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }} -p:UseProjectReferences=true
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:Version="$RELEASE_VERSION" -p:UseProjectReferences=true
 
       - name: Run tests
+        shell: bash
         run: dotnet test --project tests/PicoBench.Tests/PicoBench.Tests.csproj --configuration Release --no-build --no-progress -p:UseProjectReferences=true
 
       - name: Restore package-consumption pack path
-        run: dotnet restore src/PicoBench/PicoBench.csproj -p:Version=${{ steps.version.outputs.version }} -p:UseProjectReferences=false
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: dotnet restore src/PicoBench/PicoBench.csproj -p:Version="$RELEASE_VERSION" -p:UseProjectReferences=false
 
       - name: Pack NuGet packages
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
+          set -euo pipefail
           rm -rf ./artifacts/nupkg
           mkdir -p ./artifacts/nupkg
-          dotnet pack src/PicoBench/PicoBench.csproj \
-            --configuration Release \
-            --no-restore \
-            --output ./artifacts/nupkg \
-            -p:Version=${{ steps.version.outputs.version }} \
-            -p:UseProjectReferences=false \
-            -p:ContinuousIntegrationBuild=true \
+          pack_args=(
+            src/PicoBench/PicoBench.csproj
+            --configuration Release
+            --no-restore
+            --output ./artifacts/nupkg
+            -p:Version="$RELEASE_VERSION"
+            -p:UseProjectReferences=false
+            -p:ContinuousIntegrationBuild=true
             -p:Deterministic=true
+          )
+          dotnet pack "${pack_args[@]}"
+          shopt -s nullglob
+          packages=(./artifacts/nupkg/*.nupkg ./artifacts/nupkg/*.snupkg)
+          echo "packed: ${packages[*]}"
+          for file in "${packages[@]}"; do
+            case "$file" in
+              *.snupkg) ;;
+              *) if [[ "$(basename "$file")" != "PicoBench.$RELEASE_VERSION.nupkg" ]]; then
+                   echo "::error::packed $(basename "$file") but the tag says $RELEASE_VERSION"
+                   exit 1
+                 fi ;;
+            esac
+          done
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
@@ -90,6 +221,9 @@ jobs:
       # GitHub OIDC: lets this job mint the identity token nuget.org trades for a
       # short-lived API key. Without it the login step has nothing to present.
       id-token: write
+    env:
+      RELEASE_VERSION: ${{ needs.pack.outputs.version }}
+      RELEASE_TAG: ${{ needs.pack.outputs.tag }}
 
     steps:
       - name: Download packages
@@ -103,12 +237,7 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Extract version from tag
-        id: version
-        shell: bash
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
-
-      - name: NuGet login (OIDC → temp API key)
+      - name: NuGet login (OIDC -> temp API key)
         uses: NuGet/login@v1
         id: login
         with:
@@ -116,23 +245,45 @@ jobs:
 
       - name: Publish to NuGet.org
         shell: bash
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
-          for file in ./artifacts/nupkg/*.nupkg; do
-            if [[ "$file" != *.snupkg ]] && [[ "$file" != *.symbols.nupkg ]]; then
-              dotnet nuget push "$file" \
-                --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
-                --source https://api.nuget.org/v3/index.json \
-                --skip-duplicate
-            fi
+          set -euo pipefail
+          shopt -s nullglob
+          packages=(./artifacts/nupkg/*.nupkg)
+          if [ ${#packages[@]} -eq 0 ]; then
+            echo "::error::no .nupkg to publish"
+            exit 1
+          fi
+          for file in "${packages[@]}"; do
+            case "$file" in *.snupkg|*.symbols.nupkg) continue;; esac
+            echo "pushing $(basename "$file") ($RELEASE_VERSION)"
+            push_args=(
+              "$file"
+              --api-key "$NUGET_API_KEY"
+              --source https://api.nuget.org/v3/index.json
+              --skip-duplicate
+            )
+            dotnet nuget push "${push_args[@]}"
           done
 
+      # `gh` is preinstalled on the hosted runners and is not a third-party
+      # action, so the release-notes step carries no unpinned dependency (B5-L1).
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.event.repository.name }} ${{ steps.version.outputs.version }}
-          draft: false
-          generate_release_notes: true
-          files: |
-            ./artifacts/nupkg/*.nupkg
-            ./artifacts/nupkg/*.snupkg
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(./artifacts/nupkg/*.nupkg ./artifacts/nupkg/*.snupkg)
+          release_args=(
+            "$RELEASE_TAG"
+            "${files[@]}"
+            --repo "$GH_REPO"
+            --title "PicoBench $RELEASE_VERSION"
+            --verify-tag
+            --generate-notes
+          )
+          gh release create "${release_args[@]}"
