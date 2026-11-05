@@ -731,6 +731,19 @@ internal static class BenchmarkClassAnalyzer
         };
     }
 
+    /// <summary>
+    /// Is this <c>[Params]</c> value assignable to the member?
+    /// <para>
+    /// Batch 1 · 1.5 (B3-H1): <c>Compilation.ClassifyConversion</c>
+    /// answers a <b>type-level</b> question only, and C# has a second rule for
+    /// constants: an <c>int</c> constant converts implicitly to
+    /// <c>sbyte/byte/short/ushort/uint/ulong/char</c> when the <b>value</b> fits.
+    /// Without it <c>[Params(1, 2)] public byte B</c> — the natural way to
+    /// parameterise a buffer size — was an <b>Error</b> (PBGEN008) that blocked
+    /// the consumer's build. The range check is what keeps the diagnostic
+    /// meaningful: <c>[Params(300)] byte</c> is still an error.
+    /// </para>
+    /// </summary>
     private static bool IsCompatibleWithTargetType(
         TypedConstant constant,
         ITypeSymbol memberType,
@@ -744,8 +757,36 @@ internal static class BenchmarkClassAnalyzer
         if (constant.Type is null)
             return false;
 
+        // Arrays are a value shape of their own (1.4): the conversion that
+        // matters is the one from the array type, never from an element.
         var conversion = compilation.ClassifyConversion(constant.Type, memberType);
-        return conversion.Exists && (conversion.IsIdentity || conversion.IsImplicit);
+        if (conversion.Exists && (conversion.IsIdentity || conversion.IsImplicit))
+            return true;
+
+        return IsIntConstantInTargetRange(constant, memberType);
+    }
+
+    /// <summary>
+    /// The implicit <i>constant expression</i> conversion (C# spec §10.2.11):
+    /// an <c>int</c> constant converts to a narrower integral type (and to
+    /// <c>uint</c>/<c>ulong</c>) when its value is inside the target's range.
+    /// </summary>
+    private static bool IsIntConstantInTargetRange(TypedConstant constant, ITypeSymbol memberType)
+    {
+        if (constant.Kind != TypedConstantKind.Primitive || constant.Value is not int value)
+            return false;
+
+        return memberType.SpecialType switch
+        {
+            SpecialType.System_SByte => value is >= sbyte.MinValue and <= sbyte.MaxValue,
+            SpecialType.System_Byte => value is >= byte.MinValue and <= byte.MaxValue,
+            SpecialType.System_Int16 => value is >= short.MinValue and <= short.MaxValue,
+            SpecialType.System_UInt16 => value is >= ushort.MinValue and <= ushort.MaxValue,
+            SpecialType.System_UInt32 => value >= 0,
+            SpecialType.System_UInt64 => value >= 0,
+            SpecialType.System_Char => value is >= char.MinValue and <= char.MaxValue,
+            _ => false,
+        };
     }
 
     /// <summary>
