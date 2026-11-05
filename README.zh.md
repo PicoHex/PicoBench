@@ -363,7 +363,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 列契约
 
-`CsvFormatter` 先写一行表头，再写数据行；套件会额外写入 `#` 注释行（`# Schema:`, `# Suite:`, `# Environment:`, `# CpuCounter:`, `# CpuCounterNote:`, `# GcInfoNote:`, `# Timestamp:`, `# Duration:`）以及两个区段 `# Results` 与 `# Comparisons`，**每个区段都有自己的表头行**。因此一个文件中存在不止一行表头 —— `pandas.read_csv(path, comment='#')` 会跳过注释行，但两个区段需要你自己拆分。结果文件的首行就是这条 `# Schema: v2; …` 契约行，任何以 `#` 开头的行都是注释，解析器必须跳过。
+`CsvFormatter` 先写一行表头，再写数据行；套件会额外写入 `#` 注释行（`# Schema:` (contract line), `# key,value` metadata rows: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`）以及两个区段 `# Results` 与 `# Comparisons`，**每个区段都有自己的表头行**。因此一个文件中存在不止一行表头 —— `pandas.read_csv(path, comment='#')` 会跳过注释行，但两个区段需要你自己拆分。结果文件的首行就是这条 `# Schema: v2; …` 契约行，任何以 `#` 开头的行都是注释，解析器必须跳过。
 
 结果列，按以下顺序（默认选项；`IncludePercentiles`、`IncludeGcInfo`、`IncludeCpuCycles` 与 `IncludeTimestamp` 为 `false` 时会移除各自的列）：
 
@@ -391,13 +391,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 对使用者而言有两点后果：由于 `<0.02` 的存在，每操作列**不保证是数值型**，因此 pandas 之类的读取器会推断为 `object`，你必须显式处理上界行；而 `GCApproximate` 被插入到第 17 位，位于 `GC2` 与 `SampleCount` 之间，所以**按位置读取的代码必须把 `SampleCount`/`IterationsPerSample` 后移一位**（按列名读取不受影响）。
 
-比较列：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`。每个比较会写出两行 —— 候选在前，基准在后 —— 并且 `Speedup` 只填在候选行。比较的每操作单元格与结果表走同一个格式化器，因此 `<limit` 与 `N/A` 也会出现在那里，`CpuCycles` 带同样的 `~` 标记（`CpuCyclesAreApproximate`）。
+比较列：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`, `SampleCount`, `IterationsPerSample`。每个比较会写出两行 —— 候选在前，基准在后 —— 并且 `Speedup` 只填在候选行。比较的每操作单元格与结果表走同一个格式化器，因此 `<limit` 与 `N/A` 也会出现在那里，`CpuCycles` 带同样的 `~` 标记（`CpuCyclesAreApproximate`）。
 
 `# Schema:` 行已经落地，并且就是**文件首行**：结果文件（以及含结果的套件文件）以这段描述后续列的契约行开头，比较区段则在 `# Comparisons` 之前再写一条自己的契约行：
 
 ```
-# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
-# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg) | "N/A" (no finite ratio: 0/0 or too few paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
 ```
 
 `v2` 即 Batch 0 的形态 —— 上文的每操作三态加上 `GCApproximate`。`columns=` 列表由真实写出的表头行派生，因此不会与上面的表漂移，也不会列出被选项关掉的列；`section=` 用来区分两条契约行。解析器必须跳过所有以 `#` 开头的行，并从 `columns=` 列表读取列序，而不是硬编码。

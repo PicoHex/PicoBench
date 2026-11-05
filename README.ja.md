@@ -357,7 +357,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 ### CSV 列の契約
 
-`CsvFormatter` はヘッダー行を書き、続けてデータ行を書きます。スイートは `#` コメント行（`# Schema:`, `# Suite:`、`# Environment:`、`# CpuCounter:`、`# CpuCounterNote:`、`# GcInfoNote:`、`# Timestamp:`、`# Duration:`）と2つのセクション `# Results` と `# Comparisons` を追加し、**それぞれが独自のヘッダー行**を持ちます。したがってファイルには複数のヘッダー行があるため、`pandas.read_csv(path, comment='#')` はコメントをスキップしますが、2つのセクションは自分で分割する必要があります。結果ファイルの先頭行はこの `# Schema: v2; …` 契約行であり、`#` で始まる行はすべてパーサーがスキップすべきコメントです。
+`CsvFormatter` はヘッダー行を書き、続けてデータ行を書きます。スイートは `#` コメント行（`# Schema:` (contract line), `# key,value` metadata rows: `Suite`, `Description`, `Environment`, `CpuCounter`, `CpuCounterNote`, `GcInfoNote`, `Timestamp`, `Duration`, `NoiseNote`）と2つのセクション `# Results` と `# Comparisons` を追加し、**それぞれが独自のヘッダー行**を持ちます。したがってファイルには複数のヘッダー行があるため、`pandas.read_csv(path, comment='#')` はコメントをスキップしますが、2つのセクションは自分で分割する必要があります。結果ファイルの先頭行はこの `# Schema: v2; …` 契約行であり、`#` で始まる行はすべてパーサーがスキップすべきコメントです。
 
 結果の列（この順序、既定オプション。`IncludePercentiles`、`IncludeGcInfo`、`IncludeCpuCycles`、`IncludeTimestamp` を `false` にすると対応する列が消えます）:
 
@@ -385,13 +385,13 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 消費側への2つの影響: `<0.02` のため、1操作あたりの列が**数値であることは保証されません**。そのため pandas のようなリーダーは `object` と推論し、上限の行を明示的に扱う必要があります。また `GCApproximate` は `GC2` と `SampleCount` の間の位置17に挿入されたため、**位置ベースのリーダーは `SampleCount`/`IterationsPerSample` を1つずらす必要があります**（名前ベースのリーダーは影響を受けません）。
 
-比較の列: `TestCase`、`Provider`、`Avg_ns`、`Speedup`、`P50_ns`、`P90_ns`、`P99_ns`、`StdErr_ns`、`RSD_pct`、`CpuCycles`、`GC0`、`GC1`、`GC2`、`GCApproximate`。各比較は2行（候補が先、ベースラインが後）を書き、`Speedup` は候補の行にのみ入ります。比較の1操作あたりのセルは結果テーブルと同じフォーマッターを通るため、`<limit` と `N/A` はそこにも現れ、`CpuCycles` には同じ `~` マーカー（`CpuCyclesAreApproximate`）が付きます。
+比較の列: `TestCase`、`Provider`、`Avg_ns`、`Speedup`、`P50_ns`、`P90_ns`、`P99_ns`、`StdErr_ns`、`RSD_pct`、`CpuCycles`、`GC0`、`GC1`、`GC2`、`GCApproximate`、`SampleCount`、`IterationsPerSample`。各比較は2行（候補が先、ベースラインが後）を書き、`Speedup` は候補の行にのみ入ります。比較の1操作あたりのセルは結果テーブルと同じフォーマッターを通るため、`<limit` と `N/A` はそこにも現れ、`CpuCycles` には同じ `~` マーカー（`CpuCyclesAreApproximate`）が付きます。
 
 `# Schema:` 行はすでに実装済みで、**ファイルの先頭行**です。結果ファイル（および結果を持つスイートファイル）は、続く列を説明する契約行から始まり、比較セクションは `# Comparisons` の直前に自分自身の契約行を書きます:
 
 ```
-# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
-# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg) | "N/A" (no finite ratio: 0/0 or too few paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
 ```
 
 `v2` は Batch 0 の形 — 上記の1操作あたりの3つのセル状態に `GCApproximate` を加えたものです。`columns=` の一覧は実際に書かれるヘッダー行から生成されるため、上記の表とずれることはなく、オプションで消えた列を挙げることもありません。`section=` が2つの契約行を区別します。パーサーは `#` で始まるすべての行をスキップし、列順はハードコードせず `columns=` の一覧から読む必要があります。

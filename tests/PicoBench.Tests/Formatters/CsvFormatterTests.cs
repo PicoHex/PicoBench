@@ -242,11 +242,12 @@ public class CsvFormatterTests
         var csv = formatter.Format(suite);
 
         await Assert.That(csv).IsNotNull();
-        await Assert.That(csv).Contains("# Suite:");
+        // Batch 2 - 2.3: the suite metadata is a "# key,value" table now.
+        await Assert.That(csv).Contains("# Suite,");
         await Assert.That(csv).Contains("# Results");
         await Assert.That(csv).Contains("# Comparisons");
         await Assert.That(csv).Contains(suite.Name);
-        await Assert.That(csv).Contains("# CpuCounter:");
+        await Assert.That(csv).Contains("# CpuCounter,");
     }
 
     [Test]
@@ -400,7 +401,7 @@ public class CsvFormatterTests
             await Assert.That(File.Exists(filePath)).IsTrue();
             var content = await File.ReadAllTextAsync(filePath);
 
-            await Assert.That(content).Contains("# Suite:");
+            await Assert.That(content).Contains("# Suite,");
             await Assert.That(content).Contains("# Results");
             await Assert.That(content).Contains("# Comparisons");
         }
