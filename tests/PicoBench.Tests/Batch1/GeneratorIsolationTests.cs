@@ -234,9 +234,205 @@ public class GeneratorIsolationTests
             .Because("the healthy sibling must still get its .g.cs");
         await Assert.That(output.Sources.Length).IsEqualTo(1);
 
+        // …and the one diagnostic is the clean, actionable PBGEN021 — never the
+        // wrapped NullReferenceException text.
+        await Assert.That(generatorErrors[0].Id).IsEqualTo("PBGEN021");
+        await Assert
+            .That(
+                generatorErrors[0]
+                    .GetMessage(CultureInfo.InvariantCulture)
+                    .Contains("Object reference", StringComparison.OrdinalIgnoreCase)
+            )
+            .IsFalse();
+        await Assert
+            .That(
+                generatorErrors[0]
+                    .GetMessage(CultureInfo.InvariantCulture)
+                    .Contains("Data", StringComparison.Ordinal)
+            )
+            .IsTrue();
+
         await Assert
             .That(Batch1Support.ErrorsInGeneratedCode(output, compilerErrors).Count)
             .IsEqualTo(0);
+        await Assert.That(compilerErrors.Count).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// Trigger 4b — a throw in the transform stage that is <b>not</b> a defect.
+    /// <para>
+    /// F2 of <c>.review-2026-11/31-verify-b1.md</c>: the <c>AnalyzeTarget</c>
+    /// catch used to have exactly one guard, <see cref="ParamsNullArrayArgument_FailsOneClassOnly"/>,
+    /// and that guard only fired because of the <c>[Params(null)]</c>
+    /// <c>NullReferenceException</c>. Fix the defect and the containment would
+    /// have become untested — a regression could then take the whole project's
+    /// generated output away with <c>CS8785</c> and no test would notice.
+    /// </para>
+    /// <para>
+    /// So the throw is forced through the generator's test-only seam
+    /// (<c>BenchmarkClassAnalyzer.TransformFaultForTests</c>) instead: the same
+    /// four contract points as every other trigger — no <c>CS8785</c>, exactly
+    /// one diagnostic for the one class that failed, the sibling still gets a
+    /// compiling <c>.g.cs</c>, and the exception text reaches the user (bounded
+    /// to one line).
+    /// </para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch1")]
+    [Property("Batch1", "1.1/transform-fault-injection")]
+    [NotInParallel("generator-transform-seam")]
+    public async Task TransformStageFault_Injected_FailsOneClassOnly()
+    {
+        const string source = """
+            using PicoBench;
+
+            namespace Demo
+            {
+                [BenchmarkClass]
+                public partial class InjectedTransformFault
+                {
+                    [Benchmark]
+                    public void Work() { }
+                }
+
+                [BenchmarkClass]
+                public partial class Sibling
+                {
+                    [Benchmark]
+                    public void Work() { }
+                }
+            }
+            """;
+
+        GeneratorHarness.GeneratorOutput output;
+        try
+        {
+            // Only the class named above throws: the seam is a filter, not a
+            // global kill switch, so a run that happens to overlap this test
+            // (the hook is process-wide) is unaffected.
+            BenchmarkClassAnalyzer.TransformFaultForTests = static symbol =>
+            {
+                if (string.Equals(symbol.Name, "InjectedTransformFault", StringComparison.Ordinal))
+                    throw new InvalidOperationException("injected transform fault (G15 seam)");
+            };
+
+            output = GeneratorHarness.RunGenerator(source);
+        }
+        finally
+        {
+            BenchmarkClassAnalyzer.TransformFaultForTests = null;
+        }
+
+        var compilerErrors = GeneratorHarness.CompileErrors(source, output);
+        Batch1Support.LogRun("injected transform fault", output, compilerErrors);
+
+        // A throw in the transform stage is not inside RegisterSourceOutput: an
+        // unguarded one aborts the generator run and every class loses its half.
+        await Assert.That(Batch1Support.HasGeneratorFailure(output)).IsFalse();
+
+        var generatorErrors = Batch1Support.GeneratorErrors(output);
+        await Assert
+            .That(generatorErrors.Count)
+            .IsEqualTo(1)
+            .Because("exactly one diagnostic, for the one class that failed");
+        await Assert.That(generatorErrors[0].Id).IsEqualTo("PBGEN018");
+
+        var message = generatorErrors[0].GetMessage(CultureInfo.InvariantCulture);
+        Batch0Support.Log($"injected fault diagnostic: {message}");
+        await Assert
+            .That(message)
+            .Contains("injected transform fault")
+            .Because("the user must be told what the generator choked on");
+        await Assert.That(message).Contains("InjectedTransformFault");
+
+        // The sibling is untouched: its hint exists, the failed class has none.
+        await Assert
+            .That(output.HintNames.Any(static h => h.Contains("Sibling", StringComparison.Ordinal)))
+            .IsTrue();
+        await Assert
+            .That(
+                output.HintNames.Any(static h =>
+                    h.Contains("InjectedTransformFault", StringComparison.Ordinal)
+                )
+            )
+            .IsFalse();
+        await Assert.That(output.Sources.Length).IsEqualTo(1);
+
+        await Assert.That(compilerErrors.Count).IsEqualTo(0);
+        await Assert
+            .That(Batch1Support.ErrorsInGeneratedCode(output, compilerErrors).Count)
+            .IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// F6 / §6 of <c>.review-2026-11/31-verify-b1.md</c> — <c>[Params(null)]</c>
+    /// is legal C# and used to surface as
+    /// <c>PBGEN018 … failed: Object reference not set to an instance of an object.</c>
+    /// An Error nobody can act on, about an implementation detail (a
+    /// <c>default</c> <c>ImmutableArray</c>) the user never wrote.
+    ///
+    /// <para>
+    /// <c>null</c> binds to the whole <c>params object[]</c>, so there is no value
+    /// list to read. That deserves a message that says so and names the member —
+    /// and it must <b>never</b> be the packaged <c>NullReferenceException</c> text:
+    /// the containment path (PBGEN018) is for genuine generator faults, not for a
+    /// known argument shape.
+    /// </para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch1")]
+    [Property("Batch1", "1.1/params-null-diagnostic")]
+    public async Task ParamsNullArgument_ReportsCleanDiagnosticUnknownReference()
+    {
+        const string source = """
+            using PicoBench;
+
+            namespace Demo
+            {
+                [BenchmarkClass]
+                public partial class NullParams
+                {
+                    [Params(null)]
+                    public int[]? Data { get; set; }
+
+                    [Benchmark]
+                    public void Work() { _ = Data; }
+                }
+            }
+            """;
+
+        var output = GeneratorHarness.RunGenerator(source);
+        var compilerErrors = GeneratorHarness.CompileErrors(source, output);
+        Batch1Support.LogRun("params null diagnostic", output, compilerErrors);
+
+        await Assert.That(Batch1Support.HasGeneratorFailure(output)).IsFalse();
+
+        var errors = Batch1Support.GeneratorErrors(output);
+        await Assert.That(errors.Count).IsEqualTo(1);
+
+        var diagnostic = errors[0];
+        var message = diagnostic.GetMessage(CultureInfo.InvariantCulture);
+        Batch0Support.Log($"[params null diagnostic] {diagnostic.Id}: {message}");
+
+        // Not the containment path, and not an exception message at all.
+        await Assert.That(diagnostic.Id).IsEqualTo("PBGEN021");
+        await Assert
+            .That(message.Contains("Object reference", StringComparison.OrdinalIgnoreCase))
+            .IsFalse()
+            .Because($"the raw exception text must never reach the user: {message}");
+        await Assert
+            .That(message.Contains("NullReferenceException", StringComparison.OrdinalIgnoreCase))
+            .IsFalse();
+        await Assert
+            .That(message.Contains("failed:", StringComparison.OrdinalIgnoreCase))
+            .IsFalse()
+            .Because("PBGEN018 wording means 'the generator broke', which is not what happened");
+
+        // Actionable: names the member and says what to write instead.
+        await Assert.That(message).Contains("Data");
+        await Assert.That(message).Contains("[Params");
+
+        await Assert.That(output.Sources.Length).IsEqualTo(0);
         await Assert.That(compilerErrors.Count).IsEqualTo(0);
     }
 

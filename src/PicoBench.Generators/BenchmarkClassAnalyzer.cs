@@ -12,6 +12,27 @@ internal static class BenchmarkClassAnalyzer
     private const string ParamsAttributeName = "PicoBench.ParamsAttribute";
 
     /// <summary>
+    /// Test seam — the transform stage's fault-injection hook, reachable only
+    /// from <c>PicoBench.Tests</c> (<c>InternalsVisibleTo</c>).
+    /// <para>
+    /// Batch 1 · B of <c>.review-2026-11/30-review-b1.md</c> / F2 of
+    /// <c>31-verify-b1.md</c>: before this seam, the only thing that ever threw
+    /// out of <see cref="AnalyzeTargetCore"/> was the <c>[Params(null)]</c>
+    /// <c>NullReferenceException</c>, so <see cref="AnalyzeTarget"/>'s catch was
+    /// guarded by a defect. Fixing that defect would have silently removed the
+    /// guard: nothing would then notice if the catch were deleted, and one throw
+    /// in one class would cost the whole project its generated output
+    /// (<c>CS8785</c>). With the seam, the containment contract is testable on
+    /// purpose rather than by accident.
+    /// </para>
+    /// <para>
+    /// Always <c>null</c> in production runs; the hook is a filter so that a test
+    /// run overlapping another one cannot break it.
+    /// </para>
+    /// </summary>
+    internal static Action<INamedTypeSymbol>? TransformFaultForTests;
+
+    /// <summary>
     /// Analyses one <c>[BenchmarkClass]</c> target.
     /// <para>
     /// Batch 1 · 1.1 (B3-C2): this is the transform stage, and an exception
@@ -61,6 +82,11 @@ internal static class BenchmarkClassAnalyzer
             return new GeneratorAnalysisResult(null, diagnostics.ToImmutableArray());
 
         ct.ThrowIfCancellationRequested();
+
+        // Test-only fault injection (see TransformFaultForTests). Deliberately
+        // inside the try so it exercises AnalyzeTarget's catch exactly like a
+        // real transform failure would.
+        TransformFaultForTests?.Invoke(typeSymbol);
 
         if (!IsPartial(typeSymbol, ct))
         {
@@ -680,6 +706,25 @@ internal static class BenchmarkClassAnalyzer
             var arg = attr.ConstructorArguments[0];
             if (arg.Kind == TypedConstantKind.Array)
             {
+                // B of the Batch 1 review: `[Params(null)]` hands `null` to the
+                // whole `params object[]`, so the argument is an array whose
+                // `Values` is `default`. Enumerating that throws a
+                // NullReferenceException, which the transform containment
+                // reported as "PBGEN018 … failed: Object reference not set to an
+                // instance of an object." — legal C#, unactionable error text.
+                // There is nothing to enumerate: say so and name the member.
+                if (arg.Values.IsDefault)
+                {
+                    diagnostics.Add(
+                        Diagnostic.Create(
+                            DiagnosticDescriptors.NullParamsArrayArgument,
+                            GetAttributeLocation(attr, ct),
+                            memberName
+                        )
+                    );
+                    return null;
+                }
+
                 foreach (var element in arg.Values)
                 {
                     if (!IsCompatibleWithTargetType(element, memberType, compilation))
