@@ -737,7 +737,8 @@ internal static class BenchmarkClassAnalyzer
     /// Batch 1 · 1.5 (B3-H1): <c>Compilation.ClassifyConversion</c>
     /// answers a <b>type-level</b> question only, and C# has a second rule for
     /// constants: an <c>int</c> constant converts implicitly to
-    /// <c>sbyte/byte/short/ushort/uint/ulong/char</c> when the <b>value</b> fits.
+    /// <c>sbyte/byte/short/ushort/uint/ulong</c> when the <b>value</b> fits, and a
+    /// non-negative <c>long</c> constant converts to <c>ulong</c>.
     /// Without it <c>[Params(1, 2)] public byte B</c> — the natural way to
     /// parameterise a buffer size — was an <b>Error</b> (PBGEN008) that blocked
     /// the consumer's build. The range check is what keeps the diagnostic
@@ -763,28 +764,47 @@ internal static class BenchmarkClassAnalyzer
         if (conversion.Exists && (conversion.IsIdentity || conversion.IsImplicit))
             return true;
 
-        return IsIntConstantInTargetRange(constant, memberType);
+        return IsImplicitConstantExpressionConversion(constant, memberType);
     }
 
     /// <summary>
     /// The implicit <i>constant expression</i> conversion (C# spec §10.2.11):
     /// an <c>int</c> constant converts to a narrower integral type (and to
-    /// <c>uint</c>/<c>ulong</c>) when its value is inside the target's range.
+    /// <c>uint</c>/<c>ulong</c>) when its value is inside the target's range, and
+    /// a non-negative <c>long</c> constant converts to <c>ulong</c>.
+    /// <para>
+    /// <b><c>char</c> is not in that list.</b> <c>char c = 65;</c> is <c>CS0266</c>,
+    /// so an <c>int</c> argument cannot become a <c>char</c> value whatever its
+    /// value is. Treating it as convertible (B-1 of
+    /// <c>.review-2026-11/30-review-b1.md</c>) emitted
+    /// <c>new char[] { 65, 66 }</c> — a file that does not compile — and reported
+    /// no diagnostic at all, which is strictly worse than <c>main</c>.
+    /// </para>
     /// </summary>
-    private static bool IsIntConstantInTargetRange(TypedConstant constant, ITypeSymbol memberType)
+    private static bool IsImplicitConstantExpressionConversion(
+        TypedConstant constant,
+        ITypeSymbol memberType
+    )
     {
-        if (constant.Kind != TypedConstantKind.Primitive || constant.Value is not int value)
+        if (constant.Kind != TypedConstantKind.Primitive)
             return false;
 
-        return memberType.SpecialType switch
+        return constant.Value switch
         {
-            SpecialType.System_SByte => value is >= sbyte.MinValue and <= sbyte.MaxValue,
-            SpecialType.System_Byte => value is >= byte.MinValue and <= byte.MaxValue,
-            SpecialType.System_Int16 => value is >= short.MinValue and <= short.MaxValue,
-            SpecialType.System_UInt16 => value is >= ushort.MinValue and <= ushort.MaxValue,
-            SpecialType.System_UInt32 => value >= 0,
-            SpecialType.System_UInt64 => value >= 0,
-            SpecialType.System_Char => value is >= char.MinValue and <= char.MaxValue,
+            int value => memberType.SpecialType switch
+            {
+                SpecialType.System_SByte => value is >= sbyte.MinValue and <= sbyte.MaxValue,
+                SpecialType.System_Byte => value is >= byte.MinValue and <= byte.MaxValue,
+                SpecialType.System_Int16 => value is >= short.MinValue and <= short.MaxValue,
+                SpecialType.System_UInt16 => value is >= ushort.MinValue and <= ushort.MaxValue,
+                SpecialType.System_UInt32 => value >= 0,
+                SpecialType.System_UInt64 => value >= 0,
+                _ => false,
+            },
+
+            // `ulong u = 1L;` is legal (N-1); `ulong u = -1L;` is not.
+            long longValue => memberType.SpecialType == SpecialType.System_UInt64 && longValue >= 0,
+
             _ => false,
         };
     }
