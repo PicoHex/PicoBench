@@ -36,13 +36,15 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     {
         var sb = new StringBuilder();
 
-        // Title
-        sb.AppendLine($"# {suite.Name}");
+        // Title. Batch 2 · 2.5 (B2-H4): a name is data, not structure. A line break
+        // collapses to a space and `#` is escaped, so "S + break + ## Injected" can
+        // no longer become a real second-level heading of the generated document.
+        sb.AppendLine($"# {TextSanitizer.ForMarkdownLine(suite.Name)}");
         sb.AppendLine();
 
         if (!string.IsNullOrEmpty(suite.Description))
         {
-            sb.AppendLine(suite.Description);
+            sb.AppendLine(TextSanitizer.ForMarkdownLine(suite.Description!));
             sb.AppendLine();
         }
 
@@ -343,17 +345,13 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
 
     #region Helpers
 
-    private static string Escape(string value)
-    {
-        // Escape special markdown table characters; replace newlines so
-        // they cannot break a table row.
-        return value
-            .Replace("\\", "\\\\")
-            .Replace("|", "\\|")
-            .Replace("\r\n", "<br>")
-            .Replace("\n", "<br>")
-            .Replace("\r", "<br>");
-    }
+    /// <summary>
+    /// User text inside one table cell (Batch 2 · 2.5, B2-H4): structure characters
+    /// escaped, control characters replaced, a line break as <c>&lt;br&gt;</c> so the
+    /// row cannot be split. See <see cref="TextSanitizer"/> for the rules and for why
+    /// each character is on the list.
+    /// </summary>
+    private static string Escape(string value) => TextSanitizer.ForMarkdownCell(value);
 
     #endregion
 
@@ -427,7 +425,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
 
         foreach (var group in groups)
         {
-            sb.AppendLine($"### {group.Key}");
+            sb.AppendLine($"### {TextSanitizer.ForMarkdownLine(group.Key)}");
             sb.AppendLine();
             sb.AppendLine(formatter.Format(group.ToList()));
             sb.AppendLine();

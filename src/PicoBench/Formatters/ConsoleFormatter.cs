@@ -172,7 +172,9 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             ]
         );
 
-        sb.AppendLine($"Benchmark: {result.Name}{DescribeMeasurementLimit(result.Statistics)}");
+        sb.AppendLine(
+            $"Benchmark: {TextSanitizer.ForTerminal(result.Name)}{DescribeMeasurementLimit(result.Statistics)}"
+        );
         sb.AppendLine($"  Avg: {FormatPerOpLine(result.Statistics, result.Statistics.Avg, unit)}");
         sb.AppendLine($"  P50: {FormatPerOpLine(result.Statistics, result.Statistics.P50, unit)}");
 
@@ -248,7 +250,13 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         var p99Header = $"P99 ({unit.Symbol})";
         var stdErrHeader = $"StdErr ({unit.Symbol})";
 
-        var nameWidth = Math.Max("Name".Length, results.Max(r => r.Name.Length));
+        // Name widths are counted in display cells, not chars: a CJK name is two
+        // cells wide but one char, and a control character must not survive into the
+        // cell at all (Batch 2 · 2.5, B2-L4).
+        var nameWidth = Math.Max(
+            "Name".Length,
+            results.Max(r => DisplayWidth.Of(TextSanitizer.ForTerminal(r.Name)))
+        );
         var avgWidth = Math.Max(
             avgHeader.Length,
             results.Max(r => FormatPerOp(r.Statistics, r.Statistics.Avg, unit).Length)
@@ -300,7 +308,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         // Build column definitions
         var columns = new List<TableColumn<BenchmarkResult>>
         {
-            new("Name", nameWidth, r => r.Name, leftAlign: true),
+            new("Name", nameWidth, r => TextSanitizer.ForTerminal(r.Name), leftAlign: true),
             new(avgHeader, avgWidth, r => FormatPerOp(r.Statistics, r.Statistics.Avg, unit)),
             new(p50Header, p50Width, r => FormatPerOp(r.Statistics, r.Statistics.P50, unit))
         };
@@ -374,7 +382,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
                     + string.Join(
                         ", ",
                         noisy.Select(static r =>
-                            $"{r.Name} {FormatMetric(r.Statistics.RelativeStdDevPercent, 1)}% RSD"
+                            $"{TextSanitizer.ForTerminal(r.Name)} {FormatMetric(r.Statistics.RelativeStdDevPercent, 1)}% RSD"
                         )
                     )
                     + "; treat the difference as unresolved"
@@ -469,7 +477,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             ]
         );
 
-        sb.AppendLine($"Comparison: {comparison.Name}");
+        sb.AppendLine($"Comparison: {TextSanitizer.ForTerminal(comparison.Name)}");
         sb.AppendLine(
             $"  Baseline ({comparison.Baseline.Name}): {ComparisonValue(comparison.Baseline.Statistics, unit)}"
         );
@@ -482,7 +490,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             sb.AppendLine($"  Interval: {interval} (95% CI of the paired-round median)");
         }
 
-        sb.AppendLine($"  Winner: {DescribeWinner(comparison)}");
+        sb.AppendLine($"  Winner: {TextSanitizer.ForTerminal(DescribeWinner(comparison))}");
     }
 
     /// <summary>One side of a comparison, per-operation value and unit.</summary>
@@ -584,7 +592,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         var nameWidth = Math.Max(
             "Test Case".Length,
-            rows.Max(r => $"{r.Provider} * {r.Name}".Length)
+            rows.Max(r => DisplayWidth.Of(TextSanitizer.ForTerminal($"{r.Provider} * {r.Name}")))
         );
         var avgWidth = Math.Max(
             avgHeader.Length,
@@ -594,7 +602,12 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         var columns = new List<TableColumn<ComparisonRow>>
         {
-            new("Test Case", nameWidth, r => $"{r.Provider} * {r.Name}", leftAlign: true),
+            new(
+                "Test Case",
+                nameWidth,
+                r => TextSanitizer.ForTerminal($"{r.Provider} * {r.Name}"),
+                leftAlign: true
+            ),
             new(
                 avgHeader,
                 avgWidth,
@@ -738,19 +751,60 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         if (!string.IsNullOrEmpty(description))
         {
-            sb.AppendLine($"║{CenterText(description ?? string.Empty, width - 2)}║");
+            // A description can be several lines. Each one is its own framed row, so
+            // a line break inside it cannot split the box (Batch 2 · 2.5).
+            foreach (var line in SplitLines(description!))
+                sb.AppendLine($"║{CenterText(line, width - 2)}║");
         }
 
         sb.AppendLine($"╚{border}╝");
     }
 
+    /// <summary>
+    /// Splits user text into the lines it will occupy, with control characters
+    /// already replaced (so a stray carriage return cannot rewind the terminal) and
+    /// empty lines preserved.
+    /// </summary>
+    private static IEnumerable<string> SplitLines(string text)
+    {
+        var current = new StringBuilder();
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (TextSanitizer.IsLineBreak(c))
+            {
+                // CR LF is one line break, not two: without this skip the box grows an
+                // empty row for every Windows line ending.
+                if (c == (char)13 && i + 1 < text.Length && text[i + 1] == (char)10)
+                    i++;
+
+                yield return current.ToString();
+                current.Clear();
+                continue;
+            }
+
+            current.Append(TextSanitizer.ForTerminal(c.ToString()));
+        }
+
+        yield return current.ToString();
+    }
+
+    /// <summary>
+    /// Centres text in a fixed-width frame, measured in display cells: a CJK title
+    /// is two cells wide per char, and truncating a 20-char CJK title at 78
+    /// <em>chars</em> would overflow the box by 20 cells (Batch 2 · 2.5, B2-L4).
+    /// </summary>
     private static string CenterText(string text, int width)
     {
-        if (text.Length >= width)
-            return text.Substring(0, width);
+        var sanitized = TextSanitizer.ForTerminal(text);
+        if (DisplayWidth.Of(sanitized) >= width)
+            return DisplayWidth.Truncate(sanitized, width);
 
-        var padding = (width - text.Length) / 2;
-        return text.PadLeft(padding + text.Length).PadRight(width);
+        var padding = (width - DisplayWidth.Of(sanitized)) / 2;
+        return DisplayWidth.PadRight(
+            DisplayWidth.PadLeft(sanitized, padding + DisplayWidth.Of(sanitized)),
+            width
+        );
     }
 
     #endregion
@@ -794,7 +848,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             sb.AppendLine("┐");
             // Title text
             sb.Append("│ ");
-            sb.Append(title.PadRight(totalWidth - 4));
+            sb.Append(DisplayWidth.PadRight(TextSanitizer.ForTerminal(title), totalWidth - 4));
             sb.AppendLine(" │");
             // Title-header separator with column dividers
             AppendTableBorder(sb, columns, '├', '┬', '┤');
@@ -844,9 +898,11 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         {
             var column = columns[i];
             var value = values[i];
+            // Padding is applied in display cells, so the frame closes whatever the
+            // script of the name (Batch 2 · 2.5, B2-L4).
             var text = column.LeftAlign
-                ? $" {value}".PadRight(column.Width)
-                : value.PadLeft(column.Width - 1) + " ";
+                ? DisplayWidth.PadRight($" {value}", column.Width)
+                : DisplayWidth.PadLeft(value, column.Width - 1) + " ";
             sb.Append(text);
             sb.Append('│');
         }
@@ -958,8 +1014,12 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     public static void WriteHeader(string title, int width = 111)
     {
         var border = new string('═', width - 2);
-        var padding = (width - 2 - title.Length) / 2;
-        var centeredTitle = title.PadLeft(padding + title.Length).PadRight(width - 2);
+        var text = TextSanitizer.ForTerminal(title);
+        var textWidth = DisplayWidth.Of(text);
+        var centeredTitle = DisplayWidth.PadRight(
+            DisplayWidth.PadLeft(text, (width - 2 - textWidth) / 2 + textWidth),
+            width - 2
+        );
 
         Console.WriteLine();
         Console.WriteLine($"╔{border}╗");

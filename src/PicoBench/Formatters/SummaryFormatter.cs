@@ -98,14 +98,14 @@ public static class SummaryFormatter
                 var groupNote =
                     groupRatios.Excluded == 0 ? "" : " — " + groupRatios.DescribeExcluded();
                 sb.AppendLine(
-                    $"▶ {group.Key}: {FormatterBase.FormatSpeedupValue(groupRatios.Average, SummarySpeedupDecimals)} average speedup{groupNote}"
+                    $"▶ {TextSanitizer.ForTerminal(group.Key)}: {FormatterBase.FormatSpeedupValue(groupRatios.Average, SummarySpeedupDecimals)} average speedup{groupNote}"
                 );
 
                 foreach (var c in group)
                 {
                     var indicator = FormatterBase.GetSpeedupIndicator(c.Speedup);
                     sb.AppendLine(
-                        $"   {c.Name, -35}: {FormatterBase.FormatMetric(c.Speedup, 2)}x {indicator}"
+                        $"   {DisplayWidth.PadRight(TextSanitizer.ForTerminal(c.Name), 35)}: {FormatterBase.FormatMetric(c.Speedup, 2)}x {indicator}"
                     );
                 }
                 sb.AppendLine();
@@ -211,28 +211,34 @@ public static class SummaryFormatter
     private static void AppendCenteredLine(StringBuilder sb, string text, int width)
     {
         var innerWidth = width - 2;
-        text = Fit(text, innerWidth);
-        var padding = (innerWidth - text.Length) / 2;
+        var fitted = Fit(text, innerWidth);
+        var textWidth = DisplayWidth.Of(fitted);
+        var padding = (innerWidth - textWidth) / 2;
         sb.Append('║');
         sb.Append(' ', padding);
-        sb.Append(text);
-        sb.Append(' ', innerWidth - padding - text.Length);
+        sb.Append(fitted);
+        sb.Append(' ', innerWidth - padding - textWidth);
         sb.AppendLine("║");
     }
 
     private static void AppendPaddedLine(StringBuilder sb, string text, int width)
     {
         var innerWidth = width - 2;
-        text = Fit(text, innerWidth);
+        var fitted = Fit(text, innerWidth);
         sb.Append('║');
-        sb.Append(text);
-        if (text.Length < innerWidth)
-            sb.Append(' ', innerWidth - text.Length);
+        sb.Append(fitted);
+        sb.Append(' ', Math.Max(0, innerWidth - DisplayWidth.Of(fitted)));
         sb.AppendLine("║");
     }
 
+    /// <summary>
+    /// Fits user text into <paramref name="width"/> <b>display cells</b> and strips
+    /// the control characters that could move the cursor out of the frame (Batch 2 ·
+    /// 2.5, B2-H4/L4): the box is only a box if every line of it is the same number
+    /// of cells wide.
+    /// </summary>
     private static string Fit(string text, int width) =>
-        text.Length > width ? text.Substring(0, width) : text;
+        DisplayWidth.Truncate(TextSanitizer.ForTerminal(text), width);
 
     #endregion
 }
