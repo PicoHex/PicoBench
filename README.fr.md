@@ -448,7 +448,7 @@ La ligne `# Schema:` est livrée et occupe la **première ligne du fichier** : u
 | `BenchmarkSuite` | Nom, Description, Résultats, Comparaisons, Environnement, Durée, Horodatage |
 | `ComparisonOutcome` | Énumération : `Unknown` (aucun ratio n'a pu être calculé), `Inconclusive` (à l'intérieur de la bande morte de 5%, ou l'intervalle contient encore la parité), `Faster`, `Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() — intervalle à 95% sans hypothèse de distribution de la médiane des ratios appariés |
-| `Statistics` | Moyenne, P50, P90, P95, P99, Minimum, Maximum, ÉcartType, StandardError, RelativeStdDevPercent, CyclesCpuParOp, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
+| `Statistics` | `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError`, `RelativeStdDevPercent`, `CpuCyclesPerOp`, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
 | `TimingSample` | NanosecondesÉcoulées, MillisecondesÉcoulées, TicksÉcoulés, CyclesCpu, **CpuCyclesAreApproximate**, GcInfo |
 | `GcInfo` | Gen0, Gen1, Gen2, Total, EstZéro, IsApproximate |
 | `EnvironmentInfo` | OS, Architecture, VersionRuntime, NombreProcesseurs, Mode d'exécution, Configuration, type / disponibilité / signification du compteur CPU, étiquettes personnalisées |

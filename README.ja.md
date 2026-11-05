@@ -446,7 +446,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | `BenchmarkSuite` | 名前、説明、結果、比較、環境、期間、タイムスタンプ |
 | `ComparisonOutcome` | 列挙型: `Unknown`（比率を計算できなかった）、`Inconclusive`（5% デッドバンド内、または区間が依然として同等性を含む）、`Faster`、`Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() — 中央値ペア比の分布非依存な95%区間 |
-| `Statistics` | 平均、P50、P90、P95、P99、最小、最大、標準偏差、StandardError、RelativeStdDevPercent、操作あたりCPUサイクル、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GcInfo、HasHighVariance |
+| `Statistics` | `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`、`RelativeStdDevPercent`、`CpuCyclesPerOp`、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GcInfo、HasHighVariance |
 | `TimingSample` | 経過ナノ秒、経過ミリ秒、経過ティック、CPUサイクル、**CpuCyclesAreApproximate**、GcInfo |
 | `GcInfo` | Gen0、Gen1、Gen2、合計、ゼロか、IsApproximate |
 | `EnvironmentInfo` | OS、アーキテクチャ、ランタイムバージョン、プロセッサ数、実行モード、設定、CPUカウンター種別 / 可用性 / 意味の有無、カスタムタグ |

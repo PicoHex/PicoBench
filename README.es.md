@@ -448,7 +448,7 @@ La línea `# Schema:` ya está implementada y es la **primera línea del archivo
 | `BenchmarkSuite` | Nombre, Descripción, Resultados, Comparaciones, Entorno, Duración, Marca de tiempo |
 | `ComparisonOutcome` | Enum: `Unknown` (no se pudo calcular ningún cociente), `Inconclusive` (dentro de la banda muerta del 5%, o el intervalo aún contiene la paridad), `Faster`, `Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() — intervalo del 95% libre de distribución de la mediana del cociente emparejado |
-| `Statistics` | Promedio, P50, P90, P95, P99, Mínimo, Máximo, DesviaciónEstándar, StandardError, RelativeStdDevPercent, CiclosDeCpuPorOp, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
+| `Statistics` | `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError`, `RelativeStdDevPercent`, `CpuCyclesPerOp`, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
 | `TimingSample` | NanosegundosTranscurridos, MilisegundosTranscurridos, TicksTranscurridos, CiclosDeCpu, **CpuCyclesAreApproximate**, GcInfo |
 | `GcInfo` | Gen0, Gen1, Gen2, Total, EsCero, IsApproximate |
 | `EnvironmentInfo` | SO, Arquitectura, VersiónDelRuntime, RecuentoDeProcesadores, Modo de ejecución, Configuración, tipo / disponibilidad / significado del contador de CPU, etiquetas personalizadas |

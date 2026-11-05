@@ -446,7 +446,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | `BenchmarkSuite` | Имя, Описание, Результаты, Сравнения, Окружение, Длительность, Метка времени |
 | `ComparisonOutcome` | Перечисление: `Unknown` (отношение вычислить не удалось), `Inconclusive` (внутри мёртвой зоны 5%, или интервал всё ещё содержит паритет), `Faster`, `Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() — свободный от распределения 95%-й интервал медианы парного отношения |
-| `Statistics` | Среднее, P50, P90, P95, P99, Минимум, Максимум, СтандартноеОтклонение, StandardError, RelativeStdDevPercent, ЦикловCpuНаОперацию, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
+| `Statistics` | `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError`, `RelativeStdDevPercent`, `CpuCyclesPerOp`, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
 | `TimingSample` | ПрошедшиеНаносекунды, ПрошедшиеМиллисекунды, ПрошедшиеТики, ЦиклыCpu, **CpuCyclesAreApproximate**, GcInfo |
 | `GcInfo` | Gen0, Gen1, Gen2, Всего, Нулевое, IsApproximate |
 | `EnvironmentInfo` | ОС, Архитектура, ВерсияСредыВыполнения, КоличествоПроцессоров, Режим выполнения, Конфигурация, тип / доступность / значимость счетчика CPU, пользовательские теги |

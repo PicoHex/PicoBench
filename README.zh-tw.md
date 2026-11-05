@@ -448,7 +448,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | `BenchmarkSuite` | 名稱、描述、結果、比較、環境、持續時間、時間戳 |
 | `ComparisonOutcome` | 列舉：`Unknown`（無法計算任何比值）、`Inconclusive`（落在 5% 死區內，或區間仍包含持平）、`Faster`、`Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() —— 中位配對比值的分佈無關 95% 區間 |
-| `Statistics` | `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`、`RelativeStdDevPercent`、`CpuCyclesPerOp`、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、GC 信息、HasHighVariance |
+| `Statistics` | `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`、`RelativeStdDevPercent`、`CpuCyclesPerOp`、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、`GcInfo`、HasHighVariance |
 | `TimingSample` | 奈秒耗時、毫秒耗時、計時器滴答數、CPU 週期、**CpuCyclesAreApproximate**、GC 信息 |
 | `GcInfo` | Gen0、Gen1、Gen2、總計、是否為零、IsApproximate |
 | `EnvironmentInfo` | 操作系統、架構、執行時版本、處理器數量、執行模式、配置、CPU 計數器類型 / 可用性 / 是否有意義、自訂標籤 |

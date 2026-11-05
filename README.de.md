@@ -448,7 +448,7 @@ Die `# Schema:`-Zeile ist umgesetzt und steht **in der ersten Zeile der Datei**:
 | `BenchmarkSuite` | Name, Beschreibung, Ergebnisse, Vergleiche, Umgebung, Dauer, Zeitstempel |
 | `ComparisonOutcome` | Enum: `Unknown` (kein Verhältnis konnte berechnet werden), `Inconclusive` (innerhalb des 5%-Totbands oder das Intervall enthält noch Gleichstand), `Faster`, `Slower` |
 | `ComparisonInterval` | Low, High, Contains(value), ToString() — verteilungsfreies 95%-Intervall des medianen paarweisen Verhältnisses |
-| `Statistics` | Durchschnitt, P50, P90, P95, P99, Minimum, Maximum, Standardabweichung, StandardError, RelativeStdDevPercent, CpuZyklenProOp, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
+| `Statistics` | `Avg`, `P50`, `P90`, `P95`, `P99`, `Min`, `Max`, `StdDev`, `StandardError`, `RelativeStdDevPercent`, `CpuCyclesPerOp`, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
 | `TimingSample` | VerstricheneNanosekunden, VerstricheneMillisekunden, VerstricheneTicks, CpuZyklen, **CpuCyclesAreApproximate**, GcInfo |
 | `GcInfo` | Gen0, Gen1, Gen2, Gesamt, IstNull, IsApproximate |
 | `EnvironmentInfo` | Betriebssystem, Architektur, Laufzeitversion, Prozessoranzahl, Ausführungsmodus, Konfiguration, CPU-Zählerart / -verfügbarkeit / Aussagekraft, benutzerdefinierte Tags |
