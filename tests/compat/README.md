@@ -6,6 +6,12 @@ frameworks the rest of the repository cannot build on every OS.
 | project | targets | why |
 |---|---|---|
 | `PicoBench.Net4xSmoke` | `net472`, `net48` | the README promises `netstandard2.0` = ".NET Framework **4.7.2+**"; this is the only place that promise is compiled *and* executed (`net4x-smoke` CI job, windows-latest) |
+| `ConsumerSdk8` | `net8.0`, own `global.json` pinning SDK 8 | proves the generator runs inside the SDK 8 compiler (Roslyn 4.8). A generator built against a newer Roslyn is silently skipped there - CS9057 warning, then CS1061 in the consumer (`consumer-sdk8` job) |
+| `ConsumerNetStandard20` | `netstandard2.0` library | proves another netstandard2.0 library can compile the *generated* code, not just the library itself (the `ValueTask.FromResult` regression was exactly this) (`consumer-netstandard20` job) |
+
+`ConsumerSdk8` and `ConsumerNetStandard20` consume the package from a local feed,
+so they take the same path a real consumer takes:
+`dotnet restore <project> --source <feed> -p:PicoBenchVersion=<version>`.
 
 Run locally (Windows, needs the .NET Framework 4.7.2/4.8 targeting packs):
 

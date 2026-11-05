@@ -69,10 +69,19 @@ jobs:
       - name: Run tests
         run: dotnet test --project tests/PicoBench.Tests/PicoBench.Tests.csproj --configuration Release --no-build --verbosity normal --timeout 120s --no-progress --no-ansi -p:UseProjectReferences=true
 
+      # All four samples, on every leg: `StringVsStringBuilder` and
+      # `AsyncBenchmarks` were never executed anywhere (B5-L4), so a sample could
+      # rot without any build failing.
       - name: Smoke-run samples
+        shell: bash
+        env:
+          SAMPLES: AttributeBased CollectionBenchmarks StringVsStringBuilder AsyncBenchmarks
         run: |
-          dotnet run --project samples/AttributeBased/AttributeBased.csproj --configuration Release --no-build
-          dotnet run --project samples/CollectionBenchmarks/CollectionBenchmarks.csproj --configuration Release --no-build
+          set -euo pipefail
+          for sample in $SAMPLES; do
+            echo "== $sample"
+            dotnet run --project "samples/$sample/$sample.csproj" --configuration Release --no-build
+          done
 
   api-guard:
     name: API surface guard
@@ -290,3 +299,175 @@ jobs:
             }
           }
           if ($failed) { exit 1 }
+
+  # ------------------------------------------------ compatibility matrix --
+  # The generator's Roslyn floor is 4.8 (SDK 8.0.100+). A generator compiled
+  # against a newer Roslyn is silently skipped by the SDK 8 compiler (CS9057,
+  # warning only), so the consumer only sees CS1061 - nothing in a 10.0.x-only
+  # matrix can catch that (B3-C1).
+  consumer-sdk8:
+    name: Consumer on SDK 8 (net8.0)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            8.0.x
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Pack PicoBench for consumption
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          pack_args=(
+            src/PicoBench/PicoBench.csproj
+            --configuration Release
+            --output ./artifacts/consumer-pack
+            -p:Version="$PACKAGE_VERSION"
+            -p:UseProjectReferences=false
+            -p:ContinuousIntegrationBuild=true
+          )
+          dotnet pack "${pack_args[@]}"
+
+      # tests/compat/ConsumerSdk8 carries its own global.json pinning SDK 8, so
+      # the consumer compiles with the Roslyn that ships in the 8.0.4xx band.
+      - name: Restore the consumer with SDK 8
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          feed="$PWD/artifacts/consumer-pack"
+          cd tests/compat/ConsumerSdk8
+          dotnet --version
+          dotnet restore ConsumerSdk8.csproj --source "$feed" -p:PicoBenchVersion="$PACKAGE_VERSION"
+
+      - name: Build and run the consumer with SDK 8
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          cd tests/compat/ConsumerSdk8
+          dotnet build ConsumerSdk8.csproj --configuration Release --no-restore -p:PicoBenchVersion="$PACKAGE_VERSION"
+          output="$(dotnet run --project ConsumerSdk8.csproj --configuration Release --no-build -p:PicoBenchVersion="$PACKAGE_VERSION")"
+          echo "$output"
+          if ! printf '%s' "$output" | grep -q 'Benchmarks: 2'; then
+            echo "::error::the SDK 8 consumer did not run the generated benchmarks"
+            exit 1
+          fi
+
+  # The library targets netstandard2.0, so a netstandard2.0 library is the
+  # consumer most likely to break when emitted code uses a net5+ API
+  # (`ValueTask.FromResult` was the historical case, B3-C5).
+  consumer-netstandard20:
+    name: Consumer on netstandard2.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Pack PicoBench for consumption
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          pack_args=(
+            src/PicoBench/PicoBench.csproj
+            --configuration Release
+            --output ./artifacts/consumer-pack
+            -p:Version="$PACKAGE_VERSION"
+            -p:UseProjectReferences=false
+            -p:ContinuousIntegrationBuild=true
+          )
+          dotnet pack "${pack_args[@]}"
+
+      - name: Build the netstandard2.0 consumer
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          feed="$PWD/artifacts/consumer-pack"
+          cd tests/compat/ConsumerNetStandard20
+          dotnet restore ConsumerNetStandard20.csproj --source "$feed" -p:PicoBenchVersion="$PACKAGE_VERSION"
+          dotnet build ConsumerNetStandard20.csproj --configuration Release --no-restore -p:PicoBenchVersion="$PACKAGE_VERSION"
+
+  # ------------------------------------------------ samples on three OSes --
+  samples:
+    name: Samples (${{ matrix.logical-target }})
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - logical-target: win-x64
+            runs-on: windows-latest
+          - logical-target: linux-x64
+            runs-on: ubuntu-latest
+          - logical-target: osx-arm64
+            runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Show logical target
+        shell: bash
+        env:
+          LOGICAL_TARGET: ${{ matrix.logical-target }}
+        run: echo "running every sample on $LOGICAL_TARGET"
+
+      - name: Restore dependencies
+        shell: bash
+        run: |
+          mkdir -p ./artifacts/nupkg
+          dotnet restore PicoBench.slnx -p:UseProjectReferences=true
+
+      - name: Build
+        run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:UseProjectReferences=true
+
+      - name: Run every sample
+        shell: bash
+        env:
+          SAMPLES: AttributeBased CollectionBenchmarks StringVsStringBuilder AsyncBenchmarks
+        run: |
+          set -euo pipefail
+          for sample in $SAMPLES; do
+            echo "== $sample"
+            dotnet run --project "samples/$sample/$sample.csproj" --configuration Release --no-build
+          done
