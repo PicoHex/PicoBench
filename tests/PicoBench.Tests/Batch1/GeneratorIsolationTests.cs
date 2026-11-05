@@ -163,6 +163,84 @@ public class GeneratorIsolationTests
     }
 
     /// <summary>
+    /// Trigger 4 — a throw inside the <b>transform</b> stage, which is not
+    /// inside <c>RegisterSourceOutput</c> at all. <c>[Params(null)]</c> binds
+    /// <c>null</c> to the whole <c>params object[]</c> array, so the attribute
+    /// argument arrives with <c>Kind == Array</c> and a <c>default</c>
+    /// <c>ImmutableArray</c> for its values; enumerating that throws.
+    /// <para>
+    /// This is the only trigger of the three that no longer has a natural
+    /// resident: 1.4 taught the formatter to handle <c>typeof</c>/arrays, so the
+    /// <c>[Params(new[]{{...}})]</c> crash is gone. What must <b>never</b> go away
+    /// is the guarantee — a throw here aborts the whole generator run
+    /// (<c>CS8785</c>) and every class in the project silently loses its
+    /// <c>.g.cs</c>.
+    /// </para>
+    /// <para>
+    /// Scope note: the underlying <c>NullReferenceException</c> is a separate,
+    /// contained defect (the diagnostic is the unhelpful PBGEN018 rather than a
+    /// "no values" message; a guard on <c>arg.Values.IsDefaultOrEmpty</c> would
+    /// fix it). This test pins the <i>containment</i> contract only, and so stays
+    /// valid when that follow-up lands: one diagnostic for one class, no
+    /// <c>CS8785</c>, the sibling still generates and everything compiles.
+    /// </para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch1")]
+    [Property("Batch1", "1.1/params-null-array")]
+    public async Task ParamsNullArrayArgument_FailsOneClassOnly()
+    {
+        const string source = """
+            using PicoBench;
+
+            namespace Demo
+            {
+                [BenchmarkClass]
+                public partial class NullParams
+                {
+                    [Params(null)]
+                    public int[]? Data { get; set; }
+
+                    [Benchmark]
+                    public void Work() { _ = Data; }
+                }
+
+                [BenchmarkClass]
+                public partial class Sibling
+                {
+                    [Benchmark]
+                    public void Work() { }
+                }
+            }
+            """;
+
+        var output = GeneratorHarness.RunGenerator(source);
+        var compilerErrors = GeneratorHarness.CompileErrors(source, output);
+        Batch1Support.LogRun("params null array", output, compilerErrors);
+
+        // The transform runs before any output stage; an unguarded throw there is
+        // CS8785 and takes every class's source with it.
+        await Assert.That(Batch1Support.HasGeneratorFailure(output)).IsFalse();
+
+        var generatorErrors = Batch1Support.GeneratorErrors(output);
+        await Assert
+            .That(generatorErrors.Count)
+            .IsEqualTo(1)
+            .Because("exactly one diagnostic, for the one class that failed");
+
+        await Assert
+            .That(output.HintNames.Any(static h => h.Contains("Sibling", StringComparison.Ordinal)))
+            .IsTrue()
+            .Because("the healthy sibling must still get its .g.cs");
+        await Assert.That(output.Sources.Length).IsEqualTo(1);
+
+        await Assert
+            .That(Batch1Support.ErrorsInGeneratedCode(output, compilerErrors).Count)
+            .IsEqualTo(0);
+        await Assert.That(compilerErrors.Count).IsEqualTo(0);
+    }
+
+    /// <summary>
     /// The same partial class annotated <c>[BenchmarkClass]</c> twice used to
     /// add the identical hint name twice (<c>ArgumentException</c> → <c>CS8785</c>).
     /// Both analyses see every member of the merged type, so generating the
