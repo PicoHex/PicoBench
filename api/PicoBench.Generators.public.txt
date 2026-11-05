@@ -1,0 +1,4 @@
+I:PicoBench.Generators.BenchmarkGenerator : Microsoft.CodeAnalysis.IIncrementalGenerator
+M:PicoBench.Generators.BenchmarkGenerator..ctor() : void
+M:PicoBench.Generators.BenchmarkGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) : void override
+T:class PicoBench.Generators.BenchmarkGenerator

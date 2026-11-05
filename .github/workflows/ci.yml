@@ -71,6 +71,36 @@ jobs:
           dotnet run --project samples/AttributeBased/AttributeBased.csproj --configuration Release --no-build
           dotnet run --project samples/CollectionBenchmarks/CollectionBenchmarks.csproj --configuration Release --no-build
 
+  api-guard:
+    name: API surface guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      # `-DryRun` builds every assembly that ships to consumers (the library and
+      # the bundled source generator), dumps each public API surface and diffs it
+      # against the committed baselines in api/. A removed member fails this step
+      # with exit 4 unless the change also passes -AllowBreaking, so a breaking
+      # change becomes an explicit decision in the PR instead of a baseline that
+      # gets silently overwritten at release time (B5-H3).
+      - name: Diff the public API against the committed baselines
+        shell: pwsh
+        run: ./scripts/release.ps1 -DryRun
+
   aot-validation:
     name: AOT validation (${{ matrix.logical-target }})
     runs-on: ${{ matrix.runs-on }}
