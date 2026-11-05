@@ -127,8 +127,8 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
             if (Options.IncludeTimestamp)
             {
-                sb.AppendLine($"Timestamp: {suite.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
-                sb.AppendLine($"Duration: {suite.Duration.TotalSeconds:F2}s");
+                sb.AppendLine($"Timestamp: {FormatTimestamp(suite.Timestamp)} UTC");
+                sb.AppendLine($"Duration: {FormatDuration(suite.Duration)}");
             }
 
             // Results
@@ -167,21 +167,21 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             sb.AppendLine(
                 $"  Unmeasured: the clock did not advance for {result.Statistics.UnmeasuredSampleCount} "
                     + $"sample(s); no per-operation value is reported (clock granularity "
-                    + $"~{result.Statistics.ResolutionLimitNanoseconds:F0} ns/op)"
+                    + $"~{FormatMetric(result.Statistics.ResolutionLimitNanoseconds, 0)} ns/op)"
             );
         }
         else if (result.Statistics.ResolutionLimited)
         {
             sb.AppendLine(
                 $"  Resolution: below the measurement floor (resolution limit "
-                    + $"~{result.Statistics.ResolutionLimitNanoseconds:F3} ns/op, "
-                    + $"harness overhead {result.Statistics.OverheadNs:F3} ns/op deducted)"
+                    + $"~{FormatMetric(result.Statistics.ResolutionLimitNanoseconds, 3)} ns/op, "
+                    + $"harness overhead {FormatMetric(result.Statistics.OverheadNs, 3)} ns/op deducted)"
             );
         }
         else if (result.Statistics.OverheadNs > 0)
         {
             sb.AppendLine(
-                $"  Overhead: {result.Statistics.OverheadNs:F3} ns/op deducted (delegate/loop floor)"
+                $"  Overhead: {FormatMetric(result.Statistics.OverheadNs, 3)} ns/op deducted (delegate/loop floor)"
             );
         }
 
@@ -211,7 +211,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         if (result.Statistics.HasHighVariance)
         {
             sb.AppendLine(
-                $"  Noise: High variance ({result.Statistics.RelativeStdDevPercent:F1}% RSD)"
+                $"  Noise: High variance ({FormatMetric(result.Statistics.RelativeStdDevPercent, 1)}% RSD)"
             );
         }
     }
@@ -321,7 +321,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
                     + string.Join(
                         ", ",
                         noisy.Select(static r =>
-                            $"{r.Name} {r.Statistics.RelativeStdDevPercent:F1}% RSD"
+                            $"{r.Name} {FormatMetric(r.Statistics.RelativeStdDevPercent, 1)}% RSD"
                         )
                     )
                     + "; treat the difference as unresolved"
@@ -367,8 +367,8 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     /// </summary>
     private static string FormatCycles(Statistics statistics) =>
         statistics.CpuCyclesAreApproximate
-            ? $"~{statistics.CpuCyclesPerOp:F0}"
-            : $"{statistics.CpuCyclesPerOp:F0}";
+            ? "~" + FormatMetric(statistics.CpuCyclesPerOp, 0)
+            : FormatMetric(statistics.CpuCyclesPerOp, 0);
 
     #endregion
 
@@ -404,7 +404,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             ComparisonOutcome.Faster => comparison.Candidate.Name,
             ComparisonOutcome.Slower => comparison.Baseline.Name,
             ComparisonOutcome.Inconclusive =>
-                $"none (within the {ComparisonResult.DeadBand * 100:F0}% dead band — indistinguishable)",
+                $"none (within the {FormatMetric(ComparisonResult.DeadBand * 100, 0)}% dead band — indistinguishable)",
             _ => "unknown (not measurable)",
         };
 
@@ -510,13 +510,13 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         {
             var cpuWidth = Math.Max(
                 "CPU".Length,
-                rows.Max(r => $"{r.Result.Statistics.CpuCyclesPerOp:F0}".Length)
+                rows.Max(r => FormatMetric(r.Result.Statistics.CpuCyclesPerOp, 0).Length)
             );
             columns.Add(
                 new TableColumn<ComparisonRow>(
                     "CPU",
                     cpuWidth,
-                    r => $"{r.Result.Statistics.CpuCyclesPerOp:F0}"
+                    r => FormatMetric(r.Result.Statistics.CpuCyclesPerOp, 0)
                 )
             );
         }

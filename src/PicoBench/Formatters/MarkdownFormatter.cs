@@ -68,7 +68,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         if (Options.IncludeTimestamp)
         {
             sb.AppendLine(
-                $"> Benchmark run at {suite.Timestamp:yyyy-MM-dd HH:mm:ss} UTC ({suite.Duration.TotalSeconds:F2}s)"
+                $"> Benchmark run at {FormatTimestamp(suite.Timestamp)} UTC ({FormatDuration(suite.Duration)})"
             );
             sb.AppendLine();
         }
@@ -145,7 +145,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
             );
             if (Options.IncludePercentiles)
                 sb.Append(
-                    $"| {FormatPerOp(s, s.P90)}{below} | {FormatPerOp(s, s.P95)}{below} | {FormatPerOp(s, s.P99)}{below} | {FormatPerOp(s, s.StandardError)}{below} | {s.RelativeStdDevPercent:F1} "
+                    $"| {FormatPerOp(s, s.P90)}{below} | {FormatPerOp(s, s.P95)}{below} | {FormatPerOp(s, s.P99)}{below} | {FormatPerOp(s, s.StandardError)}{below} | {FormatMetric(s.RelativeStdDevPercent, 1)} "
                 );
             if (Options.IncludeCpuCycles)
                 sb.Append($"| {FormatCycles(s)} ");
@@ -178,7 +178,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                     + string.Join(
                         ", ",
                         noisy.Select(static r =>
-                            $"{Escape(r.Name)} ({r.Statistics.RelativeStdDevPercent:F1}% RSD)"
+                            $"{Escape(r.Name)} ({FormatMetric(r.Statistics.RelativeStdDevPercent, 1)}% RSD)"
                         )
                     )
                     + "; treat the difference as unresolved."
@@ -204,8 +204,8 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     /// </summary>
     private static string FormatCycles(Statistics statistics) =>
         statistics.CpuCyclesAreApproximate
-            ? $"~{statistics.CpuCyclesPerOp:F0}"
-            : $"{statistics.CpuCyclesPerOp:F0}";
+            ? "~" + FormatMetric(statistics.CpuCyclesPerOp, 0)
+            : FormatMetric(statistics.CpuCyclesPerOp, 0);
 
     #endregion
 
@@ -263,12 +263,12 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                 sb.Append($" {FormatTime(row.Stats.P90)} |");
                 sb.Append($" {FormatTime(row.Stats.P99)} |");
                 sb.Append($" {FormatTime(row.Stats.StandardError)} |");
-                sb.Append($" {row.Stats.RelativeStdDevPercent:F1} |");
+                sb.Append($" {FormatMetric(row.Stats.RelativeStdDevPercent, 1)} |");
             }
 
             if (Options.IncludeCpuCycles)
             {
-                sb.Append($" {row.Stats.CpuCyclesPerOp:F0} |");
+                sb.Append($" {FormatMetric(row.Stats.CpuCyclesPerOp, 0)} |");
             }
 
             if (Options.IncludeGcInfo)

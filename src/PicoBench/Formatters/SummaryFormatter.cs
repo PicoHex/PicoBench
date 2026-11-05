@@ -95,12 +95,14 @@ public static class SummaryFormatter
             foreach (var group in byCategory)
             {
                 var avg = group.Average(c => c.Speedup);
-                sb.AppendLine($"▶ {group.Key}: {avg:F2}x average speedup");
+                sb.AppendLine($"▶ {group.Key}: {FormatterBase.FormatMetric(avg, 2)}x average speedup");
 
                 foreach (var c in group)
                 {
                     var indicator = FormatterBase.GetSpeedupIndicator(c.Speedup);
-                    sb.AppendLine($"   {c.Name, -35}: {c.Speedup:F2}x {indicator}");
+                    sb.AppendLine(
+                        $"   {c.Name, -35}: {FormatterBase.FormatMetric(c.Speedup, 2)}x {indicator}"
+                    );
                 }
                 sb.AppendLine();
             }
@@ -118,14 +120,22 @@ public static class SummaryFormatter
             $"  {options.CandidateLabel} {options.WinsLabel}: {wins} / {total} scenarios",
             options.BoxWidth
         );
-        AppendPaddedLine(sb, $"  Average speedup: {overallAvg:F2}x faster", options.BoxWidth);
-        AppendPaddedLine(sb, $"  Maximum speedup: {max:F2}x faster", options.BoxWidth);
+        AppendPaddedLine(
+                sb,
+                $"  Average speedup: {FormatterBase.FormatMetric(overallAvg, 2)}x faster",
+                options.BoxWidth
+            );
+        AppendPaddedLine(
+                sb,
+                $"  Maximum speedup: {FormatterBase.FormatMetric(max, 2)}x faster",
+                options.BoxWidth
+            );
 
         if (options.ShowDuration && duration.HasValue)
         {
             AppendPaddedLine(
                 sb,
-                $"  Duration: {duration.Value.TotalSeconds:F2}s",
+                $"  Duration: {FormatterBase.FormatMetric(duration.Value.TotalSeconds, 2)}s",
                 options.BoxWidth
             );
         }

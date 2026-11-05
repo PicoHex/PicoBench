@@ -86,8 +86,8 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeTimestamp)
         {
-            sb.AppendLine($"# Timestamp: {suite.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
-            sb.AppendLine($"# Duration: {suite.Duration.TotalSeconds:F2}s");
+            sb.AppendLine($"# Timestamp: {FormatTimestamp(suite.Timestamp)} UTC");
+            sb.AppendLine($"# Duration: {FormatDuration(suite.Duration)}");
         }
 
         sb.AppendLine();

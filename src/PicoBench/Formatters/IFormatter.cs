@@ -215,10 +215,59 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     /// <summary>
     /// Format a nanosecond value using the configured precision.
     /// </summary>
-    protected string FormatTime(double nanoseconds)
-    {
-        return nanoseconds.ToString($"F{Options.TimeDecimalPlaces}", CultureInfo.InvariantCulture);
-    }
+    protected string FormatTime(double nanoseconds) =>
+        FormatMetric(nanoseconds, Options.TimeDecimalPlaces);
+
+    /// <summary>
+    /// Invariant fixed-point rendering of one metric: nanoseconds, RSD percent,
+    /// CPU cycles or seconds.
+    /// <para>
+    /// Batch 2 · 2.1 (B2-H1): the library's "invariant culture" policy used to
+    /// live in <see cref="FormatTime"/> and <see cref="FormatSpeedup"/> only,
+    /// while the RSD/cycle/duration/speedup figures the four formatters
+    /// <em>also</em> print went through <c>$"{x:F1}"</c>, i.e. through
+    /// <see cref="CultureInfo.CurrentCulture"/>. A de-DE machine therefore wrote
+    /// <c>12,3</c> into a column whose neighbours used <c>.</c>. Every numeric
+    /// cell now goes through this one method, and no formatter may interpolate a
+    /// metric with a format specifier again.
+    /// </para>
+    /// <para>
+    /// <c>internal</c> rather than <c>protected</c> because
+    /// <see cref="SummaryFormatter"/> is a static helper outside the base class
+    /// and prints the same speedup/duration figures the box of the other
+    /// formatters does.
+    /// </para>
+    /// </summary>
+    internal static string FormatMetric(double value, int decimals) =>
+        value.ToString(
+            "F" + decimals.ToString(CultureInfo.InvariantCulture),
+            CultureInfo.InvariantCulture
+        );
+
+    /// <summary>
+    /// Timestamp of a run: Gregorian calendar, invariant culture, second
+    /// precision. Interpolating a <see cref="DateTime"/> with
+    /// <c>yyyy-MM-dd HH:mm:ss</c> formats it in
+    /// <see cref="CultureInfo.CurrentCulture"/>'s <em>calendar</em>, which turns
+    /// "2026-11-02 UTC" into "2569-11-02 UTC" on th-TH and "1448-05-22 UTC" on
+    /// ar-SA — a wrong date wearing a UTC label (Batch 2 · 2.1).
+    /// </summary>
+    internal static string FormatTimestamp(DateTime timestamp) =>
+        timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+    /// <summary>Duration as seconds with two decimals plus its unit (invariant).</summary>
+    internal static string FormatDuration(TimeSpan duration) =>
+        FormatMetric(duration.TotalSeconds, 2) + "s";
+
+    /// <summary>
+    /// Invariant speedup ratio with its <c>x</c> suffix. Shared so the four
+    /// formatters cannot render the same ratio with two different precisions or
+    /// two different decimal separators (Batch 2 · 2.1 / 2.2).
+    /// </summary>
+    internal static string FormatSpeedupValue(double? speedup, int decimals) =>
+        speedup is { } value
+            ? FormatMetric(value, decimals) + "x"
+            : NotCollected;
 
     /// <summary>
     /// Format a speedup ratio using the configured precision.
