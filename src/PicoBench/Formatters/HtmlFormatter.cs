@@ -435,7 +435,7 @@ footer {
         statistics.Unmeasured
             ? NotCollected
             : statistics.ResolutionLimited
-                ? "&lt;" + BoundCell(unit, statistics.ResolutionLimitNanoseconds).Substring(1)
+                ? "&lt;" + BoundCellValue(unit, statistics.ResolutionLimitNanoseconds)
                 : MetricCell(unit, nanoseconds);
 
     /// <summary>

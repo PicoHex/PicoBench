@@ -350,13 +350,20 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     /// value is bounded by zero. The precision therefore widens until the first
     /// significant digit appears, and never narrows below the configured one.
     /// </summary>
-    internal string BoundCell(TimeUnit unit, double nanoseconds)
+    internal string BoundCell(TimeUnit unit, double nanoseconds) =>
+        "<" + BoundCellValue(unit, nanoseconds);
+
+    /// <summary>
+    /// The number of an upper bound, without the <c>&lt;</c>: HTML has to write the
+    /// sign as an entity, so each format adds its own marker to the same number.
+    /// </summary>
+    internal string BoundCellValue(TimeUnit unit, double nanoseconds)
     {
         var scaled = unit.Of(nanoseconds);
         var decimals = Options.TimeDecimalPlaces;
         while (decimals < 9 && scaled != 0 && Math.Abs(scaled) < Math.Pow(10, -decimals) / 2)
             decimals++;
-        return "<" + FormatMetric(scaled, decimals);
+        return FormatMetric(scaled, decimals);
     }
 
     /// <summary>Duration as seconds with two decimals plus its unit (invariant).</summary>
