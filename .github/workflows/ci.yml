@@ -244,3 +244,49 @@ jobs:
             exit 1
           fi
           echo "AOT artifact ran and reported its benchmarks"
+
+  # The README claims netstandard2.0 = ".NET Framework 4.7.2+". Nothing ever
+  # compiled against a .NET Framework target, so the claim had no verification
+  # path (B5-M5). net4x targeting packs only exist on Windows, which is why this
+  # is its own job instead of a matrix leg of build-and-test.
+  net4x-smoke:
+    name: .NET Framework smoke (net472 / net48)
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Build the net4x compatibility project
+        shell: pwsh
+        run: dotnet build tests/compat/PicoBench.Net4xSmoke/PicoBench.Net4xSmoke.csproj --configuration Release
+
+      - name: Run the net4x compatibility project
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($tfm in @('net472', 'net48')) {
+            Write-Host "== $tfm"
+            $output = & dotnet run --project tests/compat/PicoBench.Net4xSmoke/PicoBench.Net4xSmoke.csproj --configuration Release --no-build --framework $tfm 2>&1
+            $exit = $LASTEXITCODE
+            $output | Write-Host
+            if ($exit -ne 0) {
+              Write-Host "::error::$tfm exited with $exit"
+              $failed = $true
+            }
+            elseif (-not ($output -match 'Benchmarks: 2')) {
+              Write-Host "::error::$tfm did not report two benchmarks"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }

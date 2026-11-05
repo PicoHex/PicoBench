@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Compile-and-run smoke test for the .NET Framework leg of the netstandard2.0
+    promise (review item B5-M5 / Batch 3.6).
+
+    README documents "netstandard2.0 - compatible with .NET Framework 4.7.2+"
+    (4.7.2 is where RuntimeInformation - which Models.cs and Runner.Cpu use
+    unconditionally - lives in mscorlib). Until this project existed, nothing in
+    the repository ever compiled against a .NET Framework target, so the claim
+    had no verification path at all.
+
+    Deliberately NOT part of PicoBench.slnx: net4x target packs only exist on
+    Windows, and the rest of the solution must keep building on Linux and macOS.
+    The `net4x-smoke` CI job builds and runs it.
+  -->
+  <PropertyGroup>
+    <!-- net472 is the documented floor (README: ".NET Framework 4.7.2+", where
+         RuntimeInformation enters mscorlib); net48 is what the CI image can
+         actually execute. Both are compiled, both are run where the runtime
+         exists. -->
+    <TargetFrameworks>net472;net48</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>PicoBench.Net4xSmoke</RootNamespace>
+    <AssemblyName>PicoBench.Net4xSmoke</AssemblyName>
+    <!-- The SDK derives C# 7.3 for net48, and the GENERATED code does not compile
+         at 7.3: the generator emits `#nullable enable` and `config ??= ...`, both
+         C# 8 features, so a default net48 consumer project fails with
+         CS8370 before it sees a single PicoBench diagnostic. 8.0 is the floor
+         the generated code actually needs, not a preference; see the note in
+         tests/compat/README.md. Raising this to `latest` would hide the
+         requirement instead of documenting it. -->
+    <LangVersion>8.0</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\PicoBench\PicoBench.csproj" />
+    <!-- The generator reaches consumers through the NuGet package's
+         buildTransitive props, which a ProjectReference does not emulate; add it
+         explicitly so the generated code is compiled for net48 too (this is the
+         in-repo development pattern from src/README.md). -->
+    <ProjectReference Include="..\..\..\src\PicoBench.Generators\PicoBench.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>
