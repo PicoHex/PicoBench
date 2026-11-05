@@ -15,6 +15,14 @@ internal static class StatisticsCalculator
     /// <param name="resolutionLimitNanoseconds">
     /// Smallest per-operation value this run can resolve; 0 when unknown.
     /// </param>
+    /// <remarks>
+    /// The percentiles this publishes (<c>P50</c>, <c>P90</c>, <c>P95</c>, <c>P99</c>)
+    /// use linear interpolation between the two nearest order statistics (type 7;
+    /// see <see cref="GetPercentile"/>). The spread is the <b>sample</b> standard
+    /// deviation (Bessel's correction, <c>N-1</c>), and the relative standard
+    /// deviation is that deviation over <c>|mean|</c>, kept at 0 when the mean is
+    /// below <c>1e-12</c> rather than dividing by zero.
+    /// </remarks>
     public static Statistics Compute(
         double[] perOpTimes,
         double[] perOpCycles,
@@ -130,7 +138,32 @@ internal static class StatisticsCalculator
         };
     }
 
+    /// <summary>
+    /// One percentile of a sorted sample, by <b>linear interpolation between the two
+    /// nearest order statistics</b> — the method statistics packages call <b>type 7</b>
+    /// (Excel <c>PERCENTILE.INC</c>, NumPy's default, R's <c>quantile(type = 7)</c>).
+    /// <para>
+    /// The position is <c>p/100 * (N - 1)</c> and the value is
+    /// <c>x[floor] * (1 - w) + x[floor + 1] * w</c> with <c>w</c> the fractional part.
+    /// Worked examples, which are the values <c>[1,2,3,4]</c> and <c>[1,3]</c> produce
+    /// (and which the tests pin, so a change of method cannot pass silently):
+    /// </para>
+    /// <list type="bullet">
+    /// <item><c>[1,2,3,4]</c>: P50 = 2.5 (position 1.5), P90 = 3.7 (2.7), P95 = 3.85
+    /// (2.85), P99 = 3.97 (2.97).</item>
+    /// <item><c>[1,3]</c>: P50 = 2.0 (position 0.5), P90 = 2.8 (0.9).</item>
+    /// </list>
+    /// <para>
+    /// Consequence worth knowing at small N: with ten samples (the
+    /// <c>BenchmarkConfig.Quick</c> preset) P95 and P99 sit within a few percent of
+    /// <see cref="Statistics.Max"/> — <c>1..10</c> gives P99 = 9.91 — so below about
+    /// twenty samples the tail columns say "the tail is the maximum", not "the tail is
+    /// stable". N = 0 yields 0 and N = 1 yields the single value (the library must not
+    /// return NaN for a degenerate run).
+    /// </para>
+    /// </summary>
     private static double GetPercentile(double[] sortedData, int percentile)
+
     {
         switch (sortedData.Length)
         {
@@ -140,7 +173,7 @@ internal static class StatisticsCalculator
                 return sortedData[0];
         }
 
-        // Standard linear interpolation method
+        // Type-7 linear interpolation; see the doc comment above for the worked values.
         var position = (percentile / 100.0) * (sortedData.Length - 1);
         var lower = (int)Math.Floor(position);
         var upper = lower + 1;

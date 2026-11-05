@@ -81,16 +81,26 @@ public sealed class Statistics
     /// <summary>Average time in nanoseconds per operation.</summary>
     public double Avg { get; init; }
 
-    /// <summary>Median (50th percentile) in nanoseconds.</summary>
+    /// <summary>
+    /// Median (50th percentile) in nanoseconds, by linear interpolation between the
+    /// two nearest order statistics — the method statistics packages call type 7
+    /// (Excel <c>PERCENTILE.INC</c>, NumPy's default). Below about twenty samples the
+    /// high percentiles sit next to <see cref="Max"/>; the README's "Percentiles"
+    /// note says how to read that.
+    /// </summary>
     public double P50 { get; init; }
 
-    /// <summary>90th percentile in nanoseconds.</summary>
+    /// <summary>90th percentile in nanoseconds (type 7, like <see cref="P50"/>).</summary>
     public double P90 { get; init; }
 
-    /// <summary>95th percentile in nanoseconds.</summary>
+    /// <summary>95th percentile in nanoseconds (type 7, like <see cref="P50"/>).</summary>
     public double P95 { get; init; }
 
-    /// <summary>99th percentile in nanoseconds.</summary>
+    /// <summary>
+    /// 99th percentile in nanoseconds (type 7, like <see cref="P50"/>). With fewer
+    /// than twenty samples this is close to <see cref="Max"/> by construction, so it
+    /// does not describe a stable tail.
+    /// </summary>
     public double P99 { get; init; }
 
     /// <summary>Minimum time in nanoseconds.</summary>

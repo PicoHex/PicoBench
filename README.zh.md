@@ -18,7 +18,7 @@
 - **显式披露的极限** - `OverheadNs`、`ResolutionLimitNanoseconds`、`ResolutionLimited` 与 `Unmeasured` 说明了本次运行能够分辨与无法分辨什么，因此噪声级的结果不会被当作快速操作来读
 - **GC 跟踪** - 监控基准测试期间的 Gen0/Gen1/Gen2 回收计数（不含 setup/teardown）
 - **CPU 周期计数** - 同步路径使用线程级周期计数（Windows `QueryThreadCycleTime`；Linux 在操作系统允许非特权访问时使用 `perf_event`）。异步基准读取进程级计数器，因为线程级计数器无法跨线程切换跟踪，因此标记为 `CpuCyclesAreApproximate`（四种格式中均带 `~`）。macOS 没有周期计数器：`mach_absolute_time` 是单调的*时间*代理，而不是周期，同样会被标记
-- **统计分析** - 均值、中位数、P90、P95、P99、最小值、最大值、标准差、标准误和相对标准差
+- **统计分析** - 均值、中位数、P90、P95、P99、最小值、最大值、标准差、标准误和相对标准差 分位数采用最近两个样本之间的线性插值（统计软件称之为 *type 7*，即 Excel `PERCENTILE.INC` 与 NumPy 的默认口径），方差为样本方差（除以 `N-1`）；样本数少于约 20 时 P99 接近最大值，因此尾部分位数并不代表稳定的尾部。
 - **多种输出格式** - 4 个内置 `IFormatter` 格式化器（Console、Markdown、HTML、CSV）以及程序化摘要输出
 - **参数化基准测试** - `[Params]` 属性，支持自动笛卡尔积迭代
 - **比较支持** - 基准与候选在交错轮次中测量；结论取每轮配对比值的中位数，并且必须同时满足 5% 死区与排除持平的无分布区间，因此轮次间的噪声不会被当作性能提升发布
