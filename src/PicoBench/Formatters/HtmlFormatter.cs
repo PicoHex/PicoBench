@@ -349,18 +349,22 @@ footer {
 
     private void AppendResultsTable(StringBuilder sb, List<BenchmarkResult> results)
     {
+        // Batch 2 · 2.4 (B2-M5/M6): same table unit as Console and Markdown, chosen
+        // by the same rule and named in the same header slot.
+        var unit = TableUnit(PerOpValues(results));
+
         sb.AppendLine("<table>");
         sb.AppendLine("<thead><tr>");
         sb.AppendLine("<th>Name</th>");
-        sb.AppendLine("<th class=\"number\">Avg (ns)</th>");
-        sb.AppendLine("<th class=\"number\">P50 (ns)</th>");
+        sb.AppendLine($"<th class=\"number\">Avg ({unit.Symbol})</th>");
+        sb.AppendLine($"<th class=\"number\">P50 ({unit.Symbol})</th>");
 
         if (Options.IncludePercentiles)
         {
-            sb.AppendLine("<th class=\"number\">P90 (ns)</th>");
-            sb.AppendLine("<th class=\"number\">P95 (ns)</th>");
-            sb.AppendLine("<th class=\"number\">P99 (ns)</th>");
-            sb.AppendLine("<th class=\"number\">StdErr (ns)</th>");
+            sb.AppendLine($"<th class=\"number\">P90 ({unit.Symbol})</th>");
+            sb.AppendLine($"<th class=\"number\">P95 ({unit.Symbol})</th>");
+            sb.AppendLine($"<th class=\"number\">P99 ({unit.Symbol})</th>");
+            sb.AppendLine($"<th class=\"number\">StdErr ({unit.Symbol})</th>");
             sb.AppendLine("<th class=\"number\">RSD (%)</th>");
         }
 
@@ -384,15 +388,15 @@ footer {
             sb.AppendLine(
                 $"<td>{Escape(result.Name)}{(s.Unmeasured ? " <span class=\"note\">(unmeasured)</span>" : s.ResolutionLimited ? " <span class=\"note\">(below resolution)</span>" : "")}</td>"
             );
-            sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.Avg)}</td>");
-            sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P50)}</td>");
+            sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.Avg, unit)}</td>");
+            sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P50, unit)}</td>");
 
             if (Options.IncludePercentiles)
             {
-                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P90)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P95)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P99)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.StandardError)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P90, unit)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P95, unit)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P99, unit)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.StandardError, unit)}</td>");
                 sb.AppendLine($"<td class=\"number\">{FormatMetric(s.RelativeStdDevPercent, 1)}</td>");
             }
 
@@ -422,16 +426,45 @@ footer {
     }
 
     /// <summary>
-    /// Renders a per-operation cell. A value the run could not resolve above the
-    /// harness floor is written as an upper bound (<c>&lt;limit</c>), and a run
-    /// whose clock never advanced is written as "not measured".
+    /// Renders a per-operation cell in the table's unit. A value the run could not
+    /// resolve above the harness floor is written as an upper bound
+    /// (<c>&lt;limit</c>), and a run whose clock never advanced is written as "not
+    /// measured".
     /// </summary>
-    private string FormatPerOp(Statistics statistics, double nanoseconds) =>
+    private string FormatPerOp(Statistics statistics, double nanoseconds, TimeUnit unit) =>
         statistics.Unmeasured
-            ? "N/A"
+            ? NotCollected
             : statistics.ResolutionLimited
-                ? $"&lt;{FormatTime(statistics.ResolutionLimitNanoseconds)}"
-                : FormatTime(nanoseconds);
+                ? "&lt;" + BoundCell(unit, statistics.ResolutionLimitNanoseconds).Substring(1)
+                : MetricCell(unit, nanoseconds);
+
+    /// <summary>
+    /// Every per-operation figure the results table holds; the table's unit is
+    /// chosen from the largest of them (Batch 2 · 2.4).
+    /// </summary>
+    private static IEnumerable<double> PerOpValues(List<BenchmarkResult> results)
+    {
+        foreach (var result in results)
+        {
+            var s = result.Statistics;
+            yield return s.Avg;
+            yield return s.P50;
+            yield return s.P90;
+            yield return s.P95;
+            yield return s.P99;
+            yield return s.StandardError;
+        }
+    }
+
+    /// <summary>Every per-operation figure a statistics object contributes.</summary>
+    private static IEnumerable<double> PerOpValues(Statistics statistics)
+    {
+        yield return statistics.Avg;
+        yield return statistics.P50;
+        yield return statistics.P90;
+        yield return statistics.P99;
+        yield return statistics.StandardError;
+    }
 
     /// <summary>
     /// Renders the cycle cell. <c>~</c> marks a process-wide counter or a
@@ -496,18 +529,23 @@ footer {
             rows.Add((c.Name, Options.BaselineLabel, c.Baseline.Statistics, null));
         }
 
+        // Batch 2 · 2.4 (B2-M5): `P50 | P90 | P99 | StdErr` were bare headers here
+        // while Console wrote `Avg (ns)`. One unit for the table, named in every
+        // per-operation header, exactly as in the other two display formats.
+        var unit = TableUnit(rows.Select(r => r.Stats).SelectMany(PerOpValues));
+
         sb.AppendLine("<table>");
         sb.AppendLine("<thead><tr>");
         sb.AppendLine("<th>Test Case</th>");
-        sb.AppendLine("<th class=\"number\">Avg (ns)</th>");
+        sb.AppendLine($"<th class=\"number\">Avg ({unit.Symbol})</th>");
         sb.AppendLine("<th class=\"number\">Speedup</th>");
 
         if (Options.IncludePercentiles)
         {
-            sb.AppendLine("<th class=\"number\">P50</th>");
-            sb.AppendLine("<th class=\"number\">P90</th>");
-            sb.AppendLine("<th class=\"number\">P99</th>");
-            sb.AppendLine("<th class=\"number\">StdErr</th>");
+            sb.AppendLine($"<th class=\"number\">P50 ({unit.Symbol})</th>");
+            sb.AppendLine($"<th class=\"number\">P90 ({unit.Symbol})</th>");
+            sb.AppendLine($"<th class=\"number\">P99 ({unit.Symbol})</th>");
+            sb.AppendLine($"<th class=\"number\">StdErr ({unit.Symbol})</th>");
             sb.AppendLine("<th class=\"number\">RSD (%)</th>");
         }
 
@@ -535,15 +573,15 @@ footer {
 
             sb.AppendLine("<tr>");
             sb.AppendLine($"<td>{Escape(testCase)}</td>");
-            sb.AppendLine($"<td class=\"number\">{FormatTime(row.Stats.Avg)}</td>");
+            sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.Avg, unit)}</td>");
             sb.AppendLine($"<td class=\"number\">{speedupText}</td>");
 
             if (Options.IncludePercentiles)
             {
-                sb.AppendLine($"<td class=\"number\">{FormatTime(row.Stats.P50)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatTime(row.Stats.P90)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatTime(row.Stats.P99)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatTime(row.Stats.StandardError)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.P50, unit)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.P90, unit)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.P99, unit)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.StandardError, unit)}</td>");
                 sb.AppendLine($"<td class=\"number\">{FormatMetric(row.Stats.RelativeStdDevPercent, 1)}</td>");
             }
 

@@ -358,7 +358,21 @@ var csv      = new CsvFormatter();         // CSV for data analysis
 Console.WriteLine(SummaryFormatter.Format(suite.Comparisons));
 ```
 
-Console, Markdown, HTML, and CSV outputs include precision-oriented metadata such as standard error, relative standard deviation, and CPU counter notes when available.
+Console, Markdown, HTML, and CSV outputs include the same precision-oriented metrics — standard error, relative standard deviation, percentiles — and the CPU counter notes when available. Console, Markdown and HTML also print the same table unit for the same data (see below).
+
+### Precision profile: raw versus display
+
+One figure has two jobs, and the formatters keep them apart instead of each picking its own compromise. A value is either **raw** — nanoseconds, exactly as measured — or **display** — the same value scaled to the unit that fits the table.
+
+- **Raw** (`MetricPrecision.Raw`): plain nanoseconds, and the column header (or the CSV column name, `Avg_ns`, `StdErr_ns`, …) says `ns`. `CsvFormatter` always writes this, whatever unit the data would prefer, because a data file whose unit changes with the magnitude of the data is not machine-readable.
+- **Display** (`MetricPrecision.Display`): the table picks one unit for all of its per-operation columns — `ns` below 1 000 ns, `µs` below 1 000 µs, `ms` below 1 000 ms, seconds above that — and names it in the header (`Avg (µs)`). One unit per table, not per cell, so a column stays comparable: a five-second benchmark reads `5.0` under `Avg (s)` and its 150 ns neighbour reads `0.0` under the same header instead of being silently rescaled.
+
+```csharp
+var raw = new FormatterOptions { PrecisionProfile = MetricPrecision.Raw };
+Console.WriteLine(new ConsoleFormatter(raw).Format(suite)); // 5000000000.0 in "Avg (ns)"
+```
+
+The displayed value is the same text in Console, Markdown and HTML (a test asserts it character for character), and the raw number is always in the CSV, so a scaled display never becomes the only copy of a measurement.
 
 ### Formatting Targets
 
@@ -382,6 +396,7 @@ var options = new FormatterOptions
     IncludePercentiles    = true,
     TimeDecimalPlaces     = 1,
     SpeedupDecimalPlaces  = 2,
+    PrecisionProfile      = MetricPrecision.Display, // or .Raw; CSV always writes raw
     BaselineLabel         = "Old",
     CandidateLabel        = "New",
     OutputDirectory       = "results", // Used by WriteToFile methods

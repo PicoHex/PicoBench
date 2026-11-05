@@ -82,6 +82,20 @@ public sealed class FormatterOptions
                     );
     } = 2;
 
+    /// <summary>
+    /// How per-operation figures are rendered, or <c>null</c> for the formatter's
+    /// own default (Batch 2 · 2.4, B2-M5/M6).
+    /// <para>
+    /// <see cref="MetricPrecision.Display"/> scales a table to its readable unit
+    /// and names that unit in the header; <see cref="MetricPrecision.Raw"/> stays
+    /// in nanoseconds. The default is per format on purpose: Console, Markdown and
+    /// HTML are read by a human (<c>Display</c>), while CSV is read by a program
+    /// and its columns are named <c>_ns</c>, so <see cref="CsvFormatter"/> always
+    /// writes raw nanoseconds and ignores this setting.
+    /// </para>
+    /// </summary>
+    public MetricPrecision? PrecisionProfile { get; init; }
+
     /// <summary>Label for the baseline result in comparisons.</summary>
     public string BaselineLabel { get; init; } = "Baseline";
 
@@ -213,7 +227,16 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     #endregion
 
     /// <summary>
-    /// Format a nanosecond value using the configured precision.
+    /// Format a nanosecond value using the configured precision, <b>without</b> any
+    /// unit scaling: the raw tier.
+    /// <para>
+    /// Batch 2 · 2.4 (B2-M6): the built-in display formatters no longer call this
+    /// for a table cell — a cell goes through <see cref="MetricCell"/> under the
+    /// table's <see cref="TimeUnit"/>, so a five-second benchmark reads
+    /// <c>5.0</c> under an <c>(s)</c> header instead of <c>5000000000.0</c> under
+    /// an <c>(ns)</c> one. It stays available (a custom formatter may want the raw
+    /// nanoseconds in a fixed unit) and stays in nanoseconds on purpose.
+    /// </para>
     /// </summary>
     protected string FormatTime(double nanoseconds) =>
         FormatMetric(nanoseconds, Options.TimeDecimalPlaces);
@@ -271,6 +294,70 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     /// </summary>
     internal static string FormatTimestamp(DateTime timestamp) =>
         timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The precision profile actually in effect: the caller's
+    /// <see cref="FormatterOptions.PrecisionProfile"/>, or this format's own
+    /// default. Batch 2 · 2.4 (B2-M5/M6).
+    /// </summary>
+    internal MetricPrecision Precision => Options.PrecisionProfile ?? DefaultPrecision;
+
+    /// <summary>
+    /// This format's own precision profile when the caller did not ask for one.
+    /// <c>Display</c> for the three human-readable formats, <c>Raw</c> for
+    /// <see cref="CsvFormatter"/> (whose columns are named <c>_ns</c>).
+    /// <c>internal</c> rather than <c>protected</c> so that choosing a default is
+    /// not a new public extension point.
+    /// </summary>
+    internal virtual MetricPrecision DefaultPrecision => MetricPrecision.Display;
+
+    /// <summary>
+    /// The unit one per-operation table is written in: nanoseconds under the
+    /// <see cref="MetricPrecision.Raw"/> profile, otherwise the readable unit of
+    /// the table's largest value. Every per-operation column of one table must use
+    /// the same <see cref="TimeUnit"/>, so the unit is computed from the whole
+    /// column set once instead of per cell.
+    /// </summary>
+    internal TimeUnit TableUnit(IEnumerable<double> perOpValues) =>
+        Precision == MetricPrecision.Raw
+            ? TimeUnit.Nanoseconds
+            : TimeUnit.For(MaxFinite(perOpValues));
+
+    /// <summary>The largest finite value of a sequence; 0 when there is none.</summary>
+    internal static double MaxFinite(IEnumerable<double> values)
+    {
+        var max = 0.0;
+        foreach (var value in values)
+        {
+            if (IsFinite(value) && value > max)
+                max = value;
+        }
+        return max;
+    }
+
+    /// <summary>
+    /// One per-operation cell under a table's unit: the metric with
+    /// <see cref="FormatterOptions.TimeDecimalPlaces"/> decimals, or
+    /// <see cref="NotCollected"/> when the value is not a number.
+    /// </summary>
+    internal string MetricCell(TimeUnit unit, double nanoseconds) =>
+        FormatMetric(unit.Of(nanoseconds), Options.TimeDecimalPlaces);
+
+    /// <summary>
+    /// An upper bound (<c>&lt;limit</c>) under a table's unit. The bound is a floor,
+    /// not a round number: under a coarse unit (a <c>0.345 ns</c> limit in a
+    /// <c>µs</c> column) one decimal would print <c>&lt;0.0</c>, which claims the
+    /// value is bounded by zero. The precision therefore widens until the first
+    /// significant digit appears, and never narrows below the configured one.
+    /// </summary>
+    internal string BoundCell(TimeUnit unit, double nanoseconds)
+    {
+        var scaled = unit.Of(nanoseconds);
+        var decimals = Options.TimeDecimalPlaces;
+        while (decimals < 9 && scaled != 0 && Math.Abs(scaled) < Math.Pow(10, -decimals) / 2)
+            decimals++;
+        return "<" + FormatMetric(scaled, decimals);
+    }
 
     /// <summary>Duration as seconds with two decimals plus its unit (invariant).</summary>
     internal static string FormatDuration(TimeSpan duration) =>
