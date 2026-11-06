@@ -37,6 +37,9 @@ if [ ! -s "$gate" ]; then
     exit 1
 fi
 
+failures=0
+cases=0
+
 normalise() { grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$1" | sed 's/[[:space:]]*$//'; }
 if diff -u <(normalise "$validate") <(normalise "$gate") > "$work/drift.diff"; then
     printf 'ok: the inline gate is identical to scripts/validate-release-tag.sh
@@ -47,9 +50,6 @@ else
     sed 's/^/      /' "$work/drift.diff"
     failures=$((failures + 1))
 fi
-
-failures=0
-cases=0
 
 case_() {
     cases=$((cases + 1))
