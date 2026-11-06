@@ -196,6 +196,7 @@ REQUIRED_JOBS = {
     "samples": ["AttributeBased", "StringVsStringBuilder", "AsyncBenchmarks"],
     "release-scripting": [
         "release-ps1-exit-codes.ps1",
+        "shell-lint.test.sh",
         "release-build-exit-codes.test.sh",
         "release-tag-validation.test.sh",
         "packaging-guard.test.sh",
