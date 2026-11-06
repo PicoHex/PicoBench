@@ -77,6 +77,7 @@ internal static class BenchmarkClassAnalyzer
     )
     {
         var diagnostics = new List<Diagnostic>();
+        var compilation = ctx.SemanticModel.Compilation;
 
         if (ctx.TargetSymbol is not INamedTypeSymbol typeSymbol)
             return new GeneratorAnalysisResult(null, diagnostics.ToImmutableArray());
@@ -271,6 +272,20 @@ internal static class BenchmarkClassAnalyzer
             || (iterCleanup?.IsAsync ?? false)
             || methods.Any(m => m.IsAsync);
 
+        // G20: the emitted file has to compile at the language version the
+        // *consumer* chose (a default net48 / netstandard2.0 project is C# 7.3,
+        // where a nullable annotation and `#nullable` are CS8370). Decided per
+        // compilation rather than per model so a C# 8+ consumer keeps the
+        // nullable-aware signature it had, and the flag is part of the model
+        // value so an incremental run re-emits when the language version changes
+        // (a LangVersion edit in the .csproj).
+        // LanguageVersion lives on CSharpCompilation; the semantic model in a
+        // C# compilation always is one, and the IsCSharpCompilation guard keeps
+        // this honest for any other host (then just keep the annotations).
+        var emitNullableAnnotations =
+            compilation is not CSharpCompilation csharpCompilation
+            || csharpCompilation.LanguageVersion >= LanguageVersion.CSharp8;
+
         return new GeneratorAnalysisResult(
             new BenchmarkClassModel
             {
@@ -279,6 +294,7 @@ internal static class BenchmarkClassAnalyzer
                 AccessModifier = accessibility,
                 Description = description,
                 IsAsync = isAsync,
+                EmitNullableAnnotations = emitNullableAnnotations,
                 GlobalSetupMethod = globalSetup,
                 GlobalCleanupMethod = globalCleanup,
                 IterationSetupMethod = iterSetup,

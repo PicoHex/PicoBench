@@ -115,10 +115,13 @@ is built by a CI job:
 | `samples` | all four samples run on Windows, Linux and macOS |
 | `release-scripting` | the tag gate, both release scripts' exit codes, the package shape and the workflows themselves |
 
-Note for .NET Framework and netstandard2.0 consumers: the generated code needs
-**C# 8** (`#nullable enable`, `??=`), so a project that relies on the SDK's
-default C# 7.3 for those target frameworks must set `<LangVersion>8.0</LangVersion>`
-or later. See `tests/compat/README.md`.
+Note for .NET Framework and netstandard2.0 consumers: the generated code is
+**C# 7.3-compatible** (G20), so a project can rely on the SDK's default language
+version for those target frameworks. The `#nullable` directive and the nullable
+annotation on the generated interface member are emitted only when the consumer
+compiles at C# 8 or later (decided from `Compilation.LanguageVersion`), so a
+default (C# 7.3) consumer compiles and a C# 8+ consumer keeps the nullable-aware
+signature. See `tests/compat/README.md`.
 
 ## Why this rule exists
 

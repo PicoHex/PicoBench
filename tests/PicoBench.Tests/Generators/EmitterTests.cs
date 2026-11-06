@@ -76,7 +76,12 @@ public class EmitterTests
     {
         var code = Emitter.Generate(MinimalModel());
 
-        await Assert.That(code).Contains("config ??= global::PicoBench.BenchmarkConfig.Default;");
+        // G20: `??=` is C# 8 and a default net48 / netstandard2.0 consumer compiles
+        // the generated file at C# 7.3 (CS8370). The longhand form is the 7.3
+        // equivalent; the contract is "defaults to BenchmarkConfig.Default", the
+        // operator is an implementation detail.
+        await Assert.That(code).Contains("config = config ?? global::PicoBench.BenchmarkConfig.Default;");
+        await Assert.That(code).DoesNotContain("config ??=");
     }
 
     [Test]
