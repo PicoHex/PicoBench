@@ -617,7 +617,16 @@ footer {
 
     #region Helpers
 
-    private static string Escape(string value)
+    /// <summary>
+    /// User text as an HTML text node: entity-escaped (structure cannot be injected)
+    /// on top of the shared control-character rule (Batch 2 · 2.5 / F1). Entity escaping
+    /// alone left a bare ESC (0x1B) in the document — the one byte every other format
+    /// neutralises — so a name or description carrying an ANSI sequence still wrote it
+    /// into the file, where a reader may render it.
+    /// </summary>
+    private static string Escape(string value) => EscapeEntities(TextSanitizer.ForHtmlText(value));
+
+    private static string EscapeEntities(string value)
     {
         return value
             .Replace("&", "&amp;")

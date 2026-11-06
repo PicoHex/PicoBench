@@ -73,7 +73,20 @@ internal static class TextSanitizer
     internal static string ForMarkdownLine(string value) =>
         EscapeMarkdown(Pictures(value, cell: false));
 
+    /// <summary>
+    /// User text inside an HTML element: the control-character rule only. HTML has
+    /// no structure characters of its own to escape here — markup is neutralised by
+    /// <em>entity</em> escaping, which every caller of this method applies around it —
+    /// but a C0 control (ESC included) travels through an HTML document exactly as it
+    /// travels through a terminal, and an editor that renders the file gives it the
+    /// same effect. Batch 2 · F1: the four formatters disagreed about this character
+    /// (Console and Markdown showed a picture, HTML and CSV kept the raw byte); HTML is
+    /// the one that must not, because the file is meant to be opened.
+    /// </summary>
+    internal static string ForHtmlText(string value) => Pictures(value, cell: false);
+
     /// <summary>True for the characters that end a line in at least one renderer.</summary>
+
     internal static bool IsLineBreak(char c) =>
         c is '\r' or '\n' or '\u0085' or '\u2028' or '\u2029';
 

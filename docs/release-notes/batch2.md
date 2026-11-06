@@ -177,7 +177,10 @@ sequence.
 - Column padding and the summary frame are computed in **display cells**, not
   chars: a CJK name is two cells wide but one char, so the box closes correctly
   (it used to be 4 cells too wide).
-- HTML is unchanged: HTML escaping already prevented structural injection.
+- HTML: entity escaping already prevented structural injection, so the markup is
+  unchanged — but the control-character rule now applies here too. It previously
+  did not, and a name or description carrying an ESC byte wrote that byte into
+  the file. HTML now shows the same control picture as Console and Markdown.
 
 **Migration**
 
@@ -185,6 +188,8 @@ sequence.
   of it. If you match on names in generated Markdown, expect the escaped form
   (escaped pipe, escaped hash, escaped backtick, `<br>` inside cells).
 - Console output for such a name is one line, not two.
+- If you grepped a generated HTML file for a raw control character, it is no
+  longer there; match the control picture instead.
 
 ## 6. Percentiles have a definition
 
