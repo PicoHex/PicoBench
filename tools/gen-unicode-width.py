@@ -21,6 +21,13 @@ Outputs (both are written, never hand-edited):
       a hand-edit that drifts from the UCD has something to disagree with.
 
 Run from the repository root:  python tools/gen-unicode-width.py
+
+Regenerating has to be a no-op on a clean checkout: both outputs are checked in
+and ``tests/PicoBench.Tests/Batch2/UnicodeWidthGeneratorDriftTests.cs`` runs this
+script and fails when either file would change. The member accessibility
+(``internal``) is part of that contract - the generated file must compile exactly
+as checked in, and the table type is internal while ``TextSanitizer``, a sibling in
+the same assembly, searches the two arrays.
 """
 
 from __future__ import annotations
@@ -74,8 +81,12 @@ def ranges(target: int) -> list[tuple[int, int]]:
 
 
 def cs_table(name: str, ranges_: list[tuple[int, int]]) -> str:
+    # `internal`, not `private`: see the module docstring. Emitting `private`
+    # here is what made a literal regeneration fail with CS0122 - the header
+    # tells the reader to regenerate, so the script has to emit the exact
+    # accessibility the checked-in file compiles with.
     lines = [
-        f"    private static readonly int[] {name} =",
+        f"    internal static readonly int[] {name} =",
         "    [",
     ]
     for start, end in ranges_:
