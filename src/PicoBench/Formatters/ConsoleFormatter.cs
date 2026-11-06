@@ -479,10 +479,10 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         sb.AppendLine($"Comparison: {TextSanitizer.ForTerminal(comparison.Name)}");
         sb.AppendLine(
-            $"  Baseline ({comparison.Baseline.Name}): {ComparisonValue(comparison.Baseline.Statistics, unit)}"
+            $"  Baseline ({TextSanitizer.ForTerminal(comparison.Baseline.Name)}): {ComparisonValue(comparison.Baseline.Statistics, unit)}"
         );
         sb.AppendLine(
-            $"  Candidate ({comparison.Candidate.Name}): {ComparisonValue(comparison.Candidate.Statistics, unit)}"
+            $"  Candidate ({TextSanitizer.ForTerminal(comparison.Candidate.Name)}): {ComparisonValue(comparison.Candidate.Statistics, unit)}"
         );
         sb.AppendLine($"  Speedup: {FormatSpeedup(comparison.Speedup)} {indicator}");
         if (comparison.Interval is { } interval)

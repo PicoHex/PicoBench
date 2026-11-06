@@ -316,6 +316,43 @@ public class UserTextEscapingTests
         await Assert.That(headings[0]).Contains("cat\\|pipe");
     }
 
+    /// <summary>
+    /// B-1 (fix/batch2): the single-comparison view names its two sides with
+    /// <c>comparison.Baseline.Name</c> / <c>comparison.Candidate.Name</c>, both of
+    /// which are caller-supplied text. Node names are just as reachable as suite
+    /// names — <c>Benchmark.Compare(name, baselineName, candidateName)</c> is the
+    /// documented way to build a comparison — so they need the same treatment:
+    /// no raw ESC, no line break that swallows the rest of the line.
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch2")]
+    [Property("Batch2", "2.5/comparison node names escaped")]
+    public async Task ComparisonNodeNames_CannotForwardEsc_OrSwallowALine()
+    {
+        var comparison = new ComparisonResult(
+            "hostile case",
+            Batch2Support.Result("base" + ESC_TEXT + "[31mRED" + CRLF + "## Injected", Stats(100.0)),
+            Batch2Support.Result("cand" + ESC_TEXT + "[0m", Stats(50.0))
+        );
+
+        var console = new ConsoleFormatter().Format(comparison);
+
+        Batch2Support.Log(console);
+
+        await Assert
+            .That(console.Contains(RAW_ESC, StringComparison.Ordinal))
+            .IsFalse()
+            .Because("the comparison view forwarded a raw ESC (0x1B) in a node name");
+
+        // Every figure the view prints sits on its own physical line: a CRLF in a
+        // name must not make 'Baseline (...)' continue into '## Injected'.
+        var baselineLine = Batch2Support
+            .Lines(console)
+            .Single(static l => l.StartsWith("  Baseline (", StringComparison.Ordinal));
+        await Assert.That(baselineLine).Contains("␛[31mRED");
+        await Assert.That(baselineLine).Contains("## Injected");
+    }
+
     // ─── helpers ────────────────────────────────────────────────────
 
     /// <summary>
@@ -337,6 +374,17 @@ public class UserTextEscapingTests
     }
 
     private const char BACKSLASH = (char)92;
+
+    /// <summary>
+    /// A raw ESC (0x1B), spelled through <see cref="char"/> so no editor or source
+    /// generator fuses it into a neighbouring digit. Deliberately a different
+    /// constant from <see cref="Esc"/>: a node-name assertion that reused the same
+    /// literal could pass by comparing the injected text with itself.
+    /// </summary>
+    private static readonly string RAW_ESC = new(new[] { (char)27 });
+
+    /// <summary>The same character, written as an escape, for building fixtures.</summary>
+    private const string ESC_TEXT = "\u001b";
 
     /// <summary>A CR LF pair, written without a literal escape so no editor can fuse it.</summary>
     private static readonly string CRLF = new string(new[] { (char)13, (char)10 });
