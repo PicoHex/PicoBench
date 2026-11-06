@@ -46,7 +46,13 @@ case "$event" in
 esac
 
 # <four-digit year>.<x>.<y>, exactly the shape scripts/release.ps1 produces.
-if ! printf '%s' "$version" | grep -Eq '^[0-9]{4}\.[0-9]+\.[0-9]+$'; then
+#
+# `grep '$'` matches the end of a *line*, not the end of the value, and `-x`
+# only anchors the boundary of each line in turn - so a value carrying a
+# second line (reachable through the `version` input of workflow_dispatch)
+# satisfied both and was accepted. `-z` splits the input on NUL alone, which
+# makes `^...$` mean the whole value.
+if ! printf '%s' "$version" | grep -Eqz '^[0-9]{4}\.[0-9]+\.[0-9]+$'; then
     fail "malformed release version '$version': expected <year>.<x>.<y>, e.g. 2026.4.0"
 fi
 

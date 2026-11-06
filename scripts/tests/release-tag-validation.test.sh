@@ -139,6 +139,50 @@ run_validate env EVENT_NAME=workflow_dispatch INPUT_VERSION=2026.4.0 bash "$gate
 expect_exit 0 "2026.4.0 input accepted" true
 expect_output "tag=v2026.4.0" "tag reconstructed from the input"
 
+case_ "the version is matched as a whole value, not line by line"
+# `grep '^...$'` anchors a *line*, so a value carrying a second line - reachable
+# through this free-text input - used to pass the gate (N1). The whole value must
+# match, and nothing a rejected value carries may reach the step outputs.
+for bad in \
+    $'2026.4.0\nEVIL=1' \
+    $'2026.4.0\n' \
+    $'\n2026.4.0' \
+    $'2026.4.0\nevil=1\nmore' \
+    '2026.4.0 ' \
+    ' 2026.4.0' \
+    $'2026.4.0\t' \
+    'x2026.4.0' \
+    '2026.4.0x' \
+    ''; do
+    : > "$work/out"
+    GITHUB_OUTPUT="$work/out" env EVENT_NAME=workflow_dispatch INPUT_VERSION="$bad" \
+        bash "$gate" >"$work/log" 2>&1
+    status=$?
+    label="$(printf '%q' "$bad")"
+    if [ "$status" -eq 1 ]; then
+        ok "rejected: '$label'"
+    else
+        no "accepted (exit $status): '$label'"
+        sed 's/^/      /' "$work/log"
+    fi
+    if [ -s "$work/out" ]; then
+        no "a rejected version reached the step outputs: '$label'"
+        sed 's/^/      /' "$work/out"
+    fi
+done
+
+# The boundary is exact in both directions: the well-formed value still writes
+# exactly the two outputs, no more.
+run_validate env EVENT_NAME=workflow_dispatch INPUT_VERSION=2026.4.0 bash "$gate"
+expect_exit 0 "a plain version is still accepted" true
+if [ "$(wc -l < "$work/out")" -eq 2 ]; then
+    ok "the accepted run writes exactly two outputs"
+else
+    no "expected two step outputs, got $(wc -l < "$work/out")"
+    sed 's/^/      /' "$work/out"
+fi
+
+
 case_ "an unexpected trigger is refused"
 expect_exit 1 "event=pull_request rejected" \
     env EVENT_NAME=pull_request bash "$gate"
