@@ -18,7 +18,7 @@
 | `IBenchmarkClass.cs` | 데코레이션된 클래스에 소스 생성기가 구현하는 인터페이스 |
 | `BenchmarkConfig.cs` | Quick / Default / Precise 프리셋과 선택적 자동 보정을 제공하는 구성 |
 | `Runner.cs` | 저수준 타이밍 흐름과 샘플 생성 |
-| `Runner.Gc.cs` | GC 기준선과 델타 추적 |
+| `Runner.Gc.cs` | GC 수집 횟수와 할당 바이트(기준선과 델타, 카운터는 런타임에 확인) |
 | `Runner.Cpu.cs` | 플랫폼별 CPU 카운터 구현 |
 | `StatisticsCalculator.cs` | 백분위수 및 통계 계산 |
 | `Models.cs` | `Statistics` 정밀도 필드와 `EnvironmentInfo`의 CPU 카운터 메타데이터를 포함한 결과 형식 |

@@ -18,7 +18,7 @@ Die Haupt-Benchmarking-Bibliothek mit Ziel **netstandard2.0** ohne externe Abhä
 | `IBenchmarkClass.cs` | Vom Quellgenerator auf dekorierte Klassen implementierte Schnittstelle |
 | `BenchmarkConfig.cs` | Konfiguration mit Quick / Default / Precise Voreinstellungen plus optionaler Auto-Kalibrierung |
 | `Runner.cs` | Low-Level-Timing-Ablauf und Sample-Erzeugung |
-| `Runner.Gc.cs` | GC-Basislinie und Delta-Berechnung |
+| `Runner.Gc.cs` | GC-Sammlungszähler und Allokationsbytes (Basislinie und Delta, Zähler zur Laufzeit aufgelöst) |
 | `Runner.Cpu.cs` | Plattformspezifische CPU-Zähler-Implementierung |
 | `StatisticsCalculator.cs` | Prozentil- und Statistikberechnung |
 | `Models.cs` | Ergebnistypen einschließlich Präzisionsfeldern in `Statistics` und CPU-Zähler-Metadaten in `EnvironmentInfo` |

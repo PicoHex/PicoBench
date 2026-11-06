@@ -18,7 +18,7 @@ The main benchmarking library targeting **netstandard2.0**. Its only NuGet refer
 | `IBenchmarkClass.cs` | Interface implemented by the source generator on decorated classes |
 | `BenchmarkConfig.cs` | Configuration with Quick / Default / Precise presets plus optional auto-calibration |
 | `Runner.cs` | Low-level timing flow and sample creation |
-| `Runner.Gc.cs` | GC baseline and delta tracking |
+| `Runner.Gc.cs` | GC collection counts and allocation bytes (baseline and delta, counters resolved at run time) |
 | `Runner.Cpu.cs` | Platform-specific CPU counter implementation |
 | `StatisticsCalculator.cs` | Percentile and statistics computation |
 | `Models.cs` | Result types including `Statistics` precision fields and CPU counter metadata in `EnvironmentInfo` |

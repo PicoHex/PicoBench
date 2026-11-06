@@ -216,6 +216,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         if (Options.IncludeGcInfo)
         {
             sb.AppendLine($"  GC (0/1/2): {FormatGcInfo(result.Statistics.GcInfo)}");
+            sb.AppendLine($"  GC Allocated: {FormatGcBytes(result.Statistics.GcInfo)}");
         }
 
         // Per-operation figures like the ones above: the CSV/Markdown/HTML tables
@@ -304,6 +305,12 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
                 results.Max(r => FormatGcInfo(r.Statistics.GcInfo).Length)
             )
             : 0;
+        var gcBytesWidth = Options.IncludeGcInfo
+            ? Math.Max(
+                FormatterBase.GcBytesHeader.Length,
+                results.Max(r => FormatGcBytes(r.Statistics.GcInfo).Length)
+            )
+            : 0;
 
         // Build column definitions
         var columns = new List<TableColumn<BenchmarkResult>>
@@ -350,6 +357,9 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         if (Options.IncludeGcInfo)
         {
             columns.Add(new("GC (0/1/2)", gcWidth, r => FormatGcInfo(r.Statistics.GcInfo)));
+            columns.Add(
+                new(FormatterBase.GcBytesHeader, gcBytesWidth, r => FormatGcBytes(r.Statistics.GcInfo))
+            );
         }
 
         AppendTable(sb, columns, results);
@@ -709,6 +719,18 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
                     "GC",
                     gcWidth,
                     r => FormatGcInfo(r.Result.Statistics.GcInfo)
+                )
+            );
+
+            var gcBytesWidth = Math.Max(
+                FormatterBase.GcBytesHeader.Length,
+                rows.Max(r => FormatGcBytes(r.Result.Statistics.GcInfo).Length)
+            );
+            columns.Add(
+                new TableColumn<ComparisonRow>(
+                    FormatterBase.GcBytesHeader,
+                    gcBytesWidth,
+                    r => FormatGcBytes(r.Result.Statistics.GcInfo)
                 )
             );
         }

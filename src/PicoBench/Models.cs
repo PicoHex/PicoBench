@@ -19,6 +19,42 @@ public sealed class GcInfo
     /// <summary>When true, GC counts may include non-benchmark work (async modes).</summary>
     public bool IsApproximate { get; init; }
 
+    /// <summary>
+    /// Bytes allocated during the measured window, or <c>null</c> when the
+    /// allocation counter was <b>not collected</b> — which is a different state
+    /// from <c>0</c> (a measured run that allocated nothing). A formatter must
+    /// render the two differently (<c>N/A</c> vs <c>0</c>).
+    /// <para>
+    /// <b>Synchronous</b> benchmarks read the thread-scoped
+    /// <c>GC.GetAllocatedBytesForCurrentThread</c> delta, so the number is the
+    /// measured work's own allocation and <see cref="AllocatedBytesAreApproximate"/>
+    /// is <c>false</c>. <b>Asynchronous</b> benchmarks read the process-wide
+    /// <c>GC.GetTotalAllocatedBytes</c> delta instead (an <c>await</c> may resume
+    /// on another thread, where a thread-scoped counter is not valid), so the
+    /// number also includes allocations by other threads and is flagged
+    /// approximate.
+    /// </para>
+    /// <para>
+    /// The .NET Standard 2.0 reference surface declares neither counter, so the
+    /// library resolves them at run time. A synchronous run uses the thread-scoped
+    /// counter wherever the runtime exposes one (verified on .NET 10 and on .NET
+    /// Framework 4.7.2 / .NET Framework 4.8); an asynchronous run needs the
+    /// process-wide counter, which .NET Framework does not expose. When the counter
+    /// a run needs is absent, this stays <c>null</c> and consumers see <c>N/A</c>
+    /// — never a fabricated <c>0</c>.
+    /// </para>
+    /// </summary>
+    public long? AllocatedBytes { get; init; }
+
+    /// <summary>
+    /// When true, <see cref="AllocatedBytes"/> came from a <b>process-wide</b>
+    /// counter (asynchronous benchmarks) and therefore includes allocations made by
+    /// other threads; formatters prefix it with <c>~</c>, exactly like the
+    /// process-wide CPU-cycle counter. Meaningless when
+    /// <see cref="AllocatedBytes"/> is <c>null</c>.
+    /// </summary>
+    public bool AllocatedBytesAreApproximate { get; init; }
+
     /// <summary>Total GC collections across all generations.</summary>
     public int Total => Gen0 + Gen1 + Gen2;
 

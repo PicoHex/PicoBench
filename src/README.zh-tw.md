@@ -18,7 +18,7 @@
 | `IBenchmarkClass.cs` | 由源生成器在裝飾類上實現的接口 |
 | `BenchmarkConfig.cs` | 包含 Quick / Default / Precise 預設以及可選自動校準的配置 |
 | `Runner.cs` | 底層計時流程與樣本建立 |
-| `Runner.Gc.cs` | GC 基線與增量追蹤 |
+| `Runner.Gc.cs` | GC 回收計數與配置位元組數（基線與增量，計數器於執行階段解析） |
 | `Runner.Cpu.cs` | 平台相關 CPU 計數器實作 |
 | `StatisticsCalculator.cs` | 百分位數和統計計算 |
 | `Models.cs` | 結果類型，包括 `Statistics` 的精度欄位以及 `EnvironmentInfo` 中的 CPU 計數器元資料 |

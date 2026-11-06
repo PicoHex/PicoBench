@@ -18,7 +18,7 @@ La principal biblioteca de benchmarking con objetivo **netstandard2.0** y cero d
 | `IBenchmarkClass.cs` | Interfaz implementada por el generador de código fuente en clases decoradas |
 | `BenchmarkConfig.cs` | Configuración con preajustes Quick / Default / Precise más auto-calibración opcional |
 | `Runner.cs` | Flujo de temporización de bajo nivel y creación de muestras |
-| `Runner.Gc.cs` | Línea base y delta de GC |
+| `Runner.Gc.cs` | Recuentos de GC y bytes asignados (línea base y delta, contadores resueltos en tiempo de ejecución) |
 | `Runner.Cpu.cs` | Implementación del contador de CPU específica de la plataforma |
 | `StatisticsCalculator.cs` | Cálculo de percentiles y estadísticas |
 | `Models.cs` | Tipos de resultados incluyendo campos de precisión en `Statistics` y metadatos del contador de CPU en `EnvironmentInfo` |

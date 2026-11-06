@@ -135,7 +135,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         if (Options.IncludeCpuCycles)
             sb.Append("| CPU Cycle ");
         if (Options.IncludeGcInfo)
-            sb.Append("| GC (0/1/2) ");
+            sb.Append("| GC (0/1/2) | GC B ");
         sb.AppendLine("|");
 
         // Separator
@@ -145,7 +145,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         if (Options.IncludeCpuCycles)
             sb.Append("|----------");
         if (Options.IncludeGcInfo)
-            sb.Append("|------------");
+            sb.Append("|------------|------");
         sb.AppendLine("|");
 
         // Rows
@@ -167,7 +167,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
             if (Options.IncludeCpuCycles)
                 sb.Append($"| {FormatCycles(s)} ");
             if (Options.IncludeGcInfo)
-                sb.Append($"| {FormatGcInfo(s.GcInfo)} ");
+                sb.Append($"| {FormatGcInfo(s.GcInfo)} | {FormatGcBytes(s.GcInfo)} ");
             sb.AppendLine("|");
         }
 
@@ -280,7 +280,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         if (Options.IncludeCpuCycles)
             sb.Append(" CPU |");
         if (Options.IncludeGcInfo)
-            sb.Append(" GC |");
+            sb.Append(" GC | GC B |");
         sb.AppendLine();
 
         // Separator
@@ -290,7 +290,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         if (Options.IncludeCpuCycles)
             sb.Append("-----|");
         if (Options.IncludeGcInfo)
-            sb.Append("-----|");
+            sb.Append("-----|------|");
         sb.AppendLine();
 
         // Rows
@@ -317,7 +317,8 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
 
             if (Options.IncludeGcInfo)
             {
-                sb.Append($" {FormatGcInfo(row.Stats.GcInfo)} |");
+                sb.Append($" {FormatGcInfo(row.Stats.GcInfo)} ");
+                sb.Append($"| {FormatGcBytes(row.Stats.GcInfo)} |");
             }
 
             sb.AppendLine();
