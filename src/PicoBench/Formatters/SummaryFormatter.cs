@@ -105,7 +105,7 @@ public static class SummaryFormatter
                 {
                     var indicator = FormatterBase.GetSpeedupIndicator(c.Speedup);
                     sb.AppendLine(
-                        $"   {DisplayWidth.PadRight(TextSanitizer.ForTerminal(c.Name), 35)}: {FormatterBase.FormatMetric(c.Speedup, 2)}x {indicator}"
+                        $"   {DisplayWidth.PadRight(TextSanitizer.ForTerminal(c.Name), 35)}: {FormatterBase.FormatSpeedupValue(c.Speedup, SummarySpeedupDecimals)} {indicator}"
                     );
                 }
                 sb.AppendLine();
