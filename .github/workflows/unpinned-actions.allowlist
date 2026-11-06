@@ -1,0 +1,14 @@
+# Third-party actions that are NOT pinned to a commit SHA.
+#
+# Pinning is the default (B5-L1): a mutable tag like `@v2` means the publisher
+# can change the code that runs in a job holding `id-token: write`. Only
+# `NuGet/login` remains on a tag, because its commit SHA could not be resolved
+# when the pin was introduced (no network access to the registry). Resolve it
+# with
+#
+#     git ls-remote https://github.com/NuGet/login refs/tags/v1
+#
+# and replace the entry below with `NuGet/login@<40-hex-sha>  # v1`. Every other
+# third-party action must be a full SHA or the workflow lint fails.
+# scripts/tests/workflow_lint.py reads this file.
+NuGet/login@v1

@@ -8,10 +8,12 @@ name: NuGet Unlist
 # Run: gh workflow run nuget-unlist.yml -f version=2026.2.6
 #      (or Actions -> NuGet Unlist -> Run workflow)
 #
-# Requires the NUGET_UNLIST_API_KEY secret. The regular NUGET_API_KEY is
-# Push-scoped and returns 403 on delete; create an unlist-scoped key at
-# nuget.org (Account -> API keys -> scopes: Unlist for package PicoBench) and
-# add it as NUGET_UNLIST_API_KEY (Settings -> Secrets and variables -> Actions).
+# Requires the NUGET_UNLIST_API_KEY secret. There is no long-lived push key in
+# this repository: the release workflow trades GitHub OIDC for a temporary key
+# (NuGet/login), and that flow only covers push. Unlisting is therefore still
+# key-based - create a key at nuget.org (Account -> API keys -> scopes: Unlist
+# for package PicoBench) and add it as NUGET_UNLIST_API_KEY
+# (Settings -> Secrets and variables -> Actions).
 
 on:
   workflow_dispatch:
@@ -43,18 +45,23 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # Both inputs arrive through `env:` and are validated before use: they are
+      # typed into a workflow_dispatch form, and a package id is just as capable
+      # of carrying shell syntax as a tag name (B5-L2).
       - name: Unlist on NuGet.org
         shell: bash
         env:
           PACKAGE_ID: ${{ inputs.package-id }}
           PACKAGE_VERSION: ${{ inputs.version }}
+          NUGET_UNLIST_API_KEY: ${{ secrets.NUGET_UNLIST_API_KEY }}
         run: |
+          set -euo pipefail
+          if [[ ! "$PACKAGE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$ ]]; then
+            echo "error: refusing to unlist malformed package id '$PACKAGE_ID'" >&2
+            exit 1
+          fi
           if [[ ! "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.].+)?$ ]]; then
             echo "error: refusing to unlist malformed version '$PACKAGE_VERSION'" >&2
             exit 1
           fi
-          dotnet nuget delete "$PACKAGE_ID" "$PACKAGE_VERSION" \
-            --api-key "${{ secrets.NUGET_UNLIST_API_KEY }}" \
-            --source https://api.nuget.org/v3/index.json \
-            --non-interactive \
-            --force-english-output
+          dotnet nuget delete "$PACKAGE_ID" "$PACKAGE_VERSION" --api-key "$NUGET_UNLIST_API_KEY" --source https://api.nuget.org/v3/index.json --non-interactive --force-english-output

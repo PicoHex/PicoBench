@@ -1,0 +1,23 @@
+<Project>
+  <!--
+    Symbol packages and SourceLink are configured here, in targets, not in
+    Directory.Build.props: props files are imported BEFORE the project body, so a
+    condition on a property the .csproj declares itself can never see it.
+    `Directory.Build.props` defaulted `IsPackable` to false and then gated this
+    block on `'$(IsPackable)' == 'true'`, which was already false by the time
+    `PicoBench.csproj` said `<IsPackable>true</IsPackable>` - so `IncludeSymbols`
+    was never set, `dotnet pack` never produced a .snupkg, and the SourceLink
+    PackageReference was never restored (B5-M1). Anything that keys off a
+    property declared in the project body has to be evaluated after it.
+  -->
+  <PropertyGroup Condition="'$(IsPackable)' == 'true'">
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <!-- SourceLink for source-level debugging (only meaningful for shipped assemblies) -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+  </ItemGroup>
+</Project>

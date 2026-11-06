@@ -10,6 +10,11 @@
 
     <!-- This project is consumed as an analyzer, not a regular library -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
+
+    <!-- No package of its own (it ships inside PicoBench), but its public API
+         still reaches consumers, so scripts/release.ps1 baselines it too
+         (api/PicoBench.Generators.public.txt). -->
+    <ApiSurfaceBaseline>true</ApiSurfaceBaseline>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <DevelopmentDependency>true</DevelopmentDependency>
 

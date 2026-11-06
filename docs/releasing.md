@@ -8,8 +8,15 @@ downloads - is built from a commit on `main`. Not from a feature branch, not
 from a `ci/*` branch, not from a detached checkout, not from someone's working
 copy.
 
-The rule is enforced in code, not in a wiki: `tools/release-build.sh` refuses to
-produce artifacts unless `HEAD` is `main` and the tree is clean.
+The rule is enforced in code, not in a wiki, on both paths:
+
+* `tools/release-build.sh` refuses to produce artifacts unless `HEAD` is `main`
+  and the tree is clean.
+* The release workflow's first step validates the tag
+  (`scripts/validate-release-tag.sh`) before the checkout, and its third step
+  runs `scripts/verify-release-commit-on-main.sh`, which refuses a tag whose
+  commit is not an ancestor of `origin/main`. Pushing a `v*` tag on a side
+  branch therefore fails the workflow instead of packing stale code.
 
 Consumer-visible changes for the package you are about to ship are in
 [release-notes/batch0.md](release-notes/batch0.md) (the measurement contract) and
@@ -45,6 +52,39 @@ It builds `PicoBench.slnx` in Release and packs `src/PicoBench/PicoBench.csproj`
 exactly a `v*` tag the version comes from that tag, mirroring the release
 workflow; otherwise the repo default `0.0.0-dev` is used and the script says so.
 
+## Cut the release: `scripts/release.ps1`
+
+```powershell
+# inspect the decision - reads only, writes nothing, creates no tag
+pwsh ./scripts/release.ps1 -DryRun
+
+# cut it: refresh api/*.public.txt, commit, create the annotated tag
+pwsh ./scripts/release.ps1
+# ... then push the branch and the tag (the tag triggers the release workflow)
+```
+
+`-Push` also pushes for you; it is not required. Exit codes:
+
+| code | meaning |
+|-----:|---------|
+| 0 | success (a dry run that reported the decision, or commit + tag completed) |
+| 2 | precondition/usage error (no baselines, bad switch combination, tooling missing) |
+| 3 | working tree is dirty |
+| 4 | the public API lost members and `-AllowBreaking` was not passed |
+| 5 | build or `api-surface` tool failure |
+
+A release whose public API did not change (the normal `<year>.<x>.<y+1>`
+release) leaves the baselines byte-identical, so the commit is **empty** - that
+is expected and the tag is still created. Removing a public member is different:
+it fails with exit 4 unless you pass `-AllowBreaking`. Read the diff the script
+prints, decide whether the break is intended, document it in the release notes,
+and only then re-run with `-AllowBreaking`; the refreshed baseline becomes the
+new reference for the next release.
+
+The same gate runs in CI (`api-guard` job: `release.ps1 -DryRun`), so a pull
+request that deletes a public member fails before merge instead of being
+absorbed by a baseline refresh at release time.
+
 ## Before you release: three self-checks
 
 1. **You are on `main` and it is clean.** `git rev-parse --abbrev-ref HEAD`
@@ -59,6 +99,26 @@ workflow; otherwise the repo default `0.0.0-dev` is used and the script says so.
    artifact came from which commit. NuGet packing is not bit-reproducible, so a
    re-pack has a different hash - compare the commit sha across builds, and
    compare the hash only against the file you actually ship.
+
+## Compatibility the release is expected to keep
+
+`tests/compat/` holds the smoke projects that stand in for consumers; each one
+is built by a CI job:
+
+| job | proves |
+|---|---|
+| `api-guard` | no public member disappeared (or the break is explicit) |
+| `aot-validation` | the library AOT-publishes with zero trim/AOT warnings **and the artifact runs** |
+| `net4x-smoke` | `netstandard2.0` really compiles and runs on .NET Framework 4.7.2/4.8 |
+| `consumer-sdk8` | the generator works inside the SDK 8 compiler (Roslyn 4.8) |
+| `consumer-netstandard20` | another netstandard2.0 library can compile the generated code |
+| `samples` | all four samples run on Windows, Linux and macOS |
+| `release-scripting` | the tag gate, both release scripts' exit codes, the package shape and the workflows themselves |
+
+Note for .NET Framework and netstandard2.0 consumers: the generated code needs
+**C# 8** (`#nullable enable`, `??=`), so a project that relies on the SDK's
+default C# 7.3 for those target frameworks must set `<LangVersion>8.0</LangVersion>`
+or later. See `tests/compat/README.md`.
 
 ## Why this rule exists
 
