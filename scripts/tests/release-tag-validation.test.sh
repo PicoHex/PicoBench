@@ -109,7 +109,8 @@ for bad in \
     'vfoo' \
     'v2026.4.0-beta' \
     '2026.4.0' \
-    'v 2026.4.0' \n    'v2026.4.0 '; do
+    'v 2026.4.0' \
+    'v2026.4.0 '; do
     expect_exit 1 "'$bad' rejected" \
         env EVENT_NAME=push REF_TYPE=tag REF_NAME="$bad" bash "$gate"
 done
