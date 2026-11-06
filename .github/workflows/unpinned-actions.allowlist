@@ -3,12 +3,52 @@
 # Pinning is the default (B5-L1): a mutable tag like `@v2` means the publisher
 # can change the code that runs in a job holding `id-token: write`. Only
 # `NuGet/login` remains on a tag, because its commit SHA could not be resolved
-# when the pin was introduced (no network access to the registry). Resolve it
-# with
+# when the pin was introduced (no network access to the registry).
 #
-#     git ls-remote https://github.com/NuGet/login refs/tags/v1
+# ---------------------------------------------------------------- format ----
 #
-# and replace the entry below with `NuGet/login@<40-hex-sha>  # v1`. Every other
-# third-party action must be a full SHA or the workflow lint fails.
-# scripts/tests/workflow_lint.py reads this file.
-NuGet/login@v1
+# One entry per line, TAB separated, five fields:
+#
+#   1. the `uses:` value, byte-identical to the workflow  (parsed by the lint)
+#   2. review period: monthly | quarterly | yearly
+#   3. last reviewed: never | YYYY-MM-DD
+#   4. the command that resolves the ref to a commit SHA
+#   5. a note: what is known, and what is still open
+#
+# `workflow_lint.py` matches field 1 exactly and rejects a malformed line, so a
+# tag cannot be parked here without a review period and a resolve command
+# attached (R6). Blank lines and lines starting with `#` are ignored.
+#
+# -------------------------------------------------------- quarterly review --
+#
+# Every entry is re-checked once a period. `scripts/tests/action_pin_review.py`
+# reads this file, prints the resolve command for each entry, and - when run with
+# `--resolve` on a machine that has network and `gh`/`git` - runs it, prints the
+# commit SHA the ref points at today and the date the review is next due. It never
+# edits the file: the reviewer pastes the SHA into field 5 and today's date into
+# field 3.
+#
+#     python3 scripts/tests/action_pin_review.py            # plan only, no network
+#     python3 scripts/tests/action_pin_review.py --resolve  # needs network + gh
+#
+# The same commands and their expected output are in docs/releasing.md
+# ("Review the unpinned actions").
+#
+# VERIFICATION STATE (read this before trusting the note below):
+#
+#   * The review itself WAS run, once, on 2026-11-07 from the machine that wrote
+#     this file, against the live registry (`gh api`, which is authenticated).
+#     The commit sha in the note is therefore a real observation, not a guess.
+#   * The workflow was NOT run on GitHub: nothing here proves that
+#     `NuGet/login@<sha>` is accepted by the runner, that the OIDC exchange still
+#     succeeds, or that the release jobs pass. The pin below was deliberately NOT
+#     applied for exactly that reason - changing it is a release-day edit that
+#     wants a green CI run behind it.
+#
+# The trap worth remembering: `gh api .../git/ref/tags/v1` answers with the
+# ANNOTATED TAG OBJECT's sha, which is not the commit a workflow pin uses. Only
+# `gh api .../commits/v1` (or the `^{}` form of `git ls-remote`) peels to the
+# commit. The review script uses the peeling form for this reason.
+#
+# uses                        period     last reviewed  resolve command                                                    note
+NuGet/login@v1	quarterly	2026-11-07	gh api repos/NuGet/login/commits/v1 --jq .sha	v1 is an ANNOTATED tag -> commit 8d196754b4036150537f80ac539e15c2f1028841 (tag object ebc737b6fc418a6ca0073cf116ec8dc156d8b81e, tagger 2026-04-24, commit 'Updated to node24' 2026-04-22), observed 2026-11-07 via gh api on the authoring machine. FOLLOW-UP: the workflow still uses @v1 and was NOT changed - re-pin to the commit sha in a release-day PR with a green CI run.

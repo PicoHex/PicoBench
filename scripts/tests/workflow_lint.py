@@ -6,6 +6,11 @@ the mistakes they can carry - an expression interpolated into a shell script, a
 third-party action on a mutable tag, a validation step that runs after something
 already happened - are checked here instead (review items B5-H2, B5-M2, B5-L1).
 
+The allowlist file carries a review record per entry (period, last-reviewed
+date, resolve command, note) and this module rejects a malformed line, so a
+mutable tag cannot be parked without one; the quarterly procedure that fills the
+record is `scripts/tests/action_pin_review.py` and docs/releasing.md (R6).
+
 Exit code: 0 when every check passes, 1 otherwise.
 """
 
@@ -197,6 +202,7 @@ REQUIRED_JOBS = {
     "release-scripting": [
         "release-ps1-exit-codes.ps1",
         "shell-lint.test.sh",
+        "action_pin_review.py",
         "release-build-exit-codes.test.sh",
         "release-tag-validation.test.sh",
         "packaging-guard.test.sh",
@@ -238,13 +244,55 @@ def check_ci_jobs(path: pathlib.Path) -> None:
                 )
 
 
+ALLOWLIST_PERIODS = {"monthly", "quarterly", "yearly"}
+ALLOWLIST_FIELDS = 5
+
+
+def load_allowlist() -> set[str]:
+    """Reads the unpinned-action allowlist, which is TAB separated.
+
+    Field 1 is the `uses:` value; fields 2-5 are the review record (period,
+    last-reviewed date, resolve command, note) that R6 asks for. A malformed
+    line is an error rather than a silent skip, because a skipped line silently
+    widens the allowlist. Note the file uses `#` for its own comments, so the
+    first field is taken verbatim, tabs and all.
+    """
+    allowed: set[str] = set()
+    if not ALLOWLIST.exists():
+        return allowed
+    for number, raw in enumerate(read(ALLOWLIST), 1):
+        line = raw.rstrip(chr(13))
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        fields = line.split(chr(9))
+        if len(fields) != ALLOWLIST_FIELDS:
+            error(
+                f"{ALLOWLIST.name}:{number}: expected {ALLOWLIST_FIELDS} tab-separated "
+                f"fields (action, period, last-reviewed, resolve command, note), got {len(fields)}"
+            )
+            continue
+        action, period, reviewed, command, note = (field.strip() for field in fields)
+        if not action:
+            error(f"{ALLOWLIST.name}:{number}: the action field is empty")
+            continue
+        if period not in ALLOWLIST_PERIODS:
+            error(
+                f"{ALLOWLIST.name}:{number}: review period {period!r} is not one of "
+                f"{sorted(ALLOWLIST_PERIODS)} - the R6 review has no schedule otherwise"
+            )
+            continue
+        if not reviewed or not command or not note:
+            error(
+                f"{ALLOWLIST.name}:{number}: '{action}' is missing part of its review record "
+                f"(last-reviewed date, resolve command and note are all required)"
+            )
+            continue
+        allowed.add(action)
+    return allowed
+
+
 def main() -> int:
-    allowlist: set[str] = set()
-    if ALLOWLIST.exists():
-        for line in read(ALLOWLIST):
-            entry = strip_comment(line).strip()
-            if entry:
-                allowlist.add(entry)
+    allowlist = load_allowlist()
 
     workflows = sorted(WORKFLOW_DIR.glob("*.yml"))
     if not workflows:
