@@ -2,6 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
+![CI](https://github.com/PicoHex/PicoBench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Eine leichte Benchmarking-Bibliothek für .NET mit **zwei komplementären APIs**: einer imperativen API und einer attributbasierten, quellgenerierten API, die vollständig **AOT-kompatibel** ist. Die einzige NuGet-Referenz ist ein BCL-Polyfill (`System.Threading.Tasks.Extensions`) für `ValueTask<T>` auf netstandard2.0.
 
 ## Funktionen

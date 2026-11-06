@@ -2,6 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
+![CI](https://github.com/PicoHex/PicoBench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 軽量な.NETベンチマークライブラリで、**2つの補完的API**を提供します：命令型APIと、属性ベースでソース生成される、完全に**AOT互換**のAPIです。NuGet 参照は netstandard2.0 で `ValueTask<T>` を補う BCL polyfill（`System.Threading.Tasks.Extensions`）が 1 つだけです。
 
 ## 特徴

@@ -203,6 +203,7 @@ REQUIRED_JOBS = {
         "release-ps1-exit-codes.ps1",
         "shell-lint.test.sh",
         "action_pin_review.py",
+        "readme_translation_probe.py",
         "release-build-exit-codes.test.sh",
         "release-tag-validation.test.sh",
         "packaging-guard.test.sh",

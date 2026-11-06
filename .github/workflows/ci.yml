@@ -542,6 +542,13 @@ jobs:
         shell: bash
         run: python3 scripts/tests/action_pin_review.py
 
+      # The ten READMEs are hand-edited and nothing compiles them. This fails on
+      # structural drift (a lost section, table, code block, badge or nav bar)
+      # and prints the identifier-level divergences for a native reader (R7).
+      - name: Check the translated READMEs against the English one
+        shell: bash
+        run: python3 scripts/tests/readme_translation_probe.py
+
       - name: Release tag gate
         shell: bash
         run: bash scripts/tests/release-tag-validation.test.sh
