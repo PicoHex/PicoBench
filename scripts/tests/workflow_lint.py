@@ -184,7 +184,12 @@ def check_release_validation_is_first(path: pathlib.Path) -> None:
 REQUIRED_JOBS = {
     "build-and-test": ["StringVsStringBuilder", "AsyncBenchmarks", "dotnet test"],
     "api-guard": ["release.ps1 -DryRun"],
-    "aot-validation": ["PublishAot=true", "IlcTreatWarningsAsErrors=true", "Benchmarks: 2"],
+    "aot-validation": [
+        "PublishAot=true",
+        "IlcTreatWarningsAsErrors=true",
+        "Benchmarks: 2",
+        "aot-negative-probe.test.sh",
+    ],
     "net4x-smoke": ["PicoBench.Net4xSmoke", "net472", "net48"],
     "consumer-sdk8": ["ConsumerSdk8", "8.0.x", "Benchmarks: 2"],
     "consumer-netstandard20": ["ConsumerNetStandard20", "--source"],

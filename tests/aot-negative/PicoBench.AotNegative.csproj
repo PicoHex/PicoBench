@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Negative fixture for the AOT leg (review item N6 / Batch 3.5).
+
+    `aot-validation` claims "a trim or AOT warning fails the job" and turns
+    IL2xxx / IL3xxx into errors with three MSBuild properties. Nothing exercised
+    that claim: it rested on a static string in ci.yml, so dropping a `-p:` flag or
+    an SDK rename would have left the job green forever.
+
+    This project is a package consumer (same ProjectReference shape the job's
+    temporary app uses) whose program is selected by $(AotProgram):
+
+      * Control  - the benign `Benchmarks: 2` program, which MUST publish;
+      * Negative - the same program plus one call the trimmer cannot prove safe
+                   (`Assembly.LoadFrom`, RequiresUnreferencedCode -> IL2026),
+                   which MUST fail to publish.
+
+    The harness (scripts/tests/aot-negative-probe.test.sh) publishes both and
+    asserts that split. The publish flags live on the command line in the harness,
+    exactly as they do in ci.yml, so this file cannot mask them. Deliberately not
+    in PicoBench.slnx: it only builds with an AOT-capable SDK.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>PicoBench.AotNegative</AssemblyName>
+    <RootNamespace>PicoBench.AotNegative</RootNamespace>
+    <!-- One selected program, so the two halves stay one fixture. -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AotProgram Condition="'$(AotProgram)' == ''">Negative</AotProgram>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(AotProgram).cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PicoBench\PicoBench.csproj" />
+    <!-- The generator reaches consumers through the package's buildTransitive
+         props, which a ProjectReference does not emulate; add it explicitly so
+         the fixture compiles the generated code too (the in-repo development
+         pattern from src/README.md). -->
+    <ProjectReference Include="..\..\src\PicoBench.Generators\PicoBench.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

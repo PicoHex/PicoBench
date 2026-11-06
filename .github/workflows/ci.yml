@@ -254,6 +254,24 @@ jobs:
           fi
           echo "AOT artifact ran and reported its benchmarks"
 
+      # The step above proves the AOT claim for THIS code; it cannot prove the
+      # job still *notices* a violation. `--warnaserror` styles the three
+      # properties into a claim about the toolchain, and until this step existed
+      # nothing exercised them: dropping a `-p:` flag or an SDK rename would have
+      # left the job green for a fixture it should have rejected (N6).
+      #
+      # A twin fixture (tests/aot-negative) publishes a benign program that MUST
+      # succeed and the same program plus `Assembly.LoadFrom` (IL2026) that MUST
+      # fail, both with the flag set from ci.yml. It runs on win-x64 only, the one
+      # leg whose runner matches its matrix RID and whose flags are identical;
+      # running a foreign RID AOT publish five times over would only buy wall time.
+      - name: Prove the AOT properties are load-bearing (N6)
+        if: matrix.rid == 'win-x64'
+        shell: bash
+        env:
+          AOT_RID: ${{ matrix.rid }}
+        run: bash scripts/tests/aot-negative-probe.test.sh
+
   # The README claims netstandard2.0 = ".NET Framework 4.7.2+". Nothing ever
   # compiled against a .NET Framework target, so the claim had no verification
   # path (B5-M5). net4x targeting packs only exist on Windows, which is why this
