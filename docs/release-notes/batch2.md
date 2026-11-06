@@ -176,7 +176,11 @@ sequence.
   no escape sequence survives.
 - Column padding and the summary frame are computed in **display cells**, not
   chars: a CJK name is two cells wide but one char, so the box closes correctly
-  (it used to be 4 cells too wide).
+  (it used to be 4 cells too wide). The cell width now comes from the full
+  Unicode Character Database (East Asian Width, plus combining marks and
+  variation selectors as zero width) instead of a hand-written list, so common
+  emoji (`🚀` `🟠` `🩰` `✅` `❌` `⚡`) and a trailing variation selector pad
+  correctly as well.
 - HTML: entity escaping already prevented structural injection, so the markup is
   unchanged — but the control-character rule now applies here too. It previously
   did not, and a name or description carrying an ESC byte wrote that byte into

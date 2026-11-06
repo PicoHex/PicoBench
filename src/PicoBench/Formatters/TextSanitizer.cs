@@ -195,15 +195,12 @@ internal static class DisplayWidth
             var c = value[i];
             if (char.IsHighSurrogate(c) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
             {
-                width += IsWide(char.ConvertToUtf32(c, value[i + 1])) ? 2 : 1;
+                width += WidthOf(char.ConvertToUtf32(c, value[i + 1]));
                 i++;
                 continue;
             }
 
-            if (IsZeroWidth(c))
-                continue;
-
-            width += IsWide(c) ? 2 : 1;
+            width += WidthOf(c);
         }
 
         return width;
@@ -244,23 +241,19 @@ internal static class DisplayWidth
         return current >= width ? value : new string(padding, width - current) + value;
     }
 
-    private static bool IsZeroWidth(char c) =>
-        c is >= '\u0300' and <= '\u036f' // combining diacritical marks
-            or >= '\u200b' and <= '\u200f'; // zero-width space/joiners, bidi marks
+    /// <summary>
+    /// Cells one code point occupies: 0 for a combining mark or another formatting
+    /// character, 2 for East Asian Wide/Fullwidth, 1 otherwise. Both tables are
+    /// generated from the Unicode Character Database
+    /// (<c>tools/gen-unicode-width.py</c>) instead of being hand-listed — the hand
+    /// list this replaces knew two emoji blocks and never noticed that a variation
+    /// selector was being counted as a cell of its own (Batch 2 · F2).
+    /// </summary>
+    private static int WidthOf(int code)
+    {
+        if (UnicodeWidthTable.Contains(UnicodeWidthTable.ZeroWidth, code))
+            return 0;
 
-    private static bool IsWide(int code) =>
-        code is >= 0x1100 and <= 0x115F // Hangul Jamo
-            or >= 0x2E80 and <= 0x303E // CJK radicals, Kangxi
-            or >= 0x3041 and <= 0x33FF // Hiragana .. CJK compatibility
-            or >= 0x3400 and <= 0x4DBF // CJK ext A
-            or >= 0x4E00 and <= 0x9FFF // CJK unified
-            or >= 0xA000 and <= 0xA4CF // Yi
-            or >= 0xAC00 and <= 0xD7A3 // Hangul syllables
-            or >= 0xF900 and <= 0xFAFF // CJK compatibility ideographs
-            or >= 0xFE30 and <= 0xFE6F // CJK compatibility forms
-            or >= 0xFF00 and <= 0xFF60 // fullwidth forms
-            or >= 0xFFE0 and <= 0xFFE6
-            or >= 0x1F300 and <= 0x1F64F // emoji
-            or >= 0x1F900 and <= 0x1F9FF
-            or >= 0x20000 and <= 0x3FFFD;
+        return UnicodeWidthTable.Contains(UnicodeWidthTable.Wide, code) ? 2 : 1;
+    }
 }
