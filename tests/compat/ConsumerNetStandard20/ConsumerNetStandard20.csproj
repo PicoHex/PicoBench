@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    "netstandard2.0 consumer" leg of the compatibility matrix (review items
+    B3-C5 / 0.7). The library itself targets netstandard2.0; this project proves
+    another netstandard2.0 library can consume the package and compile the
+    generated code - the case where `ValueTask.FromResult` (net5+) used to leak
+    into the emitted source and break the build with CS0117.
+
+    LangVersion is pinned to 8.0 because that is what the generated code needs
+    (see tests/compat/README.md); netstandard2.0 alone would derive C# 7.3.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>8.0</LangVersion>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PicoBench" Version="$(PicoBenchVersion)" />
+  </ItemGroup>
+
+</Project>

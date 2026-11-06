@@ -41,6 +41,21 @@ Baseline directory relative to RepoRoot. Default: api
 .PARAMETER Push
 After tagging, push the branch and the tag (this triggers the release workflow).
 
+.PARAMETER AllowBreaking
+Accept a public API surface that LOST members (removed > 0). Without this switch
+a removed member is a hard failure (exit 4): dropping a public member is visible
+to consumers, so it needs an explicit decision instead of a silently refreshed
+baseline.
+
+.OUTPUTS
+Exit codes:
+
+    0  success (dry run reported the decision, or baselines refreshed + committed + tagged)
+    2  precondition or usage error (no baselines, bad switch combination, tooling missing)
+    3  working tree is dirty
+    4  the public API lost members and -AllowBreaking was not passed
+    5  build failure or api-surface tool failure
+
 .PARAMETER ResetOnYearChange
 Reset x and y when the year changes instead of carrying them forward.
 
@@ -66,6 +81,7 @@ param(
     [switch]$AssumeCurrent,
     [string]$BaselineDir = "api",
     [switch]$Push,
+    [switch]$AllowBreaking,
     [switch]$ResetOnYearChange
 )
 
@@ -74,7 +90,7 @@ $ErrorActionPreference = "Stop"
 function Write-Step([string]$message) { Write-Host "== $message" -ForegroundColor Cyan }
 function Write-Ok([string]$message) { Write-Host "   $message" -ForegroundColor Green }
 function Write-Note([string]$message) { Write-Host "   $message" -ForegroundColor Yellow }
-function Fail([string]$message) { Write-Host "error: $message" -ForegroundColor Red; exit 2 }
+function Fail([string]$message, [int]$code = 2) { Write-Host "error: $message" -ForegroundColor Red; exit $code }
 
 function Invoke-Native([string]$command, [string[]]$arguments) {
     # Native stderr output must not become a terminating error under
@@ -116,7 +132,13 @@ function Get-PackableProjects([string]$root) {
         [xml]$xml = Get-Content -LiteralPath $file.FullName -Raw
         $propertyGroups = @($xml.Project.PropertyGroup)
         $isPackable = $propertyGroups | ForEach-Object { $_.IsPackable } | Where-Object { $_ } | Select-Object -First 1
-        if ("$isPackable".Trim().ToLowerInvariant() -ne "true") { continue }
+        # Projects marked ApiSurfaceBaseline are shipped inside another package
+        # (PicoBench.Generators is embedded in PicoBench as an analyzer), so they
+        # have no package of their own but their public API still reaches
+        # consumers and needs a baseline of its own.
+        $apiSurface = $propertyGroups | ForEach-Object { $_.ApiSurfaceBaseline } | Where-Object { $_ } | Select-Object -First 1
+        $tracksApiSurface = "$apiSurface".Trim().ToLowerInvariant() -eq "true"
+        if ("$isPackable".Trim().ToLowerInvariant() -ne "true" -and -not $tracksApiSurface) { continue }
         $packageId = $propertyGroups | ForEach-Object { $_.PackageId } | Where-Object { $_ } | Select-Object -First 1
         $assemblyName = $propertyGroups | ForEach-Object { $_.AssemblyName } | Where-Object { $_ } | Select-Object -First 1
         if (-not $packageId) { $packageId = $assemblyName }
@@ -150,7 +172,7 @@ function Invoke-Build([string]$root) {
         $result = Invoke-Native "dotnet" @("build", $project.Path, "-c", "Release", "--nologo")
         if ($result.ExitCode -ne 0) {
             Write-Host ($result.Output -join [Environment]::NewLine)
-            throw "build failed: $($project.Path)"
+            Fail "build failed: $($project.Path)" 5
         }
         Write-Ok "built $($project.PackageId)"
     }
@@ -169,7 +191,7 @@ function Get-Surface([string]$root, [string]$outputDirectory) {
         }
         $surfaceFile = Join-Path $outputDirectory "$($project.PackageId).public.txt"
         $null = Invoke-Tool @("dump", $assembly.FullName, "--out", $surfaceFile)
-        if ($script:ToolExit -ne 0) { Fail "api dump failed for $($project.PackageId)" }
+        if ($script:ToolExit -ne 0) { Fail "api dump failed for $($project.PackageId)" 5 }
         $surfaces[$project.PackageId] = $surfaceFile
     }
     return $surfaces
@@ -195,7 +217,7 @@ Write-Step "Building api-surface tool"
 $toolBuild = Invoke-Native "dotnet" @("build", (Join-Path $toolDirectory "ApiSurface.csproj"), "-c", "Release", "-v", "quiet", "--nologo")
 if ($toolBuild.ExitCode -ne 0) {
     Write-Host ($toolBuild.Output -join [Environment]::NewLine)
-    Fail "failed to build the api-surface tool"
+    Fail "failed to build the api-surface tool" 5
 }
 
 if ([System.IO.Path]::IsPathRooted($BaselineDir)) { $baselineRoot = $BaselineDir }
@@ -243,13 +265,14 @@ try {
     }
 
     $dirtyResult = Invoke-GitRaw @("status", "--porcelain")
-    if ($dirtyResult.Output -and -not $DryRun) { Fail "working tree is not clean; commit or stash before releasing" }
+    if ($dirtyResult.Output -and -not $DryRun) { Fail "working tree is not clean; commit or stash before releasing" 3 }
 
     Invoke-Build $RepoRoot
 
     Write-Step "Comparing the public API against the $BaselineDir baselines"
     $currentSurfaces = Get-Surface $RepoRoot $workRoot
     $changed = $false
+    $removedTotal = 0
     foreach ($packageId in ($currentSurfaces.Keys | Sort-Object)) {
         $baseline = Join-Path $baselineRoot "$packageId.public.txt"
         if (-not (Test-Path $baseline)) {
@@ -262,6 +285,7 @@ try {
         if (-not ($summary -match "added=(\d+) removed=(\d+)")) { Fail "unexpected diff output for $packageId" }
         $added = [int]$Matches[1]
         $removed = [int]$Matches[2]
+        $removedTotal += $removed
         if ($added -gt 0 -or $removed -gt 0) {
             $changed = $true
             Write-Note "$packageId`: API changed (+$added / -$removed)"
@@ -272,6 +296,16 @@ try {
         }
     }
 
+    # Removing a public member breaks every consumer that used it, so it needs a
+    # deliberate decision rather than a silently rewritten baseline. Additive
+    # changes stay on the normal x-counter path.
+    if ($removedTotal -gt 0 -and -not $AllowBreaking) {
+        Write-Host ""
+        Write-Note "the public API lost $removedTotal member line(s) since the last release"
+        Fail ("removing public API is a breaking change; re-run with -AllowBreaking once the break is " +
+            "intended and documented (docs/releasing.md)") 4
+    }
+
     $lastTag = Get-LastTag
     $apiChanged = "false"
     if ($changed) { $apiChanged = "true" }
@@ -279,7 +313,7 @@ try {
     if ($lastTag) { $versionArgs += @("--last", $lastTag) }
     if ($ResetOnYearChange) { $versionArgs += "--reset-on-year-change" }
     $nextVersion = @(Invoke-Tool $versionArgs)[-1].Trim()
-    if ($script:ToolExit -ne 0) { Fail "next-version failed" }
+    if ($script:ToolExit -ne 0) { Fail "next-version failed" 5 }
 
     Write-Host ""
     Write-Step "Decision"
@@ -308,7 +342,21 @@ try {
     }
 
     $null = Invoke-Git @("add", "--", $BaselineDir)
-    $null = Invoke-Git @("commit", "-m", "chore(release): v$nextVersion")
+    # A y-counter release leaves the API untouched, so refreshing the baselines
+    # stages nothing and `git commit` would fail with "nothing to commit"
+    # (B5-H1: every non-API release died here). The tag needs a commit to point
+    # at, so an empty release commit is the correct outcome, not an error.
+    $staged = Invoke-GitRaw @("diff", "--cached", "--quiet", "--", $BaselineDir)
+    if ($staged.ExitCode -eq 0) {
+        Write-Note "API unchanged - creating an empty release commit for v$nextVersion"
+        $null = Invoke-Git @("commit", "--allow-empty", "-m", "chore(release): v$nextVersion")
+    }
+    elseif ($staged.ExitCode -eq 1) {
+        $null = Invoke-Git @("commit", "-m", "chore(release): v$nextVersion")
+    }
+    else {
+        Fail "git diff --cached failed: $($staged.Output)" 5
+    }
     $null = Invoke-Git @("tag", "-a", "v$nextVersion", "-m", "v$nextVersion")
     Write-Ok "committed baselines and created tag v$nextVersion"
 

@@ -53,7 +53,10 @@ jobs:
             global.json
 
       - name: Show logical target
-        run: echo Testing ${{ matrix.logical-target }}
+        shell: bash
+        env:
+          LOGICAL_TARGET: ${{ matrix.logical-target }}
+        run: echo testing $LOGICAL_TARGET
 
       - name: Restore dependencies
         run: |
@@ -66,10 +69,49 @@ jobs:
       - name: Run tests
         run: dotnet test --project tests/PicoBench.Tests/PicoBench.Tests.csproj --configuration Release --no-build --verbosity normal --timeout 120s --no-progress --no-ansi -p:UseProjectReferences=true
 
+      # All four samples, on every leg: `StringVsStringBuilder` and
+      # `AsyncBenchmarks` were never executed anywhere (B5-L4), so a sample could
+      # rot without any build failing.
       - name: Smoke-run samples
+        shell: bash
+        env:
+          SAMPLES: AttributeBased CollectionBenchmarks StringVsStringBuilder AsyncBenchmarks
         run: |
-          dotnet run --project samples/AttributeBased/AttributeBased.csproj --configuration Release --no-build
-          dotnet run --project samples/CollectionBenchmarks/CollectionBenchmarks.csproj --configuration Release --no-build
+          set -euo pipefail
+          for sample in $SAMPLES; do
+            echo "== $sample"
+            dotnet run --project "samples/$sample/$sample.csproj" --configuration Release --no-build
+          done
+
+  api-guard:
+    name: API surface guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      # `-DryRun` builds every assembly that ships to consumers (the library and
+      # the bundled source generator), dumps each public API surface and diffs it
+      # against the committed baselines in api/. A removed member fails this step
+      # with exit 4 unless the change also passes -AllowBreaking, so a breaking
+      # change becomes an explicit decision in the PR instead of a baseline that
+      # gets silently overwritten at release time (B5-H3).
+      - name: Diff the public API against the committed baselines
+        shell: pwsh
+        run: ./scripts/release.ps1 -DryRun
 
   aot-validation:
     name: AOT validation (${{ matrix.logical-target }})
@@ -109,7 +151,10 @@ jobs:
             global.json
 
       - name: Show logical target
-        run: echo Validating AOT for ${{ matrix.logical-target }}
+        shell: bash
+        env:
+          LOGICAL_TARGET: ${{ matrix.logical-target }}
+        run: echo "validating AOT for $LOGICAL_TARGET"
 
       - name: Create local feed dir (NuGet.config local source)
         shell: bash
@@ -120,14 +165,30 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
       - name: Pack PicoBench for package-consumption validation
-        run: dotnet pack src/PicoBench/PicoBench.csproj --configuration Release --output ./artifacts/aot-pack -p:Version=0.0.0-ci.${{ github.run_number }} -p:UseProjectReferences=false -p:ContinuousIntegrationBuild=true -p:Deterministic=true
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          pack_args=(
+            src/PicoBench/PicoBench.csproj
+            --configuration Release
+            --output ./artifacts/aot-pack
+            -p:Version="$PACKAGE_VERSION"
+            -p:UseProjectReferences=false
+            -p:ContinuousIntegrationBuild=true
+            -p:Deterministic=true
+          )
+          dotnet pack "${pack_args[@]}"
 
       - name: Create temporary AOT validation app
         shell: pwsh
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
         run: |
           Remove-Item -Recurse -Force ./artifacts/aot-app -ErrorAction SilentlyContinue
           dotnet new console --framework net10.0 --output ./artifacts/aot-app
-          dotnet add ./artifacts/aot-app/aot-app.csproj package PicoBench --version 0.0.0-ci.${{ github.run_number }} --source ./artifacts/aot-pack
+          dotnet add ./artifacts/aot-app/aot-app.csproj package PicoBench --version $env:PACKAGE_VERSION --source ./artifacts/aot-pack
           @'
           using System.Threading;
           using PicoBench;
@@ -146,5 +207,312 @@ jobs:
           }
           '@ | Set-Content ./artifacts/aot-app/Program.cs
 
+      # A trim or AOT warning is the whole point of this job: it means the
+      # linker could not prove the library is safe, which is how an
+      # "AOT-compatible" claim quietly stops being true. Treat the IL2xxx /
+      # IL3xxx families as errors instead of a green build (B5-M4).
       - name: Publish AOT validation app
-        run: dotnet publish ./artifacts/aot-app/aot-app.csproj --configuration Release --framework net10.0 --runtime ${{ matrix.rid }} --self-contained -p:PublishAot=true
+        shell: bash
+        env:
+          RID: ${{ matrix.rid }}
+        run: |
+          set -euo pipefail
+          publish_args=(
+            ./artifacts/aot-app/aot-app.csproj
+            --configuration Release
+            --framework net10.0
+            --runtime "$RID"
+            --self-contained
+            -p:PublishAot=true
+            -p:TreatWarningsAsErrors=true
+            -p:ILLinkTreatWarningsAsErrors=true
+            -p:IlcTreatWarningsAsErrors=true
+          )
+          dotnet publish "${publish_args[@]}"
+
+      # Publishing only proves the linker ran. Executing the artifact is what
+      # proves the AOT claim: reflection the linker stripped, a missing
+      # analyzer, or a dead generated method all survive `publish` and fail
+      # here (B5-M4).
+      - name: Run the AOT artifact and assert its output
+        shell: bash
+        env:
+          RID: ${{ matrix.rid }}
+        run: |
+          set -euo pipefail
+          exe="./artifacts/aot-app/bin/Release/net10.0/$RID/publish/aot-app"
+          case "$RID" in win-*) exe="$exe.exe" ;; esac
+          if [ ! -x "$exe" ] && [ ! -f "$exe" ]; then
+            echo "::error::AOT artifact not found at $exe"
+            exit 1
+          fi
+          output="$("$exe")"
+          echo "$output"
+          if ! printf '%s' "$output" | grep -q 'Benchmarks: 2'; then
+            echo "::error::the AOT binary did not report the expected two benchmarks"
+            exit 1
+          fi
+          echo "AOT artifact ran and reported its benchmarks"
+
+  # The README claims netstandard2.0 = ".NET Framework 4.7.2+". Nothing ever
+  # compiled against a .NET Framework target, so the claim had no verification
+  # path (B5-M5). net4x targeting packs only exist on Windows, which is why this
+  # is its own job instead of a matrix leg of build-and-test.
+  net4x-smoke:
+    name: .NET Framework smoke (net472 / net48)
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Build the net4x compatibility project
+        shell: pwsh
+        run: dotnet build tests/compat/PicoBench.Net4xSmoke/PicoBench.Net4xSmoke.csproj --configuration Release
+
+      - name: Run the net4x compatibility project
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($tfm in @('net472', 'net48')) {
+            Write-Host "== $tfm"
+            $output = & dotnet run --project tests/compat/PicoBench.Net4xSmoke/PicoBench.Net4xSmoke.csproj --configuration Release --no-build --framework $tfm 2>&1
+            $exit = $LASTEXITCODE
+            $output | Write-Host
+            if ($exit -ne 0) {
+              Write-Host "::error::$tfm exited with $exit"
+              $failed = $true
+            }
+            elseif (-not ($output -match 'Benchmarks: 2')) {
+              Write-Host "::error::$tfm did not report two benchmarks"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+
+  # ------------------------------------------------ compatibility matrix --
+  # The generator's Roslyn floor is 4.8 (SDK 8.0.100+). A generator compiled
+  # against a newer Roslyn is silently skipped by the SDK 8 compiler (CS9057,
+  # warning only), so the consumer only sees CS1061 - nothing in a 10.0.x-only
+  # matrix can catch that (B3-C1).
+  consumer-sdk8:
+    name: Consumer on SDK 8 (net8.0)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            8.0.x
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Pack PicoBench for consumption
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          pack_args=(
+            src/PicoBench/PicoBench.csproj
+            --configuration Release
+            --output ./artifacts/consumer-pack
+            -p:Version="$PACKAGE_VERSION"
+            -p:UseProjectReferences=false
+            -p:ContinuousIntegrationBuild=true
+          )
+          dotnet pack "${pack_args[@]}"
+
+      # tests/compat/ConsumerSdk8 carries its own global.json pinning SDK 8, so
+      # the consumer compiles with the Roslyn that ships in the 8.0.4xx band.
+      - name: Restore the consumer with SDK 8
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          feed="$PWD/artifacts/consumer-pack"
+          cd tests/compat/ConsumerSdk8
+          dotnet --version
+          dotnet restore ConsumerSdk8.csproj --source "$feed" -p:PicoBenchVersion="$PACKAGE_VERSION"
+
+      - name: Build and run the consumer with SDK 8
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          cd tests/compat/ConsumerSdk8
+          dotnet build ConsumerSdk8.csproj --configuration Release --no-restore -p:PicoBenchVersion="$PACKAGE_VERSION"
+          output="$(dotnet run --project ConsumerSdk8.csproj --configuration Release --no-build -p:PicoBenchVersion="$PACKAGE_VERSION")"
+          echo "$output"
+          if ! printf '%s' "$output" | grep -q 'Benchmarks: 2'; then
+            echo "::error::the SDK 8 consumer did not run the generated benchmarks"
+            exit 1
+          fi
+
+  # The library targets netstandard2.0, so a netstandard2.0 library is the
+  # consumer most likely to break when emitted code uses a net5+ API
+  # (`ValueTask.FromResult` was the historical case, B3-C5).
+  consumer-netstandard20:
+    name: Consumer on netstandard2.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Pack PicoBench for consumption
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          pack_args=(
+            src/PicoBench/PicoBench.csproj
+            --configuration Release
+            --output ./artifacts/consumer-pack
+            -p:Version="$PACKAGE_VERSION"
+            -p:UseProjectReferences=false
+            -p:ContinuousIntegrationBuild=true
+          )
+          dotnet pack "${pack_args[@]}"
+
+      - name: Build the netstandard2.0 consumer
+        shell: bash
+        env:
+          PACKAGE_VERSION: 0.0.0-ci.${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          feed="$PWD/artifacts/consumer-pack"
+          cd tests/compat/ConsumerNetStandard20
+          dotnet restore ConsumerNetStandard20.csproj --source "$feed" -p:PicoBenchVersion="$PACKAGE_VERSION"
+          dotnet build ConsumerNetStandard20.csproj --configuration Release --no-restore -p:PicoBenchVersion="$PACKAGE_VERSION"
+
+  # ------------------------------------------------ samples on three OSes --
+  samples:
+    name: Samples (${{ matrix.logical-target }})
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - logical-target: win-x64
+            runs-on: windows-latest
+          - logical-target: linux-x64
+            runs-on: ubuntu-latest
+          - logical-target: osx-arm64
+            runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Show logical target
+        shell: bash
+        env:
+          LOGICAL_TARGET: ${{ matrix.logical-target }}
+        run: echo "running every sample on $LOGICAL_TARGET"
+
+      - name: Restore dependencies
+        shell: bash
+        run: |
+          mkdir -p ./artifacts/nupkg
+          dotnet restore PicoBench.slnx -p:UseProjectReferences=true
+
+      - name: Build
+        run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:UseProjectReferences=true
+
+      - name: Run every sample
+        shell: bash
+        env:
+          SAMPLES: AttributeBased CollectionBenchmarks StringVsStringBuilder AsyncBenchmarks
+        run: |
+          set -euo pipefail
+          for sample in $SAMPLES; do
+            echo "== $sample"
+            dotnet run --project "samples/$sample/$sample.csproj" --configuration Release --no-build
+          done
+
+  # ------------------------------------------------ release scripting ------
+  # release.ps1, tools/release-build.sh, the tag gate, the package shape and the
+  # workflows themselves only run on release day - the worst moment to discover
+  # they are broken (B5-H1 was exactly that: y-version releases could not be cut
+  # for months and nothing noticed). These tests pin the contracts instead.
+  release-scripting:
+    name: Release scripting contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Lint the workflows (expressions, pinned actions, job contracts)
+        shell: bash
+        run: python3 scripts/tests/workflow_lint.py
+
+      - name: Release tag gate
+        shell: bash
+        run: bash scripts/tests/release-tag-validation.test.sh
+
+      - name: tools/release-build.sh exit-code contract
+        shell: bash
+        run: bash scripts/tests/release-build-exit-codes.test.sh
+
+      - name: scripts/release.ps1 exit-code contract
+        shell: pwsh
+        run: ./scripts/tests/release-ps1-exit-codes.ps1
+
+      - name: Package shape (snupkg, contents, dependencies)
+        shell: bash
+        run: bash scripts/tests/packaging-guard.test.sh
