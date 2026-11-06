@@ -22,6 +22,9 @@ F:PicoBench.CpuCycleMeasurementKind.PerfEventCpuCycles : PicoBench.CpuCycleMeasu
 F:PicoBench.CpuCycleMeasurementKind.ThreadCycles : PicoBench.CpuCycleMeasurementKind = 1 const
 F:PicoBench.CpuCycleMeasurementKind.Unsupported : PicoBench.CpuCycleMeasurementKind = 0 const
 F:PicoBench.CpuCycleMeasurementKind.value__ : int
+F:PicoBench.Formatters.MetricPrecision.Display : PicoBench.Formatters.MetricPrecision = 1 const
+F:PicoBench.Formatters.MetricPrecision.Raw : PicoBench.Formatters.MetricPrecision = 0 const
+F:PicoBench.Formatters.MetricPrecision.value__ : int
 F:PicoBench.RuntimeExecutionMode.Jit : PicoBench.RuntimeExecutionMode = 1 const
 F:PicoBench.RuntimeExecutionMode.NativeAot : PicoBench.RuntimeExecutionMode = 2 const
 F:PicoBench.RuntimeExecutionMode.Unknown : PicoBench.RuntimeExecutionMode = 0 const
@@ -207,6 +210,7 @@ P:PicoBench.Formatters.FormatterOptions.IncludePercentiles : bool { get; init; }
 P:PicoBench.Formatters.FormatterOptions.IncludeTimestamp : bool { get; init; }
 P:PicoBench.Formatters.FormatterOptions.Minimal : PicoBench.Formatters.FormatterOptions { get; }
 P:PicoBench.Formatters.FormatterOptions.OutputDirectory : string { get; init; }
+P:PicoBench.Formatters.FormatterOptions.PrecisionProfile : System.Nullable`1<PicoBench.Formatters.MetricPrecision> { get; init; }
 P:PicoBench.Formatters.FormatterOptions.SpeedupDecimalPlaces : int { get; init; }
 P:PicoBench.Formatters.FormatterOptions.TimeDecimalPlaces : int { get; init; }
 P:PicoBench.Formatters.SummaryOptions.BoxWidth : int { get; init; }
@@ -279,6 +283,7 @@ T:class PicoBench.TimingSample
 T:enum PicoBench.AsyncTimingMode
 T:enum PicoBench.ComparisonOutcome
 T:enum PicoBench.CpuCycleMeasurementKind
+T:enum PicoBench.Formatters.MetricPrecision
 T:enum PicoBench.RuntimeExecutionMode
 T:interface PicoBench.Formatters.IFormatter
 T:interface PicoBench.IBenchmarkClass

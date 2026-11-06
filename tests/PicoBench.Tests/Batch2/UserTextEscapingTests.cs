@@ -1,5 +1,6 @@
 namespace PicoBench.Tests.Batch2;
 
+using System.Globalization;
 using PicoBench.Formatters;
 
 /// <summary>
@@ -316,6 +317,43 @@ public class UserTextEscapingTests
         await Assert.That(headings[0]).Contains("cat\\|pipe");
     }
 
+    /// <summary>
+    /// B-1 (fix/batch2): the single-comparison view names its two sides with
+    /// <c>comparison.Baseline.Name</c> / <c>comparison.Candidate.Name</c>, both of
+    /// which are caller-supplied text. Node names are just as reachable as suite
+    /// names — <c>Benchmark.Compare(name, baselineName, candidateName)</c> is the
+    /// documented way to build a comparison — so they need the same treatment:
+    /// no raw ESC, no line break that swallows the rest of the line.
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch2")]
+    [Property("Batch2", "2.5/comparison node names escaped")]
+    public async Task ComparisonNodeNames_CannotForwardEsc_OrSwallowALine()
+    {
+        var comparison = new ComparisonResult(
+            "hostile case",
+            Batch2Support.Result("base" + ESC_TEXT + "[31mRED" + CRLF + "## Injected", Stats(100.0)),
+            Batch2Support.Result("cand" + ESC_TEXT + "[0m", Stats(50.0))
+        );
+
+        var console = new ConsoleFormatter().Format(comparison);
+
+        Batch2Support.Log(console);
+
+        await Assert
+            .That(console.Contains(RAW_ESC, StringComparison.Ordinal))
+            .IsFalse()
+            .Because("the comparison view forwarded a raw ESC (0x1B) in a node name");
+
+        // Every figure the view prints sits on its own physical line: a CRLF in a
+        // name must not make 'Baseline (...)' continue into '## Injected'.
+        var baselineLine = Batch2Support
+            .Lines(console)
+            .Single(static l => l.StartsWith("  Baseline (", StringComparison.Ordinal));
+        await Assert.That(baselineLine).Contains("␛[31mRED");
+        await Assert.That(baselineLine).Contains("## Injected");
+    }
+
     // ─── helpers ────────────────────────────────────────────────────
 
     /// <summary>
@@ -337,6 +375,17 @@ public class UserTextEscapingTests
     }
 
     private const char BACKSLASH = (char)92;
+
+    /// <summary>
+    /// A raw ESC (0x1B), spelled through <see cref="char"/> so no editor or source
+    /// generator fuses it into a neighbouring digit. Deliberately a different
+    /// constant from <see cref="Esc"/>: a node-name assertion that reused the same
+    /// literal could pass by comparing the injected text with itself.
+    /// </summary>
+    private static readonly string RAW_ESC = new(new[] { (char)27 });
+
+    /// <summary>The same character, written as an escape, for building fixtures.</summary>
+    private const string ESC_TEXT = "\u001b";
 
     /// <summary>A CR LF pair, written without a literal escape so no editor can fuse it.</summary>
     private static readonly string CRLF = new string(new[] { (char)13, (char)10 });
@@ -364,36 +413,137 @@ public class UserTextEscapingTests
         };
 
     /// <summary>
-    /// Display width of a line: two cells for East Asian wide characters, zero for
-    /// combining marks, one for everything else. Written independently of the
-    /// production helper so the two have to agree for the test to pass.
+    /// Batch 2 · F2: an emoji is two cells wide, and the frame has to close on a row
+    /// that carries one. 🚀 (U+1F680) was outside the old table, so the box grew by a
+    /// cell; a variation selector (U+FE0F) was counted as a cell of its own.
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch2")]
+    [Property("Batch2", "F2/emoji display width")]
+    public async Task ConsoleTable_StaysAligned_WithEmojiAndVariationSelectors()
+    {
+        var results = new List<BenchmarkResult>
+        {
+            Batch2Support.Result("rocket🚀_Op", Stats(150.0)),
+            Batch2Support.Result("orange🟠_Op", Stats(160.0)),
+            Batch2Support.Result("swan🩰_Op", Stats(170.0)),
+            Batch2Support.Result("check✅_Op", Stats(180.0)),
+            Batch2Support.Result("cross❌_Op", Stats(190.0)),
+            Batch2Support.Result("bolt⚡_Op", Stats(200.0)),
+            Batch2Support.Result("watch⌚_Op", Stats(210.0)),
+            Batch2Support.Result("flag️_Op", Stats(220.0)),
+            Batch2Support.Result("family👨‍👩‍👧_Op", Stats(230.0)),
+            Batch2Support.Result("plain_Op", Stats(240.0)),
+        };
+
+        var console = new ConsoleFormatter().Format(results);
+        var lines = Batch2Support.Lines(console).Where(static l => l.Length > 0).ToList();
+
+        foreach (var line in lines)
+            Batch2Support.Log($"{DisplayWidth(line),3} | {line}");
+
+        var width = DisplayWidth(lines[0]);
+        foreach (var line in lines)
+            await Assert
+                .That(DisplayWidth(line))
+                .IsEqualTo(width)
+                .Because($"'{line}' does not line up with the frame ({DisplayWidth(line)} vs {width} cells)");
+
+        // The names really are in the output (the fixture is not silently empty).
+        await Assert.That(console).Contains("rocket🚀_Op");
+        await Assert.That(console).Contains("family👨‍👩‍👧_Op");
+    }
+
+    /// <summary>
+    /// Batch 2 · F2: the display width of the individual characters the emoji test
+    /// relies on, straight from the snapshot. This is the assertion the copied oracle
+    /// could not make — it had the same blind spots as the implementation.
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch2")]
+    [Property("Batch2", "F2/emoji display width")]
+    public async Task Snapshot_AgreesWithTheKnownWidths()
+    {
+        // (code point, expected cells) — the cases review 40 measured.
+        var cases = new (int Code, int Cells)[]
+        {
+            (0x1F680, 2), // 🚀 rocket
+            (0x1F7E0, 2), // 🟠 orange circle
+            (0x1FA70, 2), // 🩰 ballet shoes
+            (0x2705, 2), // ✅ check mark
+            (0x274C, 2), // ❌ cross mark
+            (0x26A1, 2), // ⚡ high voltage
+            (0x231A, 2), // ⌚ watch
+            (0xFE0F, 0), // variation selector-16
+            (0x0301, 0), // combining acute
+            (0x1F1EF, 1), // regional indicator J (flags are two of them, one cell each)
+            (0x4E2D, 2), // CJK 'middle'
+            (0x41, 1), // 'A'
+        };
+
+        foreach (var (code, cells) in cases)
+        {
+            Batch2Support.Log($"U+{code:X4}: snapshot says {UnicodeWidth(code)}, expected {cells}");
+            await Assert
+                .That(UnicodeWidth(code))
+                .IsEqualTo(cells)
+                .Because($"the snapshot disagrees with the known width of U+{code:X4}");
+        }
+    }
+
+    /// <summary>
+    /// Display width of a line, from the Unicode data snapshot next to this file —
+
+    /// <b>not</b> from a copy of the production range table. Batch 2 · F2: the first
+    /// version of this helper was a verbatim copy of <c>DisplayWidth.IsWide</c>, so
+    /// the two could only ever agree; it was structurally incapable of noticing that
+    /// 🚀 (U+1F680) was padded as one cell. This one reads
+    /// <c>UnicodeWidthSnapshot.txt</c>, which <c>tools/gen-unicode-width.py</c>
+    /// generates from the UCD independently of the C# table.
     /// </summary>
     private static int DisplayWidth(string line)
     {
         var width = 0;
         foreach (var rune in line.EnumerateRunes())
-        {
-            var value = rune.Value;
-            if (value is >= 0x0300 and <= 0x036F)
-                continue; // combining mark
-            width += IsWide(value) ? 2 : 1;
-        }
+            width += UnicodeWidth(rune.Value);
         return width;
     }
 
-    private static bool IsWide(int code) =>
-        code is >= 0x1100 and <= 0x115F // Hangul Jamo
-            or >= 0x2E80 and <= 0x303E // CJK radicals, Kangxi
-            or >= 0x3041 and <= 0x33FF // Hiragana .. CJK compatibility
-            or >= 0x3400 and <= 0x4DBF // CJK ext A
-            or >= 0x4E00 and <= 0x9FFF // CJK unified
-            or >= 0xA000 and <= 0xA4CF // Yi
-            or >= 0xAC00 and <= 0xD7A3 // Hangul syllables
-            or >= 0xF900 and <= 0xFAFF // CJK compatibility ideographs
-            or >= 0xFE30 and <= 0xFE6F // CJK compatibility forms
-            or >= 0xFF00 and <= 0xFF60 // fullwidth forms
-            or >= 0xFFE0 and <= 0xFFE6
-            or >= 0x1F300 and <= 0x1F64F // emoji
-            or >= 0x1F900 and <= 0x1F9FF
-            or >= 0x20000 and <= 0x3FFFD;
+    /// <summary>Cells the snapshot assigns to one code point.</summary>
+    private static int UnicodeWidth(int code)
+    {
+        foreach (var (cells, start, end) in UnicodeWidthRanges)
+        {
+            if (code >= start && code <= end)
+                return cells;
+        }
+
+        return 1; // every code point the snapshot does not list is one cell
+    }
+
+    /// <summary>
+    /// The snapshot, parsed once: <c>(cells, start, end)</c>, ignoring the
+    /// <c>#</c> header.
+    /// </summary>
+    private static readonly (int Cells, int Start, int End)[] UnicodeWidthRanges =
+        LoadUnicodeWidthRanges();
+
+    private static (int Cells, int Start, int End)[] LoadUnicodeWidthRanges()
+    {
+        var root = Path.GetDirectoryName(
+            PicoBench.Tests.Batch0.Batch0Support.FindRepositoryFile("PicoBench.slnx")
+        )!;
+        var path = Path.Combine(root, "tests", "PicoBench.Tests", "Batch2", "UnicodeWidthSnapshot.txt");
+
+        return File
+            .ReadAllLines(path)
+            .Where(static line => line.Length > 0 && line[0] != '#')
+            .Select(static line => line.Split(' '))
+            .Select(static parts => (
+                Cells: int.Parse(parts[0], CultureInfo.InvariantCulture),
+                Start: Convert.ToInt32(parts[1], 16),
+                End: Convert.ToInt32(parts[2], 16)
+            ))
+            .ToArray();
+    }
 }

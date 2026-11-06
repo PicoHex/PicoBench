@@ -92,14 +92,28 @@ ratio could not be traced back to the run that produced it.
 - The comparisons section gains **`SampleCount`** and **`IterationsPerSample`**
   (same names, same order as the results section), and the `# Schema:` line above
   it lists them and documents the `Speedup` cell.
-- Verified by an RFC 4180 reader behind a `comment='#'`-equivalent scan, and with
-  `pandas.read_csv(path, comment='#')` on a description that spans lines.
+- That `Speedup` clause names both ratio definitions the API has. A
+  `ComparisonResult` built from two independent `BenchmarkResult`s reports the
+  ratio of the two averages; one produced by `Benchmark.Compare` reports the
+  **median of the per-round paired ratios** (Batch 0). It also lists the real
+  causes of a non-finite ratio: a **candidate average of zero** makes the ratio
+  `+∞` (the clause calls it "unbounded"), a non-finite candidate average makes it
+  `NaN` (the clause calls it "unmeasurable"), and a
+  direct comparison with fewer than the six usable rounds the sign test needs is
+  `NaN` too. A **0/0 pair is not one of them** — an independent comparison of two
+  all-zero results is exactly `1.0` and prints as a number.
+- Verified on an adversarial description with an RFC 4180 reader behind a
+  `comment='#'`-equivalent scan; the `pandas.read_csv(path, comment='#')` check on
+  that description was run by hand during development, not from CI.
 
 **Migration**
 
-- If you parsed the metadata block, split each `#` line on the **first comma**
-  instead of on `: ` — and turn a literal `\n` back into a line break if you need
-  the original text.
+- If you parsed the metadata block, split each **`# key,value`** line on the first
+  comma instead of on `: ` — a metadata row has exactly two fields. The three
+  structural comment lines (`# Schema:`, `# Results`, `# Comparisons`) are not
+  key/value rows and carry bare commas of their own, so skip them (a
+  `comment='#'` reader drops them whole). Turn a literal `\n` back into a
+  line break if you need the original text.
 - If you read comparison columns positionally, append two columns (name-based
   readers are unaffected); read the order from `columns=` in the `# Schema:` line.
 - `# Description: "line1` / `line2"` pairs no longer exist: a reader that relied
@@ -162,8 +176,15 @@ sequence.
   no escape sequence survives.
 - Column padding and the summary frame are computed in **display cells**, not
   chars: a CJK name is two cells wide but one char, so the box closes correctly
-  (it used to be 4 cells too wide).
-- HTML is unchanged: HTML escaping already prevented structural injection.
+  (it used to be 4 cells too wide). The cell width now comes from the full
+  Unicode Character Database (East Asian Width, plus combining marks and
+  variation selectors as zero width) instead of a hand-written list, so common
+  emoji (`🚀` `🟠` `🩰` `✅` `❌` `⚡`) and a trailing variation selector pad
+  correctly as well.
+- HTML: entity escaping already prevented structural injection, so the markup is
+  unchanged — but the control-character rule now applies here too. It previously
+  did not, and a name or description carrying an ESC byte wrote that byte into
+  the file. HTML now shows the same control picture as Console and Markdown.
 
 **Migration**
 
@@ -171,6 +192,8 @@ sequence.
   of it. If you match on names in generated Markdown, expect the escaped form
   (escaped pipe, escaped hash, escaped backtick, `<br>` inside cells).
 - Console output for such a name is one line, not two.
+- If you grepped a generated HTML file for a raw control character, it is no
+  longer there; match the control picture instead.
 
 ## 6. Percentiles have a definition
 

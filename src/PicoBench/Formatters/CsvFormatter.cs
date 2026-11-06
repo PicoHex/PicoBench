@@ -374,10 +374,22 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Array.IndexOf(columns, "Speedup") >= 0)
         {
+            // The definition has two shapes, because the API does: a comparison
+            // built from two independent results reports the ratio of the two
+            // averages, while a direct (Benchmark.Compare) comparison reports the
+            // median of the per-round paired ratios (Batch 0). The non-finite
+            // causes are the ones ComputeSpeedup actually implements: a near-zero
+            // candidate average is +infinity, an unmeasurable (non-finite) one is
+            // NaN, and a direct comparison with fewer than the six usable rounds
+            // the sign test needs is NaN as well. A 0/0 pair is *not* one of them
+            // - it is exactly 1.0, so it prints as a number.
             schema +=
-                "; Speedup = ratio (baseline avg / candidate avg) | \""
+                "; Speedup = ratio (baseline avg / candidate avg, or the median"
+                + " of the per-round paired ratios for a direct comparison) | \""
                 + FormatterBase.NotCollected
-                + "\" (no finite ratio: 0/0 or too few paired rounds)";
+                + "\" (no finite ratio: a candidate average of zero is unbounded,"
+                + " a non-finite candidate average is unmeasurable, or too few usable"
+                + " paired rounds)";
         }
 
         if (Array.IndexOf(columns, "SampleCount") >= 0)

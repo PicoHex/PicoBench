@@ -40,9 +40,13 @@ public enum MetricPrecision
 /// Batch 2 · 2.4 (B2-M6): <c>Avg = 5_000_000_000</c> rendered as
 /// <c>5000000000.0</c> in a column whose header said <c>(ns)</c>: correct, and
 /// unreadable. The unit is chosen <b>once per table</b> from the largest
-/// per-operation value the table holds, so every column of one table shares it —
-/// a per-cell rescale would put <c>2.5</c> and <c>0.0</c> in the same column and
-/// make the column look like a rounding bug.
+/// per-operation value the table holds, so every column of one table shares it.
+/// That is what makes the column comparable, and it is also why a small neighbour
+/// of a large value reads <c>0.0</c>: the <c>2.5 ms</c> row and the <c>150 ns</c>
+/// row of one table are both printed in <c>ms</c>, so the second one rounds to
+/// zero. A per-cell rescale would put <c>150.0</c> and <c>2.5</c> in the same column
+/// instead — each readable on its own, and the column no longer comparable across
+/// rows.
 /// </para>
 /// <para>
 /// The thresholds are one thousand of the next smaller unit, i.e. the unit that

@@ -167,6 +167,34 @@ public class NonFiniteSpeedupTests
         await Assert.That(console).DoesNotContain("Speedup: N/A (!)");
     }
 
+    /// <summary>
+    /// B-2 (fix/batch2): the detailed rows of the summary box appended a literal
+    /// <c>x</c> to <c>FormatterBase.FormatMetric</c>'s output, so a non-finite
+    /// ratio read <c>N/Ax</c> — the exact token shape 2.2 set out to remove. The
+    /// release note promises a non-finite ratio is rendered as <c>N/A</c> "in the
+    /// comparison summary" too, so a per-scenario row has to use the same helper
+    /// as the aggregate lines above it.
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch2")]
+    [Property("Batch2", "2.2/non-finite speedup")]
+    public async Task SummaryDetailRows_NeverPrintTheTokenNax()
+    {
+        var summary = SummaryFormatter.Format([Unbounded(), Undefined(), Ordinary()]);
+
+        Batch2Support.Log(summary);
+
+        await Assert.That(summary).DoesNotContain("N/Ax");
+
+        // One detailed row per scenario; the non-finite ones carry the bare N/A
+        // the aggregate lines already use.
+        var unbounded = Batch2Support
+            .Lines(summary)
+            .Single(static l => l.TrimStart().StartsWith("Unbounded", StringComparison.Ordinal));
+        await Assert.That(unbounded).Contains(": N/A ");
+        await Assert.That(unbounded).DoesNotContain("x ");
+    }
+
     private static string Line(string text, string prefix) =>
         Batch2Support
             .Lines(text)

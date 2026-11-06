@@ -495,7 +495,33 @@ public class PrecisionProfileTests
         return index <= 0 ? $"<no html column named {header}>" : HtmlNumberCell(html, index - 1);
     }
 
+    /// <summary>
+    /// F3 (fix/batch2): the xmldoc of <c>TimeUnit</c> argued that a per-cell rescale
+    /// 'would put 2.5 and 0.0 in the same column'. That is backwards — those two
+    /// numbers in one column is exactly what <b>per-table</b> yields, and it is what
+    /// the test above asserts. A per-cell rescale would put 150.0 next to 2.5. This
+    /// guard reads the comment so the two branches cannot be swapped back.
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch2")]
+    [Property("Batch2", "F3/precision profile comment")]
+    public async Task TimeUnitDocumentation_DescribesAPerCellRescaleAs150NextToTwoPointFive()
+    {
+        var root = Path.GetDirectoryName(
+            PicoBench.Tests.Batch0.Batch0Support.FindRepositoryFile("PicoBench.slnx")
+        )!;
+        var source = File.ReadAllText(Path.Combine(root, "src", "PicoBench", "Formatters", "PrecisionProfile.cs"));
+
+        await Assert
+            .That(source)
+            .Contains("A per-cell rescale would put <c>150.0</c> and <c>2.5</c> in the same column");
+        await Assert
+            .That(source)
+            .DoesNotContain("A per-cell rescale would put <c>2.5</c> and <c>0.0</c>");
+    }
+
     /// <summary>Parses a numeric cell written by any of the four formats.</summary>
+
     private static double Number(string cell) =>
         double.Parse(cell, NumberStyles.Float, CultureInfo.InvariantCulture);
 }
