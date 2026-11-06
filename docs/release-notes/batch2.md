@@ -92,14 +92,28 @@ ratio could not be traced back to the run that produced it.
 - The comparisons section gains **`SampleCount`** and **`IterationsPerSample`**
   (same names, same order as the results section), and the `# Schema:` line above
   it lists them and documents the `Speedup` cell.
-- Verified by an RFC 4180 reader behind a `comment='#'`-equivalent scan, and with
-  `pandas.read_csv(path, comment='#')` on a description that spans lines.
+- That `Speedup` clause names both ratio definitions the API has. A
+  `ComparisonResult` built from two independent `BenchmarkResult`s reports the
+  ratio of the two averages; one produced by `Benchmark.Compare` reports the
+  **median of the per-round paired ratios** (Batch 0). It also lists the real
+  causes of a non-finite ratio: a **candidate average of zero** makes the ratio
+  `+∞` (the clause calls it "unbounded"), a non-finite candidate average makes it
+  `NaN` (the clause calls it "unmeasurable"), and a
+  direct comparison with fewer than the six usable rounds the sign test needs is
+  `NaN` too. A **0/0 pair is not one of them** — an independent comparison of two
+  all-zero results is exactly `1.0` and prints as a number.
+- Verified on an adversarial description with an RFC 4180 reader behind a
+  `comment='#'`-equivalent scan; the `pandas.read_csv(path, comment='#')` check on
+  that description was run by hand during development, not from CI.
 
 **Migration**
 
-- If you parsed the metadata block, split each `#` line on the **first comma**
-  instead of on `: ` — and turn a literal `\n` back into a line break if you need
-  the original text.
+- If you parsed the metadata block, split each **`# key,value`** line on the first
+  comma instead of on `: ` — a metadata row has exactly two fields. The three
+  structural comment lines (`# Schema:`, `# Results`, `# Comparisons`) are not
+  key/value rows and carry bare commas of their own, so skip them (a
+  `comment='#'` reader drops them whole). Turn a literal `\n` back into a
+  line break if you need the original text.
 - If you read comparison columns positionally, append two columns (name-based
   readers are unaffected); read the order from `columns=` in the `# Schema:` line.
 - `# Description: "line1` / `line2"` pairs no longer exist: a reader that relied
