@@ -24,19 +24,51 @@ dotnet run --project tests/compat/PicoBench.Net4xSmoke/PicoBench.Net4xSmoke.cspr
 Each run prints `Framework: <version>` and `Benchmarks: 2`, and exits non-zero
 unless the generated benchmark class produced its two results.
 
-## Known requirement this project uncovered: C# 8 or later
+## The C# 8 requirement this project uncovered is gone (G20)
 
-The source generator emits `#nullable enable` and `config ??= ...`, so the
-generated code needs **C# 8**. The SDK derives **C# 7.3** for .NET Framework
-targets, which means a default `net48` consumer project fails with
+The source generator used to emit `#nullable enable` and `config ??= ...`, so the
+generated code needed **C# 8**. The SDK derives **C# 7.3** for .NET Framework and
+netstandard2.0 targets, and a default `net48` consumer project therefore failed
+with
 
 ```
 error CS8370: Feature 'nullable reference types' is not available in C# 7.3.
 ```
 
-before it sees a single PicoBench diagnostic - the error names neither PicoBench
-nor the generator. `PicoBench.Net4xSmoke` therefore pins `<LangVersion>8.0</LangVersion>`,
-which is the floor the generated code actually needs. Making the generator emit
-7.3-compatible code (avoid `#nullable`, avoid `??=`) or reporting the requirement
-as a diagnostic is tracked separately; until then every .NET Framework consumer
-needs `<LangVersion>8.0</LangVersion>` or later.
+before it saw a single PicoBench diagnostic - the error named neither PicoBench
+nor the generator. `PicoBench.Net4xSmoke` worked around it with
+`<LangVersion>8.0</LangVersion>`.
+
+**The generated code is now C# 7.3-compatible**, so that pin is gone:
+`PicoBench.Net4xSmoke` carries no `LangVersion` at all and therefore builds at
+the SDK's derived C# 7.3 - which is the case a real .NET Framework consumer hits.
+The three constructs were removed like this:
+
+| was | is now |
+|---|---|
+| `#nullable enable` (always) | emitted only when the consumer compiles at C# 8+ |
+| `BenchmarkConfig? config = null` (always) | `?` emitted only at C# 8+, annotation-free `BenchmarkConfig config = null` at 7.3 |
+| `config ??= BenchmarkConfig.Default` | `config = config ?? BenchmarkConfig.Default` |
+
+The first two are decided from the **consumer's compilation language version**
+(`Compilation.LanguageVersion >= LanguageVersion.CSharp8`), not from a
+preprocessor symbol: the SDK does not define a `CSHARP_8_OR_GREATER` symbol
+(measured - a probe `#if CSHARP_8_OR_GREATER` stays inactive even on net10.0), so
+a symbol guard would silently pin every consumer to the low branch. Deciding at
+generation time keeps a C# 8+ consumer on exactly the code it had (nullable
+context + annotated signature, so no `CS8632` / `CS8767` / `CS8625`) and gives a
+7.3 consumer code that compiles.
+
+`tests/PicoBench.Tests/Batch3/GeneratedCodeLanguageVersionTests.cs` is the
+compile-level guard: it feeds the generated trees into a compilation at
+`LanguageVersion.CSharp7_3` (`AddSyntaxTrees` + `GetDiagnostics`) and requires
+zero errors, alongside positive cases at C# 8 / latest, a check that the emission
+really follows the consumer's language version (no `#nullable` / no `?` at 7.3,
+both present at C# 8), and a check that a nullable-enabled C# 8 consumer is free
+of `CS8632` / `CS8767` / `CS8625`.
+
+`ConsumerNetStandard20` still pins `<LangVersion>8.0</LangVersion>`, but now for
+a different reason: **its own** `<Nullable>enable</Nullable>` cannot be combined
+with the C# 7.3 the SDK derives for netstandard2.0 (`CS8630`, a compiler error
+about the project's option, not about generated code). That project deliberately
+stands in for a nullable-aware consumer.

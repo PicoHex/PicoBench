@@ -27,14 +27,14 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <RootNamespace>PicoBench.Net4xSmoke</RootNamespace>
     <AssemblyName>PicoBench.Net4xSmoke</AssemblyName>
-    <!-- The SDK derives C# 7.3 for net48, and the GENERATED code does not compile
-         at 7.3: the generator emits `#nullable enable` and `config ??= ...`, both
-         C# 8 features, so a default net48 consumer project fails with
-         CS8370 before it sees a single PicoBench diagnostic. 8.0 is the floor
-         the generated code actually needs, not a preference; see the note in
-         tests/compat/README.md. Raising this to `latest` would hide the
-         requirement instead of documenting it. -->
-    <LangVersion>8.0</LangVersion>
+    <!-- G20: LangVersion is deliberately NOT set. The SDK derives C# 7.3 for
+         net48, and this project used to carry `<LangVersion>8.0</LangVersion>` to
+         work around the generator emitting `#nullable enable` and `config ??=`
+         (both C# 8). The generator now emits 7.3-compatible code, so the bypass is
+         gone and this build IS the proof: if the generated code ever needs C# 8
+         again, this project stops compiling at the SDK's default language version
+         - which is exactly the case a real .NET Framework consumer hits. Do not
+         add LangVersion back here. -->
   </PropertyGroup>
 
   <ItemGroup>

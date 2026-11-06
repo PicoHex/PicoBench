@@ -37,6 +37,19 @@ internal sealed class BenchmarkClassModel : IEquatable<BenchmarkClassModel>
     public string AccessModifier { get; init; } = "public";
     public string? Description { get; init; }
     public bool IsAsync { get; init; }
+
+    /// <summary>
+    /// Whether the emitted source may use C# 8 nullable syntax - the
+    /// <c>#nullable enable</c> directive and the <c>BenchmarkConfig?</c>
+    /// annotation on the generated override.
+    /// <para>
+    /// G20: a default <c>net48</c> / <c>netstandard2.0</c> consumer compiles at
+    /// C# 7.3, where both are <c>CS8370</c>; the analyzer sets this from
+    /// <c>Compilation.LanguageVersion</c> so the emitted file matches the
+    /// consumer instead of assuming the newest language.
+    /// </para>
+    /// </summary>
+    public bool EmitNullableAnnotations { get; init; } = true;
     public LifecycleMethodInfo? GlobalSetupMethod { get; init; }
     public LifecycleMethodInfo? GlobalCleanupMethod { get; init; }
     public LifecycleMethodInfo? IterationSetupMethod { get; init; }
@@ -57,6 +70,7 @@ internal sealed class BenchmarkClassModel : IEquatable<BenchmarkClassModel>
             && AccessModifier == other.AccessModifier
             && Description == other.Description
             && IsAsync == other.IsAsync
+            && EmitNullableAnnotations == other.EmitNullableAnnotations
             && LifecycleEquals(GlobalSetupMethod, other.GlobalSetupMethod)
             && LifecycleEquals(GlobalCleanupMethod, other.GlobalCleanupMethod)
             && LifecycleEquals(IterationSetupMethod, other.IterationSetupMethod)
@@ -86,6 +100,7 @@ internal sealed class BenchmarkClassModel : IEquatable<BenchmarkClassModel>
             hash = hash * 31 + AccessModifier.GetHashCode();
             hash = hash * 31 + (Description?.GetHashCode() ?? 0);
             hash = hash * 31 + IsAsync.GetHashCode();
+            hash = hash * 31 + EmitNullableAnnotations.GetHashCode();
             hash = hash * 31 + (GlobalSetupMethod?.GetHashCode() ?? 0);
             hash = hash * 31 + (GlobalCleanupMethod?.GetHashCode() ?? 0);
             hash = hash * 31 + (IterationSetupMethod?.GetHashCode() ?? 0);

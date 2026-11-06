@@ -7,8 +7,13 @@
     generated code - the case where `ValueTask.FromResult` (net5+) used to leak
     into the emitted source and break the build with CS0117.
 
-    LangVersion is pinned to 8.0 because that is what the generated code needs
-    (see tests/compat/README.md); netstandard2.0 alone would derive C# 7.3.
+    G20: this project sets `<Nullable>enable</Nullable>` on purpose (it stands in
+    for a nullable-aware consumer) and netstandard2.0 derives C# 7.3 - a
+    combination the compiler itself rejects with `CS8630: Invalid 'nullable' value:
+    'Enable' for C# 7.3`. The 8.0 pin below is therefore required by THIS project's
+    own nullable setting, not by the generated code: the generator now emits
+    7.3-compatible code, and `PicoBench.Net4xSmoke` (nullable disabled, no
+    LangVersion) proves that. Do not read this pin as a floor the library needs.
   -->
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
