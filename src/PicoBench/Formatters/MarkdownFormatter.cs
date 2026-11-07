@@ -358,7 +358,22 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                 "> **below resolution** — the value is at the measurement harness' own floor, so only an upper bound is shown."
             );
         }
+
+        if (list.Exists(static s => s.CpuCyclesAreApproximate))
+        {
+            sb.AppendLine();
+            sb.AppendLine("> **~ CPU Cycle** — " + ApproximateCyclesNote);
+        }
     }
+
+    /// <summary>
+    /// The one sentence the three display formats print under a table whose cycle
+    /// cells carry a <c>~</c> (T4 · macOS cycle semantics): the number is kept, the
+    /// marker is the same in every format, and the header names the column. CSV
+    /// states the same contract in its <c># Schema:</c> line.
+    /// </summary>
+    internal const string ApproximateCyclesNote =
+        "the counter is process-wide (an asynchronous run can resume on another thread) or a monotonic clock proxy (macOS `mach_absolute_time`), not a thread-scoped cycle count; the value is kept because it is a valid duration on macOS, not because it is a cycle count.";
 
     /// <summary>Every per-operation figure a statistics object contributes.</summary>
     private static IEnumerable<double> PerOpValues(Statistics statistics)

@@ -515,7 +515,19 @@ footer {
             sb.AppendLine(
                 "<p class=\"note\">below resolution: the value is at the measurement harness' own floor, so only an upper bound is shown.</p>"
             );
+
+        if (list.Exists(static s => s.CpuCyclesAreApproximate))
+            sb.AppendLine("<p class=\"note\">" + ApproximateCyclesNote + "</p>");
     }
+
+    /// <summary>
+    /// The one sentence the three display formats print under a table whose cycle
+    /// cells carry a <c>~</c> (T4 · macOS cycle semantics): the number is kept, the
+    /// marker is the same in every format, and the header names the column. CSV
+    /// states the same contract in its <c># Schema:</c> line.
+    /// </summary>
+    internal const string ApproximateCyclesNote =
+        "~ CPU Cycles: the counter is process-wide (an asynchronous run can resume on another thread) or a monotonic clock proxy (macOS mach_absolute_time), not a thread-scoped cycle count; the value is kept as a duration.";
 
     #endregion
 

@@ -478,7 +478,30 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
                 "below resolution: the value is at the measurement harness' own floor, only an upper bound is shown"
             );
         }
+
+        if (list.Exists(static s => s.CpuCyclesAreApproximate))
+        {
+            sb.AppendLine();
+            sb.AppendLine(ApproximateCyclesNote);
+        }
     }
+
+    /// <summary>
+    /// The one sentence the three display formats print under a table whose cycle
+    /// cells carry a <c>~</c> (T4 · macOS cycle semantics).
+    /// <para>
+    /// The value is <b>kept</b>: on macOS the counter is a monotonic clock, so the
+    /// number is a real duration but not an architectural cycle count, and an
+    /// asynchronous run reads a process-wide counter that also counts other
+    /// threads' work. Either way the cell cannot simply be dropped, so every format
+    /// keeps the number, marks it with <c>~</c> in the same place, and says what the
+    /// marker means. CSV carries the same contract in its <c># Schema:</c> line
+    /// (<c>CpuCycles = count | "~count" (not a thread-scoped cycle count)</c>).
+    /// </para>
+    /// </summary>
+    internal const string ApproximateCyclesNote =
+        "~ CPU Cycles: the counter is process-wide (an asynchronous run can resume on another thread) "
+        + "or a monotonic clock proxy (macOS mach_absolute_time), not a thread-scoped cycle count.";
 
     #endregion
 
