@@ -133,7 +133,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                 $"| P90 ({unit.Symbol}) | P95 ({unit.Symbol}) | P99 ({unit.Symbol}) | StdErr ({unit.Symbol}) | RSD (%) "
             );
         if (Options.IncludeCpuCycles)
-            sb.Append("| CPU Cycle ");
+            sb.Append("| " + CpuCyclesHeader + " ");
         if (Options.IncludeGcInfo)
             sb.Append("| GC (0/1/2) ");
         sb.AppendLine("|");
@@ -152,11 +152,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         foreach (var result in results)
         {
             var s = result.Statistics;
-            var below = s.Unmeasured
-                ? " (unmeasured)"
-                : s.ResolutionLimited
-                    ? " (below resolution)"
-                    : "";
+            var below = MeasurementLimitNote(s);
             sb.Append(
                 $"| {Escape(result.Name)} | {FormatPerOp(s, s.Avg, unit)}{below} | {FormatPerOp(s, s.P50, unit)}{below} "
             );
@@ -171,20 +167,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
             sb.AppendLine("|");
         }
 
-        if (results.Exists(static r => r.Statistics.Unmeasured))
-        {
-            sb.AppendLine();
-            sb.AppendLine(
-                "> **unmeasured** — the clock did not advance for the whole sample, so no per-operation value is shown (the timing source's granularity is coarser than the work)."
-            );
-        }
-        else if (results.Exists(static r => r.Statistics.ResolutionLimited))
-        {
-            sb.AppendLine();
-            sb.AppendLine(
-                "> **below resolution** — the value is at the measurement harness' own floor, so only an upper bound is shown."
-            );
-        }
+        AppendMeasurementLimitNote(sb, results.Select(static r => r.Statistics));
 
         var noisy = results.Where(static r => r.Statistics.HasHighVariance).ToList();
         if (noisy.Count > 0)
@@ -243,6 +226,14 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
             ? "~" + FormatMetric(statistics.CpuCyclesPerOp, 0)
             : FormatMetric(statistics.CpuCyclesPerOp, 0);
 
+    /// <summary>
+    /// Header of the CPU-cycle column, spelled the same way in the results table
+    /// and in the comparison table (T4 · format parity): both tables hold the same
+    /// kind of cell — a <c>~</c>-marked proxy or a plain count — so they must name
+    /// it the same way.
+    /// </summary>
+    private const string CpuCyclesHeader = "CPU Cycle";
+
     #endregion
 
     #region Comparisons Table
@@ -278,7 +269,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
                 $" P50 ({unit.Symbol}) | P90 ({unit.Symbol}) | P99 ({unit.Symbol}) | StdErr ({unit.Symbol}) | RSD (%) |"
             );
         if (Options.IncludeCpuCycles)
-            sb.Append(" CPU |");
+            sb.Append(" " + CpuCyclesHeader + " |");
         if (Options.IncludeGcInfo)
             sb.Append(" GC |");
         sb.AppendLine();
@@ -293,34 +284,79 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
             sb.Append("-----|");
         sb.AppendLine();
 
-        // Rows
+        // Rows. T4 · format parity: a comparison row marks its per-operation cells
+        // exactly the way the results table marks them — the `(unmeasured)` /
+        // `(below resolution)` suffix the results row carries — so one and the same
+        // `Statistics` reads the same in both tables of the document.
         foreach (var row in rows)
         {
+            var stats = row.Stats;
+            var below = MeasurementLimitNote(stats);
             var testCase = $"{row.Provider} * {row.TestCase}";
             sb.Append($"| {Escape(testCase)} ");
-            sb.Append($"| {PerOpCell(row.Stats, row.Stats.Avg, unit)} ");
+            sb.Append($"| {PerOpCell(stats, stats.Avg, unit)}{below} ");
             sb.Append($"| {row.Speedup} |");
 
             if (Options.IncludePercentiles)
             {
-                sb.Append($" {PerOpCell(row.Stats, row.Stats.P50, unit)} |");
-                sb.Append($" {PerOpCell(row.Stats, row.Stats.P90, unit)} |");
-                sb.Append($" {PerOpCell(row.Stats, row.Stats.P99, unit)} |");
-                sb.Append($" {PerOpCell(row.Stats, row.Stats.StandardError, unit)} |");
-                sb.Append($" {FormatMetric(row.Stats.RelativeStdDevPercent, 1)} |");
+                sb.Append($" {PerOpCell(stats, stats.P50, unit)}{below} |");
+                sb.Append($" {PerOpCell(stats, stats.P90, unit)}{below} |");
+                sb.Append($" {PerOpCell(stats, stats.P99, unit)}{below} |");
+                sb.Append($" {PerOpCell(stats, stats.StandardError, unit)}{below} |");
+                sb.Append($" {FormatMetric(stats.RelativeStdDevPercent, 1)} |");
             }
 
             if (Options.IncludeCpuCycles)
             {
-                sb.Append($" {FormatMetric(row.Stats.CpuCyclesPerOp, 0)} |");
+                // The same cell as the results row: a proxy counter keeps its `~`.
+                sb.Append($" {FormatCycles(stats)} |");
             }
 
             if (Options.IncludeGcInfo)
             {
-                sb.Append($" {FormatGcInfo(row.Stats.GcInfo)} |");
+                sb.Append($" {FormatGcInfo(stats.GcInfo)} |");
             }
 
             sb.AppendLine();
+        }
+
+        AppendMeasurementLimitNote(sb, rows.Select(static r => r.Stats));
+    }
+
+    /// <summary>
+    /// The marker a per-operation cell carries next to its value:
+    /// <c>(unmeasured)</c> when the clock never advanced, <c>(below resolution)</c>
+    /// when the value sits at the harness floor. One helper for both tables, so the
+    /// results table and the comparison table cannot mark the same run differently.
+    /// </summary>
+    private static string MeasurementLimitNote(Statistics statistics) =>
+        statistics.Unmeasured
+            ? " (unmeasured)"
+            : statistics.ResolutionLimited
+                ? " (below resolution)"
+                : "";
+
+    /// <summary>
+    /// The note that explains those markers, printed under a table whose cells use
+    /// them. Both tables call it, and a table whose cells are all plain numbers
+    /// prints none.
+    /// </summary>
+    private static void AppendMeasurementLimitNote(StringBuilder sb, IEnumerable<Statistics> statistics)
+    {
+        var list = statistics.ToList();
+        if (list.Exists(static s => s.Unmeasured))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "> **unmeasured** — the clock did not advance for the whole sample, so no per-operation value is shown (the timing source's granularity is coarser than the work)."
+            );
+        }
+        else if (list.Exists(static s => s.ResolutionLimited))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "> **below resolution** — the value is at the measurement harness' own floor, so only an upper bound is shown."
+            );
         }
     }
 
