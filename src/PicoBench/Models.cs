@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 
 namespace PicoBench;
 
@@ -136,7 +136,9 @@ public sealed class Statistics
     /// Fixed per-operation overhead of the measurement harness itself (delegate
     /// dispatch, loop bookkeeping, clock and counter reads) that was measured
     /// with the same iteration count and deducted from the per-operation values.
-    /// 0 when no overhead was measured (asynchronous benchmarks).
+    /// Both the synchronous and the asynchronous paths measure and deduct it; 0
+    /// only when the caller supplied no probe to measure it with, i.e. when
+    /// nothing was deducted and the per-operation values carry the floor.
     /// </summary>
     public double OverheadNs { get; init; }
 
