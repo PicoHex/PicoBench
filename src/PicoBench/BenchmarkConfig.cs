@@ -1,4 +1,4 @@
-namespace PicoBench;
+﻿namespace PicoBench;
 
 /// <summary>
 /// Configuration for benchmark execution.
@@ -105,25 +105,42 @@ public sealed class BenchmarkConfig
     /// <summary>Default configuration suitable for most benchmarks.</summary>
     public static BenchmarkConfig Default { get; } = new();
 
-    /// <summary>Quick configuration for faster iteration during development.</summary>
+    /// <summary>
+    /// Quick configuration for faster iteration during development.
+    /// <para>
+    /// The preset pins a fixed <see cref="IterationsPerSample"/> and leaves
+    /// <see cref="AutoCalibrateIterations"/> at its default (<c>false</c>): the
+    /// resolved iteration count of a run is the preset's own constant, so two
+    /// runs of one workload agree exactly. Auto-calibration is a multiplicative
+    /// search that stops wherever one probe happens to overshoot
+    /// <see cref="MinSampleTime"/>, which made the resolved count
+    /// non-reproducible (2.0-2.2x spread over five runs of one workload). Opt in
+    /// explicitly with <c>new BenchmarkConfig { AutoCalibrateIterations = true }</c>
+    /// when a timing budget matters more than cross-run comparability.
+    /// </para>
+    /// </summary>
     public static BenchmarkConfig Quick { get; } =
         new()
         {
             WarmupIterations = 100,
             SampleCount = 10,
             IterationsPerSample = 1000,
-            AutoCalibrateIterations = true,
         };
 
-    /// <summary>Precise configuration for final measurements.</summary>
+    /// <summary>
+    /// Precise configuration for final measurements.
+    /// <para>
+    /// Like <see cref="Quick"/>, the preset is deterministic: it pins
+    /// <see cref="IterationsPerSample"/> and does not auto-calibrate, so repeated
+    /// runs of the same workload use the same iteration count.
+    /// </para>
+    /// </summary>
     public static BenchmarkConfig Precise { get; } =
         new()
         {
             WarmupIterations = 5000,
             SampleCount = 200,
             IterationsPerSample = 50000,
-            AutoCalibrateIterations = true,
-            MinSampleTime = TimeSpan.FromMilliseconds(1),
         };
 }
 
