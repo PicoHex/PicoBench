@@ -1,4 +1,4 @@
-namespace PicoBench;
+﻿namespace PicoBench;
 
 /// <summary>
 /// High-level benchmark orchestrator that runs measurements and computes statistics.
@@ -176,6 +176,16 @@ public static class Benchmark
                 return config.TimingMode == AsyncTimingMode.CpuOnly
                     ? Runner.TimeCpuAsync(iterations, scope, s => action(s))
                     : Runner.TimeAsync(iterations, scope, s => action(s));
+            },
+            // The probe is the empty state-passing delegate of the *same* scope
+            // type, timed by the *same* entry point, so the deducted cost and the
+            // measurement share one loop body.
+            iterations =>
+            {
+                using var scope = scopeFactory();
+                return config.TimingMode == AsyncTimingMode.CpuOnly
+                    ? Runner.TimeCpuAsync(iterations, scope, Runner.HarnessProbeAsyncActionFor<TScope>())
+                    : Runner.TimeAsync(iterations, scope, Runner.HarnessProbeAsyncActionFor<TScope>());
             }
         );
     }
@@ -526,7 +536,17 @@ public static class Benchmark
         return await CollectAndBuildAsync(
             name,
             config,
-            iterations => DispatchAsyncTiming(iterations, action, setup, teardown, config)
+            iterations => DispatchAsyncTiming(iterations, action, setup, teardown, config),
+            // Setup and teardown are awaited outside the timed loop, so probing
+            // without them walks the identical inner path.
+            iterations =>
+                DispatchAsyncTiming(
+                    iterations,
+                    Runner.HarnessProbeAsyncAction,
+                    setup: null,
+                    teardown: null,
+                    config
+                )
         );
     }
 
@@ -565,7 +585,16 @@ public static class Benchmark
             config,
             config.TimingMode == AsyncTimingMode.CpuOnly
                 ? iterations => Runner.TimeCpuAsync(iterations, state, action)
-                : iterations => Runner.TimeAsync(iterations, state, action)
+                : iterations => Runner.TimeAsync(iterations, state, action),
+            config.TimingMode == AsyncTimingMode.CpuOnly
+                ? iterations =>
+                    Runner.TimeCpuAsync(
+                        iterations,
+                        state,
+                        Runner.HarnessProbeAsyncActionFor<TState>()
+                    )
+                : iterations =>
+                    Runner.TimeAsync(iterations, state, Runner.HarnessProbeAsyncActionFor<TState>())
         );
     }
 
@@ -583,20 +612,76 @@ public static class Benchmark
     }
 
     /// <summary>
+    /// Asynchronous counterpart of <see cref="MeasureOverhead(int)"/>: times the
+    /// empty-delegate probe with the same iteration count and the same entry point
+    /// as the run, and returns the amount to deduct together with the smallest
+    /// per-operation value the run can still resolve.
+    /// <para>
+    /// The deducted amount is the smallest probe, for the reason given on
+    /// <see cref="MeasureOverhead(int)"/>; the limit additionally carries the
+    /// per-operation harness floor, the probe spread and the quantisation of the
+    /// timing source this run reads, so it stays an upper bound even when the
+    /// residual was clamped at zero.
+    /// </para>
+    /// </summary>
+    private static async Task<(
+        double Nanoseconds,
+        double ResolutionLimitNanoseconds
+    )> MeasureOverheadAsync(
+        int iterationsPerSample,
+        Func<int, Task<TimingSample>> probeFuncAsync,
+        double quantumPerOp
+    )
+    {
+        var harness = await Runner.MeasureHarnessOverheadAsync(
+            iterationsPerSample,
+            HarnessOverheadRepetitions,
+            probeFuncAsync
+        );
+
+        var clockTickPerOp = 1_000_000_000.0 / Stopwatch.Frequency / iterationsPerSample;
+        var spreadPerOp =
+            Math.Max(0.0, harness.MaxNanoseconds - harness.MinNanoseconds) / iterationsPerSample;
+        var overheadUpperBoundPerOp =
+            Math.Max(0.0, harness.MaxNanoseconds) / iterationsPerSample;
+
+        return (
+            harness.MinNanoseconds,
+            Math.Max(
+                Math.Max(quantumPerOp, clockTickPerOp),
+                Math.Max(spreadPerOp, overheadUpperBoundPerOp)
+            )
+        );
+    }
+
+    /// <summary>
     /// Per-operation nanoseconds of a sample, never a "measured zero": a sample
     /// whose clock did not advance is reported as one quantum of the timing
     /// source, the smallest value that source can express. The sample itself stays
     /// flagged as unmeasured (<see cref="Statistics.Unmeasured"/>), so the value is
     /// disclosed as "not measured" rather than published as a fast operation.
+    /// <para>
+    /// <paramref name="overheadNanoseconds"/> is the harness cost measured for this
+    /// run and is subtracted first — in the asynchronous path it used to be 0, so
+    /// the whole async floor stayed attributed to the measured action. A sample
+    /// whose residual is not positive resolves to the larger of the quantum and the
+    /// per-operation harness floor: it may never claim a cost smaller than what the
+    /// harness itself adds.
+    /// </para>
     /// </summary>
     private static double PerOpNanosecondsWithFloor(
         TimingSample sample,
         int iterationsPerSample,
-        double quantumPerOp
+        double quantumPerOp,
+        double overheadNanoseconds = 0
     )
     {
-        var perOp = sample.ElapsedNanoseconds / iterationsPerSample;
-        return quantumPerOp > 0 && !(perOp > 0) ? quantumPerOp : perOp;
+        var net = sample.ElapsedNanoseconds - overheadNanoseconds;
+        if (net > 0)
+            return net / iterationsPerSample;
+
+        var overheadPerOp = Math.Max(0.0, overheadNanoseconds) / iterationsPerSample;
+        return Math.Max(quantumPerOp, overheadPerOp);
     }
 
     /// <summary>
@@ -610,10 +695,23 @@ public static class Benchmark
             ? Runner.GetCpuClockGranularity().Ticks * 100.0
             : 0.0;
 
+    /// <summary>
+    /// Asynchronous counterpart of
+    /// <see cref="CollectAndBuild(string, BenchmarkConfig, Func{int, TimingSample})"/>.
+    /// <para>
+    /// <paramref name="probeFuncAsync"/> is the empty-delegate probe of the same
+    /// shape as <paramref name="sampleFuncAsync"/> (same scope/state type, same
+    /// timing entry point). It is what makes the deduced overhead real: Batch 0 ·
+    /// 0.1b measured the async floor at 0.65-2.7 ns/op that this path attributed
+    /// to the measured action. When it is null no deduction is made and the result
+    /// says so (<c>OverheadNs = 0</c>).
+    /// </para>
+    /// </summary>
     private static async Task<BenchmarkResult> CollectAndBuildAsync(
         string name,
         BenchmarkConfig config,
-        Func<int, Task<TimingSample>> sampleFuncAsync
+        Func<int, Task<TimingSample>> sampleFuncAsync,
+        Func<int, Task<TimingSample>>? probeFuncAsync = null
     )
     {
         if (config.ForceGcBeforeBenchmark)
@@ -627,6 +725,10 @@ public static class Benchmark
         // WallClock reads Stopwatch, whose tick is already the nanosecond scale.
         var quantumPerOp = ResolveTimingQuantumNanoseconds(config) / iterationsPerSample;
 
+        var overhead = probeFuncAsync is null
+            ? default
+            : await MeasureOverheadAsync(iterationsPerSample, probeFuncAsync, quantumPerOp);
+
         var samples = new TimingSample[config.SampleCount];
         var perOpTimes = new double[config.SampleCount];
         var perOpCycles = new double[config.SampleCount];
@@ -637,7 +739,12 @@ public static class Benchmark
 
             var sample = await sampleFuncAsync(iterationsPerSample);
             samples[s] = sample;
-            perOpTimes[s] = PerOpNanosecondsWithFloor(sample, iterationsPerSample, quantumPerOp);
+            perOpTimes[s] = PerOpNanosecondsWithFloor(
+                sample,
+                iterationsPerSample,
+                quantumPerOp,
+                overhead.Nanoseconds
+            );
             perOpCycles[s] = (double)sample.CpuCycles / iterationsPerSample;
         }
 
@@ -645,8 +752,8 @@ public static class Benchmark
             perOpTimes,
             perOpCycles,
             samples,
-            harnessOverheadNanoseconds: 0,
-            resolutionLimitNanoseconds: quantumPerOp
+            harnessOverheadNanoseconds: overhead.Nanoseconds,
+            resolutionLimitNanoseconds: overhead.ResolutionLimitNanoseconds
         );
 
         return new BenchmarkResult(

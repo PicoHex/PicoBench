@@ -1,4 +1,4 @@
-namespace PicoBench;
+﻿namespace PicoBench;
 
 /// <summary>
 /// Low-level timing utilities for benchmark measurements.
@@ -258,19 +258,71 @@ public static partial class Runner
     }
 
     /// <summary>
+    /// The empty delegate the harness probes use, held in a one-element array and
+    /// read through it. The indirection is the point: read straight from a local
+    /// or a <c>static readonly</c> field, the JIT can prove which body the timed
+    /// loop calls and fold the probe to nothing, which would make the deduction a
+    /// lie. The probe and the measured action additionally travel through the
+    /// <b>same</b> timing entry point (see
+    /// <see cref="MeasureHarnessOverhead(int, int, Func{int, TimingSample})"/>).
+    /// </summary>
+    private static readonly Action[] EmptyProbeActions = [static () => { }];
+
+    private static readonly Func<Task>[] EmptyAsyncProbeActions =
+        [static () => Task.CompletedTask];
+
+    /// <summary>Empty <see cref="Action"/> probe for the delegate-carrying overloads.</summary>
+    internal static Action HarnessProbeAction => EmptyProbeActions[0];
+
+    /// <summary>Empty <see cref="Func{Task}"/> probe for the asynchronous overloads.</summary>
+    internal static Func<Task> HarnessProbeAsyncAction => EmptyAsyncProbeActions[0];
+
+    /// <summary>
+    /// Per-<typeparamref name="TState"/> empty probe delegates, so a state-passing
+    /// run is corrected by a probe of exactly the shape it measures.
+    /// </summary>
+    private static class EmptyProbe<TState>
+    {
+        internal static readonly Action<TState> Action = static _ => { };
+
+        internal static readonly Func<TState, Task> AsyncAction = static _ => Task.CompletedTask;
+    }
+
+    /// <summary>Empty <see cref="Action{TState}"/> probe for the state-passing overloads.</summary>
+    internal static Action<TState> HarnessProbeActionFor<TState>() => EmptyProbe<TState>.Action;
+
+    /// <summary>
+    /// Empty <see cref="Func{TState, Task}"/> probe for the state-passing async
+    /// overloads.
+    /// </summary>
+    internal static Func<TState, Task> HarnessProbeAsyncActionFor<TState>() =>
+        EmptyProbe<TState>.AsyncAction;
+
+    /// <summary>
     /// Measures the fixed per-sample overhead of the harness with
     /// <paramref name="iterations"/> iterations, i.e. the cost a caller would
     /// otherwise see attributed to the measured action (delegate dispatch plus
     /// loop bookkeeping plus the clock/counter reads around it).
+    /// <para>
+    /// <paramref name="sample"/> is a probe of the <b>same shape</b> as the sample
+    /// function the run itself uses — same timing entry point, same iteration count
+    /// — so the subtracted amount and the measurement carry the identical harness
+    /// cost. Probing through a different entry point was the defect of Batch 0 ·
+    /// 0.1: the two paths did not share one JIT-ed loop body.
+    /// </para>
     /// </summary>
     /// <param name="iterations">Iterations per sample used by the run being corrected.</param>
     /// <param name="repetitions">Number of probes to keep; the minimum is reported.</param>
-    internal static HarnessOverhead MeasureHarnessOverhead(int iterations, int repetitions)
+    /// <param name="sample">Empty-delegate probe, timed exactly like a real sample.</param>
+    internal static HarnessOverhead MeasureHarnessOverhead(
+        int iterations,
+        int repetitions,
+        Func<int, TimingSample> sample
+    )
     {
         if (iterations <= 0 || repetitions <= 0)
             return new HarnessOverhead(0, 0);
 
-        Action empty = static () => { };
         var min = double.MaxValue;
         var max = 0.0;
 
@@ -280,20 +332,89 @@ public static partial class Runner
         // state this run is measured in.
         for (var r = 0; r <= repetitions; r++)
         {
-            var sample = Time(iterations, empty);
+            var probe = sample(iterations);
             if (r == 0)
                 continue;
 
-            if (sample.ElapsedNanoseconds < min)
-                min = sample.ElapsedNanoseconds;
-            if (sample.ElapsedNanoseconds > max)
-                max = sample.ElapsedNanoseconds;
+            if (probe.ElapsedNanoseconds < min)
+                min = probe.ElapsedNanoseconds;
+            if (probe.ElapsedNanoseconds > max)
+                max = probe.ElapsedNanoseconds;
         }
 
         return min is double.MaxValue
             ? new HarnessOverhead(0, 0)
             : new HarnessOverhead(min, max);
     }
+
+    /// <summary>
+    /// Convenience overload for the synchronous delegate path: probes
+    /// <paramref name="probe"/> through <see cref="Time(int, Action)"/>.
+    /// </summary>
+    internal static HarnessOverhead MeasureHarnessOverhead(
+        int iterations,
+        int repetitions,
+        Action probe
+    ) => MeasureHarnessOverhead(iterations, repetitions, n => Time(n, probe));
+
+    /// <summary>
+    /// Asynchronous counterpart of
+    /// <see cref="MeasureHarnessOverhead(int, int, Func{int, TimingSample})"/>:
+    /// probes an empty async delegate through the same timing entry point
+    /// (<see cref="TimeAsync(int, Func{Task}, Func{Task}?, Func{Task}?)"/> or
+    /// <see cref="TimeCpuAsync(int, Func{Task}, Func{Task}?, Func{Task}?)"/>) as the
+    /// asynchronous measurement it corrects.
+    /// </summary>
+    internal static async Task<HarnessOverhead> MeasureHarnessOverheadAsync(
+        int iterations,
+        int repetitions,
+        Func<int, Task<TimingSample>> sample
+    )
+    {
+        if (iterations <= 0 || repetitions <= 0)
+            return new HarnessOverhead(0, 0);
+
+        var min = double.MaxValue;
+        var max = 0.0;
+
+        for (var r = 0; r <= repetitions; r++)
+        {
+            var probe = await sample(iterations);
+            if (r == 0)
+                continue;
+
+            if (probe.ElapsedNanoseconds < min)
+                min = probe.ElapsedNanoseconds;
+            if (probe.ElapsedNanoseconds > max)
+                max = probe.ElapsedNanoseconds;
+        }
+
+        return min is double.MaxValue
+            ? new HarnessOverhead(0, 0)
+            : new HarnessOverhead(min, max);
+    }
+
+    /// <summary>
+    /// Convenience probes over the harness' own empty delegates, for callers that
+    /// do not hold a probe of the shape they measure.
+    /// </summary>
+    internal static HarnessOverhead MeasureHarnessOverhead(int iterations, int repetitions) =>
+        MeasureHarnessOverhead(iterations, repetitions, HarnessProbeAction);
+
+    /// <summary>
+    /// Asynchronous counterpart of <see cref="MeasureHarnessOverhead(int, int)"/>:
+    /// probes <see cref="HarnessProbeAsyncAction"/> through the same timing entry
+    /// point the caller used.
+    /// </summary>
+    internal static Task<HarnessOverhead> MeasureHarnessOverheadAsync(
+        int iterations,
+        int repetitions
+    ) =>
+        MeasureHarnessOverheadAsync(
+            iterations,
+            repetitions,
+            n => TimeAsync(n, HarnessProbeAsyncAction)
+        );
 
     /// <summary>
     /// Run a timed measurement of the given action.
