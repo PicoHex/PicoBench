@@ -504,7 +504,7 @@ footer {
     /// or a value that was never measured is not a number the document can leave
     /// unexplained. A table whose cells are all plain numbers prints none.
     /// </summary>
-    private static void AppendMeasurementLimitNote(StringBuilder sb, IEnumerable<Statistics> statistics)
+    private void AppendMeasurementLimitNote(StringBuilder sb, IEnumerable<Statistics> statistics)
     {
         var list = statistics.ToList();
         if (list.Exists(static s => s.Unmeasured))
@@ -516,7 +516,8 @@ footer {
                 "<p class=\"note\">below resolution: the value is at the measurement harness' own floor, so only an upper bound is shown.</p>"
             );
 
-        if (list.Exists(static s => s.CpuCyclesAreApproximate))
+        // R-T4 · B7: a table with no cycle column prints no `~`, so it explains none.
+        if (Options.IncludeCpuCycles && list.Exists(static s => s.CpuCyclesAreApproximate))
             sb.AppendLine("<p class=\"note\">" + ApproximateCyclesNote + "</p>");
     }
 

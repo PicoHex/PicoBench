@@ -461,7 +461,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
     /// cells are all plain numbers keeps printing none.
     /// </para>
     /// </summary>
-    private static void AppendMeasurementNotes(StringBuilder sb, IEnumerable<Statistics> statistics)
+    private void AppendMeasurementNotes(StringBuilder sb, IEnumerable<Statistics> statistics)
     {
         var list = statistics.ToList();
         if (list.Exists(static s => s.Unmeasured))
@@ -479,7 +479,10 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             );
         }
 
-        if (list.Exists(static s => s.CpuCyclesAreApproximate))
+        // R-T4 · B7: the note explains a `~` the table prints. With the cycle column
+        // turned off there is no `~` to explain, so the note stays away too — the same
+        // negative-control rule the tests hold the exact counter to.
+        if (Options.IncludeCpuCycles && list.Exists(static s => s.CpuCyclesAreApproximate))
         {
             sb.AppendLine();
             sb.AppendLine(ApproximateCyclesNote);

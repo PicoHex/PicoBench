@@ -468,6 +468,55 @@ public class FormatParityTests
                 .Because($"{name} still explains the `~` marker it prints");
     }
 
+    /// <summary>
+    /// R-T4 · B7 — the negative control the tests already hold the exact counter to,
+    /// applied to the column switch: a formatter that prints no cycle column prints no
+    /// <c>~</c>, so it must not explain a <c>~</c> either. Before this test the note was
+    /// printed twice per document with <see cref="FormatterOptions.IncludeCpuCycles"/>
+    /// off, once under each table — explaining a marker that was not on the page.
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch0")]
+    [Property("Batch0", "T4/negative control")]
+    public async Task CycleNoteIsNotPrintedWhenTheCycleColumnIsNot()
+    {
+        var approximate = CycleStatistics(approximate: true);
+        var suite = Suite(
+            BenchmarkResultFactory.Create("proxy-counter", statistics: approximate),
+            ComparisonOf(approximate, "proxy-counter-pair")
+        );
+        var compact = new FormatterOptions { IncludeCpuCycles = false };
+
+        foreach (
+            var (name, document) in new[]
+            {
+                ("console", new ConsoleFormatter(compact).Format(suite)),
+                ("markdown", new MarkdownFormatter(compact).Format(suite)),
+                ("html", new HtmlFormatter(compact).Format(suite)),
+            }
+        )
+        {
+            await Assert
+                .That(document)
+                .DoesNotContain("CPU Cycle")
+                .Because($"{name}: the cycle column is switched off");
+            await Assert
+                .That(document)
+                .DoesNotContain("~42")
+                .Because($"{name}: must not print a marker for a column it does not print");
+            await Assert
+                .That(document)
+                .DoesNotContain("monotonic clock proxy")
+                .Because($"{name}: must not explain a marker it does not print");
+        }
+
+        // Positive control: the same fixture with the column on prints both, so the
+        // assertions above cannot pass because the fixture stopped being approximate.
+        var console = new ConsoleFormatter().Format(suite);
+        await Assert.That(console).Contains("CPU Cycles");
+        await Assert.That(console).Contains("monotonic clock proxy");
+    }
+
     // ─── Per-state fixtures (R-T4 · B1) ────────────────────────────
 
     /// <summary>

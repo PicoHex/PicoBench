@@ -341,7 +341,7 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
     /// them. Both tables call it, and a table whose cells are all plain numbers
     /// prints none.
     /// </summary>
-    private static void AppendMeasurementLimitNote(StringBuilder sb, IEnumerable<Statistics> statistics)
+    private void AppendMeasurementLimitNote(StringBuilder sb, IEnumerable<Statistics> statistics)
     {
         var list = statistics.ToList();
         if (list.Exists(static s => s.Unmeasured))
@@ -359,7 +359,8 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
             );
         }
 
-        if (list.Exists(static s => s.CpuCyclesAreApproximate))
+        // R-T4 · B7: a table with no cycle column prints no `~`, so it explains none.
+        if (Options.IncludeCpuCycles && list.Exists(static s => s.CpuCyclesAreApproximate))
         {
             sb.AppendLine();
             sb.AppendLine("> **~ CPU Cycle** — " + ApproximateCyclesNote);
