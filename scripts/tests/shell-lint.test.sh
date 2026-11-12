@@ -21,6 +21,13 @@
 # first key carries no `=` is SC1073 + SC1072 - error level, so the gate would
 # fail on its own prose. Keep the word inside the sentence, as these lines do.
 #
+# Severity policy: the gate runs shellcheck at its DEFAULT severity (every
+# level), never `--severity=warning`. SC2086 - "double quote to prevent
+# globbing and word splitting" - is an info-level check in shellcheck 0.9 and
+# 0.10, so dropping info would drop the most valuable check in the set. The
+# cost is that info/style findings must be fixed or suppressed where they
+# occur; all eight scripts are clean at the default severity.
+#
 # Exit code: 0 when every executed check passes, 1 otherwise.
 set -uo pipefail
 

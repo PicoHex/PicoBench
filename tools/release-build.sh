@@ -131,7 +131,7 @@ if [ -n "$ARTIFACT" ]; then
   echo "  size    : $(wc -c < "$ARTIFACT" | tr -d ' ') bytes"
 else
   echo "  no .nupkg produced; contents of $OUT_ABS:"
-  ls -l "$OUT_ABS" | sed 's/^/  /'
+  find "$OUT_ABS" -maxdepth 1 -mindepth 1 -exec ls -ld {} + | sed 's/^/  /'
   echo "  total   : $(du -sh "$OUT_ABS" | awk '{print $1}')"
 fi
 
@@ -139,7 +139,7 @@ fi
 RESIDUE="$(git status --porcelain)"
 if [ -n "$RESIDUE" ]; then
   echo "the release build left residue in the working tree (this must be zero):" >&2
-  echo "$RESIDUE" | sed 's/^/  /' >&2
+  printf '%s\n' "$RESIDUE" | awk '{ print "  " $0 }' >&2
   exit 6
 fi
 echo "  repo    : clean (git status --porcelain is empty)"
