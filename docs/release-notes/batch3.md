@@ -47,11 +47,10 @@ collection and a benchmark that allocated nothing were both reported as `0/0/0`.
   on .NET 10 and on .NET Framework 4.7.2 and 4.8, where **one sample** of a
   `new byte[1024] x1000` workload reports **~1.0 MB**: 1000 arrays × 1048 B
   (1024 B payload + a 24 B object header) = 1,048,000 B — measured 1,048,040 B
-  on .NET 10 and 1,048,224 B on .NET Framework 4.7.2 / 4.8. An
-  **asynchronous** run needs the process-wide counter, which .NET Framework does
-  not expose, so on net4x the
-  async path publishes `null` ("not collected", rendered `N/A`) rather than a
-  fabricated `0`.
+  on .NET 10 and 1,048,224 B on .NET Framework 4.7.2 / 4.8. An **asynchronous**
+  run needs the process-wide counter, which .NET Framework does not expose, so
+  on net4x the async path publishes `null` ("not collected", rendered `N/A`)
+  rather than a fabricated `0`.
 
 **Migration**
 

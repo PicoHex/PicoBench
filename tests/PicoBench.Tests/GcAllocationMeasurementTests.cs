@@ -386,6 +386,101 @@ public class GcAllocationMeasurementTests
             .Because("these READMEs do not document the AllocBytes column: " + string.Join(", ", missing));
     }
 
+    /// <summary>
+    /// The READMEs quote the two <c># Schema:</c> lines <b>verbatim</b>, but those
+    /// quoted copies are hand-maintained and nothing compared them with what the
+    /// formatter really writes: a one-character edit to a contract fence (or the
+    /// loss of one of its two lines) used to stay green. This compares every
+    /// quoted copy with the real output, byte for byte, in all ten languages.
+    /// </summary>
+    [Test]
+    [Property("Category", "GcBytes")]
+    [Property("T3", "readme drift")]
+    public async Task EveryReadme_QuotesTheSchemaLineTheFormatterWrites()
+    {
+        var root = Path.GetDirectoryName(Batch0Support.FindRepositoryFile("PicoBench.slnx"))!;
+        var real = RealSchemaLines();
+        foreach (var line in real)
+            Batch0Support.Log($"real schema line ({line.Length} chars): {line}");
+
+        await Assert.That(real.Count).IsEqualTo(2).Because("results plus comparisons");
+
+        var drift = new List<string>();
+        foreach (var file in ReadmeFiles)
+        {
+            var quoted = SchemaLinesOf(File.ReadAllText(Path.Combine(root, file)));
+            Batch0Support.Log($"{file}: quoted schema lines = {quoted.Count}");
+
+            if (quoted.Count != real.Count)
+            {
+                drift.Add(
+                    $"{file}: quotes {quoted.Count} '# Schema:' lines, the formatter writes {real.Count}"
+                );
+                continue;
+            }
+
+            for (var i = 0; i < real.Count; i++)
+            {
+                if (string.Equals(quoted[i], real[i], StringComparison.Ordinal))
+                    continue;
+
+                drift.Add(
+                    $"{file}: '# Schema:' line {i + 1} differs from the real output"
+                        + $" (README {quoted[i].Length} chars, real {real[i].Length} chars); "
+                        + FirstDifference(quoted[i], real[i])
+                );
+            }
+        }
+
+        await Assert
+            .That(drift)
+            .IsEmpty()
+            .Because("the schema copies in these READMEs drifted from the formatter: " + string.Join(" | ", drift));
+    }
+
+    /// <summary>
+    /// Every README's results column table must describe column 18 as
+    /// <c>AllocBytes</c> with its three cell shapes. This is the line that carries
+    /// the <b>meaning</b> of the column, and deleting it moves nothing in the
+    /// <c># Schema:</c> fence above, so the fence comparison cannot see it: the
+    /// <c>Contains("AllocBytes")</c> check alone stayed green when exactly this
+    /// line was removed from one README (review R-T3c, mutation M2).
+    /// </summary>
+    [Test]
+    [Property("Category", "GcBytes")]
+    [Property("T3", "readme drift")]
+    public async Task EveryReadme_DescribesAllocBytesAsColumn18()
+    {
+        var root = Path.GetDirectoryName(Batch0Support.FindRepositoryFile("PicoBench.slnx"))!;
+        var wrong = new List<string>();
+
+        foreach (var file in ReadmeFiles)
+        {
+            var rows = File.ReadAllText(Path.Combine(root, file))
+                .Replace("\r\n", "\n")
+                .Split('\n')
+                .Where(static line => line.StartsWith("| 18 |", StringComparison.Ordinal))
+                .ToList();
+
+            var documented = rows.Where(static row =>
+                    row.Contains("`AllocBytes`", StringComparison.Ordinal)
+                    && row.Contains("`~", StringComparison.Ordinal)
+                    && row.Contains("N/A", StringComparison.Ordinal)
+                )
+                .ToList();
+
+            Batch0Support.Log($"{file}: column-18 rows = {rows.Count}, documented = {documented.Count}");
+
+            if (rows.Count != 1 || documented.Count != 1)
+                wrong.Add(
+                    $"{file}: expected exactly one '| 18 |' row naming `AllocBytes` with the `~` and N/A cell shapes,"
+                        + $" found {rows.Count} row(s), {documented.Count} complete"
+                );
+        }
+
+        await Assert.That(wrong).IsEmpty().Because(string.Join(" | ", wrong));
+    }
+
     // ─── Fixtures ──────────────────────────────────────────────────
 
     private static string Describe(long? bytes) =>
@@ -452,6 +547,46 @@ public class GcAllocationMeasurementTests
     /// <summary>The <c>AllocBytes</c> cell of the results section, located by column name.</summary>
     private static string Cell(string csv, string column) =>
         Batch0Support.ReadCsvCell(csv, "alloc-fixture", column);
+
+    /// <summary>The two <c># Schema:</c> lines the formatter really writes.</summary>
+    private static List<string> RealSchemaLines()
+    {
+        var results = CsvSchemaLines(new CsvFormatter().Format(ResultWithAllocation(1_024L)));
+        var comparisons = CsvSchemaLines(
+            new CsvFormatter().Format(ComparisonResultFactory.CreateMultiple(1).ToList())
+        );
+        return [.. results, .. comparisons];
+    }
+
+    /// <summary>
+    /// Where two contract lines stop agreeing, with a window around it: the lines
+    /// are ~800 characters, so printing them whole buries the difference.
+    /// </summary>
+    private static string FirstDifference(string quoted, string expected)
+    {
+        var index = 0;
+        while (
+            index < quoted.Length
+            && index < expected.Length
+            && quoted[index] == expected[index]
+        )
+            index++;
+
+        var start = Math.Max(0, index - 20);
+        return $"first difference at char {index}: README '{Window(quoted, start)}'"
+            + $" vs real '{Window(expected, start)}'";
+    }
+
+    private static string Window(string line, int start) =>
+        line.Substring(start, Math.Min(line.Length - start, 60));
+
+    /// <summary>The <c># Schema:</c> lines a README quotes inside its fence.</summary>
+    private static List<string> SchemaLinesOf(string markdown) =>
+        markdown
+            .Replace("\r\n", "\n")
+            .Split('\n')
+            .Where(static line => line.StartsWith("# Schema:", StringComparison.Ordinal))
+            .ToList();
 
     /// <summary>Every <c># Schema:</c> line of the document.</summary>
     private static List<string> CsvSchemaLines(string csv) =>
