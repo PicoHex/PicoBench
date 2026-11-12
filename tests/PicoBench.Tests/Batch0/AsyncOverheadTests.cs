@@ -52,7 +52,7 @@ public class AsyncOverheadTests
         var rawPerOps = new List<double>(trials);
         var reportedPerOps = new List<double>(trials);
         var overheads = new List<double>(trials);
-        BenchmarkResult? last = null;
+        var results = new List<BenchmarkResult>(trials);
 
         Func<Task> empty = static () => Task.CompletedTask;
 
@@ -64,10 +64,11 @@ public class AsyncOverheadTests
                 warmup: null,
                 config: AsyncConfig()
             );
-            last = result;
+            results.Add(result);
 
             var rawPerOp =
-                result.Samples!.Average(static s => s.ElapsedNanoseconds) / result.IterationsPerSample;
+                result.Samples!.Average(static s => s.ElapsedNanoseconds)
+                / result.IterationsPerSample;
 
             rawPerOps.Add(rawPerOp);
             reportedPerOps.Add(result.Statistics.Avg);
@@ -82,7 +83,21 @@ public class AsyncOverheadTests
             );
         }
 
-        var statistics = last!.Statistics;
+        // The disclosure contract is asserted on the LEAST INTERFERED trial.
+        //
+        // An empty delegate is the workload that cannot be resolved, and a trial the
+        // machine did not interrupt shows exactly that. Measured on a loaded machine
+        // (full suite 45-59 s against 21 s idle), one trial read raw 64.820 ns/op
+        // where the other two read 27.964 and 25.072, and its residual
+        // (47.460 ns/op) exceeded the limit that same run disclosed
+        // (20.000 ns/op) — so the run published a plain number, because under that
+        // much interference an empty delegate genuinely did appear to cost 47 ns/op.
+        // Interference can only make an empty delegate look resolvable, never the
+        // reverse, so taking the minimum removes the ambient state from the premise
+        // without weakening the claim. The median assertions below stay medians:
+        // they are about the floor, which every trial deducts.
+        var typical = results.MinBy(static r => r.Statistics.Avg)!;
+        var statistics = typical.Statistics;
         var raw = Batch0Support.Median(rawPerOps);
         var reported = Batch0Support.Median(reportedPerOps);
 
@@ -96,19 +111,51 @@ public class AsyncOverheadTests
                     + "as the cost of the measured action"
             );
 
-        // (2) …and the floor really left the reported value.
+        // (2) …and the floor really left the reported value: it was subtracted from
+        // every sample, not merely announced on the result.
+        //
+        // This used to be `median(reported) <= median(raw)`, which is NOT an invariant
+        // of the implementation. A sample that elapses less than the floor probed for
+        // the run is published at the floor instead (`Benchmark.PerOpNanosecondsWithFloor`),
+        // and that floor can exceed the sample's own raw value: measured on the
+        // reference machine the inequality was violated in 108 of 200 quiet
+        // repetitions, while a noisy full-suite process (whose samples sit further
+        // above the probed floor) almost never violated it. A machine-state-dependent
+        // coin flip is a flaky assertion, not a defect detector.
+        //
+        // The identity below holds exactly for a WallClock run (its timing quantum is
+        // 0), and it catches the half of the defect no ratio can see: a floor that is
+        // measured and announced but never subtracted fails it by the whole floor
+        // (measured under a mutant that reports the floor and skips the subtraction:
+        // delta = 13.2 ns/op against a 2.2e-8 tolerance). A floor that is never
+        // measured at all leaves OverheadNs = 0, which makes this identity vacuous —
+        // that shape is assertion (1)'s job, and it was measured red on the same mutant.
+        var recomputed = RecomputedAvgFromRawSamples(typical);
+        Batch0Support.Log(
+            $"raw median={raw:F3} ns/op reported median={reported:F3} ns/op "
+                + $"quietest-trial avg={statistics.Avg:F6} recomputed-from-samples={recomputed:F6} "
+                + $"delta={statistics.Avg - recomputed:E2}"
+        );
+
         await Assert
-            .That(reported)
-            .IsLessThanOrEqualTo(raw)
+            .That(Math.Abs(statistics.Avg - recomputed))
+            .IsLessThanOrEqualTo(1e-9 * Math.Max(1.0, statistics.Avg))
             .Because(
-                $"an empty async delegate was reported at {reported:F3} ns/op against a raw "
-                    + $"{raw:F3} ns/op — the deduction raised the value it was supposed to reduce"
+                $"the run published avg = {statistics.Avg:F6} ns/op while its own retained samples "
+                    + $"minus the {statistics.OverheadNs:F0} ns floor it reports give {recomputed:F6} ns/op "
+                    + $"(raw median {raw:F3} ns/op, reported median {reported:F3} ns/op) — the floor was "
+                    + "announced but not deducted, or deducted by an amount other than the one it reports"
             );
 
         // (3) An empty delegate is not a plain number: at the floor, or disclosed.
-        var cell = Batch0Support.ReadCsvCell(new CsvFormatter().Format(last), last.Name, "Avg_ns");
+        var cell = Batch0Support.ReadCsvCell(
+            new CsvFormatter().Format(typical),
+            typical.Name,
+            "Avg_ns"
+        );
         var atFloor = statistics.Avg <= Batch0Support.ResolutionFloorNanoseconds;
-        var disclosed = statistics.ResolutionLimited && cell.StartsWith("<", StringComparison.Ordinal);
+        var disclosed =
+            statistics.ResolutionLimited && cell.StartsWith("<", StringComparison.Ordinal);
 
         Batch0Support.Log(
             $"reported={statistics.Avg:F3} ns/op cell='{cell}' atFloor={atFloor} disclosed={disclosed}"
@@ -124,7 +171,7 @@ public class AsyncOverheadTests
             );
 
         // (4) The published limit must cover the floor the run deducted.
-        var perOpFloor = statistics.OverheadNs / last.IterationsPerSample;
+        var perOpFloor = statistics.OverheadNs / typical.IterationsPerSample;
         Batch0Support.Log(
             $"limit={statistics.ResolutionLimitNanoseconds:F4} ns/op vs deducted floor {perOpFloor:F4} ns/op"
         );
@@ -241,7 +288,7 @@ public class AsyncOverheadTests
     /// <c>await Task.CompletedTask</c> is a workload of ≈8 µs/op, measured
     /// independently by the manual Stopwatch loop below, which awaits the same
     /// delegate with no library involvement. The framework's per-operation value for
-    /// that loop must agree with the reference within 25%.
+    /// that loop must agree with the reference within ≈35%.
     /// <para>
     /// The workload carries the await deliberately: it is the asynchronous shape
     /// whose harness floor 0.1b had to remove, and it is heavy enough that the
@@ -250,6 +297,57 @@ public class AsyncOverheadTests
     /// net cost is ≈0.1 ns/op — awaiting an already-completed task is essentially
     /// free — so both sides would sit at the harness floor and their ratio would
     /// measure noise, not the deduction.
+    /// </para>
+    /// <para>
+    /// <b>Where the tolerance comes from</b> (measured on the reference machine,
+    /// 8 cores / 16 threads, 700-test suite). The ratio compares two wall-clock
+    /// windows taken at different times, so it inherits the machine's frequency and
+    /// preemption drift — nothing tighter than that survives, and nothing wider
+    /// would still mean anything:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>one manual window (the original shape): per-trial ratio fell to 0.275
+    /// and 7 of 36 five-trial blocks read below 0.70 — unusable, because one
+    /// descheduling inflates the whole reference for that trial;</item>
+    /// <item>fastest of <b>three</b> windows (the previous shape): blocks spanned
+    /// 0.763-0.977, and this test was still measured red once at 0.5956 (median
+    /// reference 10.58 µs/op against a median reported 6.30 µs/op, i.e. a reference
+    /// inflated 1.68×) — the windows were few enough that every one of them could
+    /// be preempted;</item>
+    /// <item>fastest of <b>seven</b> windows (what this test now uses): blocks
+    /// spanned 0.911-1.035, per-trial minimum 0.772, p10 0.862;</item>
+    /// <item>fastest of fifteen windows: 0.920-1.056, per-trial minimum 0.793 — the
+    /// curve has flattened (0.772 → 0.793 for more than double the windows), which
+    /// is why seven is where it starts and stops: more windows buy nothing.</item>
+    /// </list>
+    /// <para>
+    /// All of the seven- and fifteen-window rows were taken with 40 trials in one
+    /// process on a deliberately <b>loaded</b> machine (full-suite duration 28-45 s
+    /// against 21 s idle), where the workload measured 6.25 µs/op rather than the
+    /// 8 µs/op the header quotes — the point of the numbers is their spread, not
+    /// their absolute level.
+    /// </para>
+    /// <para>
+    /// Hence the window <c>[0.65, 1.35]</c>. The bottom follows the measured tail
+    /// rather than a round number: seven windows put the worst block at 0.911, and
+    /// the one real failure at three windows (0.5956) sat a further 0.78× below that
+    /// shape's own worst block (0.763) — machine states the sample did not contain.
+    /// 0.911 × 0.78 ≈ 0.71, so 0.65 keeps ≈9% headroom under the worst state
+    /// extrapolated from data, while a 0.5× regression still lands outside. The top
+    /// stays at 1.35 for the opposite signature: seven-window blocks measured up to
+    /// 1.035, and an inflated report is also caught arithmetically below.
+    /// </para>
+    /// <para>
+    /// The floor itself is <b>not</b> what this ratio defends: on a ≈8 µs/op workload
+    /// the deducted floor is ≈13 ns/op, i.e. 0.2%, which no wall-clock ratio can
+    /// resolve. The deduction is defended arithmetically instead — by
+    /// <c>OverheadNs &gt; 0</c> and by the exact identity re-derived from the retained
+    /// samples (see the assertions below). The two shapes of the defect need both:
+    /// a floor that is never measured reports <c>OverheadNs == 0</c> and is caught by
+    /// <c>OverheadNs &gt; 0</c> (the identity is then vacuous), while a floor that is
+    /// reported but never subtracted is caught by the identity — measured at delta =
+    /// 13.2 ns/op and 25.8 ns/op on the two tests, eight orders of magnitude beyond
+    /// the 1e-9 relative tolerance.
     /// </para>
     /// <para>Expected at HEAD: <b>RED</b> — nothing is deducted, so the run reports
     /// its own harness cost on top of the spin and <c>OverheadNs</c> is 0.</para>
@@ -261,7 +359,8 @@ public class AsyncOverheadTests
     public async Task Async_KnownCost_AgreesWithManualStopwatchReference()
     {
         const int iterationsPerSample = 2_000;
-        const int trials = 3;
+        const int trials = 5;
+        const int referenceWindows = 7;
 
         Func<Task> spinThenAwait = static async () =>
         {
@@ -276,6 +375,7 @@ public class AsyncOverheadTests
         var manuals = new List<double>(trials);
         var reported = new List<double>(trials);
         var overheads = new List<double>(trials);
+        BenchmarkResult? last = null;
 
         for (var trial = 0; trial < trials; trial++)
         {
@@ -285,22 +385,44 @@ public class AsyncOverheadTests
                 warmup: null,
                 config: AsyncConfig(iterationsPerSample: iterationsPerSample)
             );
+            last = result;
 
             // The independent reference: the same spins and the same awaits, the
             // same iteration count, timed by hand with a Stopwatch only.
-            var watch = Stopwatch.StartNew();
-            for (var i = 0; i < iterationsPerSample; i++)
-                await spinThenAwait();
-            watch.Stop();
-            var manualPerOp = watch.Elapsed.TotalNanoseconds / iterationsPerSample;
+            //
+            // Seven windows, of which the FASTEST is kept. A single window has
+            // nothing to compare against when it is preempted: one descheduling
+            // inflates the whole reference for that trial (measured: per-trial ratio
+            // down to 0.275), while the library dilutes the same preemption over ten
+            // samples — an asymmetry between the two sides that has nothing to do
+            // with the floor under test. The fastest window is the least interfered
+            // one, which is also the statistic PicoBench itself uses to probe its
+            // harness floor (`Runner.MeasureHarnessOverheadAsync` keeps the minimum
+            // over its repetitions). Seven is the knee of the measured curve:
+            // fastest-of-1/3/7/15 puts the per-trial minimum at 0.275/0.552/0.772/
+            // 0.793, so the estimator converges by seven and extra windows merely
+            // cost time (seven × 16 ms per trial, on a ~0.5 s test).
+            var fastestWindow = double.MaxValue;
+            for (var window = 0; window < referenceWindows; window++)
+            {
+                var watch = Stopwatch.StartNew();
+                for (var i = 0; i < iterationsPerSample; i++)
+                    await spinThenAwait();
+                watch.Stop();
+                fastestWindow = Math.Min(
+                    fastestWindow,
+                    watch.Elapsed.TotalNanoseconds / iterationsPerSample
+                );
+            }
 
-            manuals.Add(manualPerOp);
+            manuals.Add(fastestWindow);
             reported.Add(result.Statistics.Avg);
             overheads.Add(result.Statistics.OverheadNs);
 
             Batch0Support.Log(
-                $"trial {trial}: manual={manualPerOp:F1} ns/op reported={result.Statistics.Avg:F1} ns/op "
-                    + $"ratio={result.Statistics.Avg / manualPerOp:F4} overhead={result.Statistics.OverheadNs:F0} ns/sample"
+                $"trial {trial}: manual={fastestWindow:F1} ns/op reported={result.Statistics.Avg:F1} ns/op "
+                    + $"ratio={result.Statistics.Avg / fastestWindow:F4} "
+                    + $"overhead={result.Statistics.OverheadNs:F0} ns/sample"
             );
         }
 
@@ -310,29 +432,86 @@ public class AsyncOverheadTests
 
         Batch0Support.Log(
             $"median manual={manual:F1} ns/op, median reported={measured:F1} ns/op, ratio={ratio:F4} "
-                + "(allowed 0.75-1.25)"
+                + "(allowed 0.65-1.35)"
         );
 
-        // The floor was deducted from the awaits, not left on top of them.
+        // (1) The floor was measured at all.
         await Assert
             .That(Batch0Support.Median(overheads))
             .IsGreaterThan(0.0)
             .Because("the known-cost async run deducted nothing from its samples");
 
+        // (2) …and it was applied to every sample: the published average is exactly
+        // what the retained raw samples give once the reported floor is subtracted.
+        // This assertion carries the 0.1b defect, because it is arithmetic — it cannot
+        // drift with the machine — and it fails for both shapes of the defect: no
+        // floor measured, or a floor reported but not deducted.
+        var recomputed = RecomputedAvgFromRawSamples(last!);
+        Batch0Support.Log(
+            $"avg={last!.Statistics.Avg:F6} recomputed-from-samples={recomputed:F6} "
+                + $"delta={last.Statistics.Avg - recomputed:E2}"
+        );
+        await Assert
+            .That(Math.Abs(last.Statistics.Avg - recomputed))
+            .IsLessThanOrEqualTo(1e-9 * Math.Max(1.0, last.Statistics.Avg))
+            .Because(
+                $"the run published {last.Statistics.Avg:F6} ns/op while its own samples minus the "
+                    + $"{last.Statistics.OverheadNs:F0} ns floor it reports give {recomputed:F6} ns/op — "
+                    + "the harness floor was not deducted from the value the user sees"
+            );
+
+        // (3) The absolute scale still agrees with an independent stopwatch.
         await Assert
             .That(ratio)
-            .IsGreaterThanOrEqualTo(0.75)
+            .IsGreaterThanOrEqualTo(0.65)
             .Because(
                 $"the run reported {measured:F1} ns/op for awaits a manual Stopwatch loop measures at "
-                    + $"{manual:F1} ns/op — the deduction overshot the floor it was correcting"
+                    + $"{manual:F1} ns/op (ratio {ratio:F4}, allowed 0.65-1.35) — the two sides disagree "
+                    + "by more than this machine's measured drift (σ ≈ 0.05-0.08) can explain"
             );
         await Assert
             .That(ratio)
-            .IsLessThanOrEqualTo(1.25)
+            .IsLessThanOrEqualTo(1.35)
             .Because(
                 $"the run reported {measured:F1} ns/op for awaits a manual Stopwatch loop measures at "
-                    + $"{manual:F1} ns/op — the harness floor is still attributed to the awaits"
+                    + $"{manual:F1} ns/op (ratio {ratio:F4}, allowed 0.65-1.35) — the reported value is "
+                    + "inflated far beyond anything the harness floor could add to an 8 µs/op workload"
             );
+    }
+
+    /// <summary>
+    /// Recomputes <see cref="Statistics.Avg"/> from the raw samples a run retained,
+    /// using only public values, so that "the harness floor was deducted" can be
+    /// checked <b>arithmetically</b> instead of by comparing two noisy statistics.
+    /// <para>
+    /// For a <see cref="AsyncTimingMode.WallClock"/> run the published per-operation
+    /// value of a sample is <c>max((elapsed − overhead) / iterations, overhead /
+    /// iterations)</c>: a sample whose elapsed time is not above the floor the run
+    /// probed is published at that floor, because the harness cost is real even when
+    /// this particular sample could not be observed above it. The WallClock timing
+    /// quantum is 0, so no other term enters.
+    /// </para>
+    /// </summary>
+    private static double RecomputedAvgFromRawSamples(BenchmarkResult result)
+    {
+        var samples = result.Samples;
+        if (samples is null || samples.Count == 0)
+            throw new InvalidOperationException(
+                "the run did not retain its samples, so its average cannot be re-derived"
+            );
+
+        var iterations = result.IterationsPerSample;
+        var overhead = result.Statistics.OverheadNs;
+        var overheadPerOp = overhead / iterations;
+
+        var sum = 0.0;
+        foreach (var sample in samples)
+        {
+            var net = sample.ElapsedNanoseconds - overhead;
+            sum += net > 0 ? net / iterations : Math.Max(0.0, overheadPerOp);
+        }
+
+        return sum / samples.Count;
     }
 
     private static BenchmarkConfig AsyncConfig(
