@@ -297,7 +297,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             )
             : 0;
         var cpuWidth = Options.IncludeCpuCycles
-            ? Math.Max("CPU Cycles".Length, results.Max(r => FormatCycles(r.Statistics).Length))
+            ? Math.Max(CpuCyclesHeader.Length, results.Max(r => FormatCycles(r.Statistics).Length))
             : 0;
         var gcWidth = Options.IncludeGcInfo
             ? Math.Max(
@@ -351,7 +351,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         if (Options.IncludeCpuCycles)
         {
-            columns.Add(new("CPU Cycles", cpuWidth, r => FormatCycles(r.Statistics)));
+            columns.Add(new(CpuCyclesHeader, cpuWidth, r => FormatCycles(r.Statistics)));
         }
 
         if (Options.IncludeGcInfo)
@@ -363,21 +363,7 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         }
 
         AppendTable(sb, columns, results);
-
-        if (results.Exists(static r => r.Statistics.Unmeasured))
-        {
-            sb.AppendLine();
-            sb.AppendLine(
-                "unmeasured: the clock did not advance for the whole sample — no per-operation value is shown"
-            );
-        }
-        else if (results.Exists(static r => r.Statistics.ResolutionLimited))
-        {
-            sb.AppendLine();
-            sb.AppendLine(
-                "below resolution: the value is at the measurement harness' own floor, only an upper bound is shown"
-            );
-        }
+        AppendMeasurementNotes(sb, results.Select(static r => r.Statistics));
 
         // Batch 0 - 0.5, third clause: a run whose spread is wide enough to question
         // the number itself has to say so in the main table, not only in the
@@ -466,6 +452,56 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             ? "~" + FormatMetric(statistics.CpuCyclesPerOp, 0)
             : FormatMetric(statistics.CpuCyclesPerOp, 0);
 
+    /// <summary>
+    /// Header of the CPU-cycle column, spelled the same way in the results table
+    /// and in the comparison table (T4 · format parity): both tables hold the
+    /// same kind of cell, so they must name it the same way.
+    /// </summary>
+    private const string CpuCyclesHeader = "CPU Cycles";
+
+    /// <summary>
+    /// The note a table owes its reader when one of its runs could not resolve the
+    /// workload: an upper bound (<c>&lt;limit</c>) or a value that was never
+    /// measured (<c>N/A</c>) is not a number, and the table has to say so.
+    /// <para>
+    /// T4 · format parity: the results table printed this note while the comparison
+    /// table — whose per-operation cells carry the very same states — printed the
+    /// markers without ever explaining them. Both tables now go through this one
+    /// method, so the explanation cannot differ between the two, and a table whose
+    /// cells are all plain numbers keeps printing none.
+    /// </para>
+    /// </summary>
+    private void AppendMeasurementNotes(StringBuilder sb, IEnumerable<Statistics> statistics)
+    {
+        var list = statistics.ToList();
+        if (list.Exists(static s => s.Unmeasured))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "unmeasured: the clock did not advance for the whole sample — no per-operation value is shown"
+            );
+        }
+        else if (list.Exists(static s => s.ResolutionLimited))
+        {
+            sb.AppendLine();
+            sb.AppendLine(
+                "below resolution: the value is at the measurement harness' own floor, only an upper bound is shown"
+            );
+        }
+
+        // R-T4 · B7: the note explains a `~` the table prints. With the cycle column
+        // turned off there is no `~` to explain, so the note stays away too — the same
+        // negative-control rule the tests hold the exact counter to.
+        if (Options.IncludeCpuCycles && list.Exists(static s => s.CpuCyclesAreApproximate))
+        {
+            sb.AppendLine();
+            sb.AppendLine(ApproximateCycles.ConsoleNote);
+        }
+    }
+
+    // The `~` sentence is shared with the other two display formats
+    // (<see cref="ApproximateCycles"/>), so the three cannot drift apart (R-T4 · B5).
+
     #endregion
 
     #region Comparison Result
@@ -546,6 +582,10 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         var columns = BuildComparisonColumns(rows);
 
         AppendTable(sb, columns, rows);
+
+        // Same note the results table prints when a per-operation cell is an upper
+        // bound or was never measured: the comparison cells carry the same states.
+        AppendMeasurementNotes(sb, rows.Select(static r => r.Result.Statistics));
 
         // Summary. Non-finite ratios are excluded from the aggregate and counted,
         // so one scenario with a zero (or NaN) candidate cannot swallow the rest
@@ -695,15 +735,20 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
 
         if (Options.IncludeCpuCycles)
         {
+            // Same cell as the results table's `CPU Cycles` column: a proxy
+            // counter (process-wide, or macOS' monotonic clock) keeps its `~`
+            // marker here too, so one and the same `Statistics` cannot read as an
+            // exact thread-scoped cycle count in one table and a proxy in the
+            // other (T4 · format parity).
             var cpuWidth = Math.Max(
-                "CPU".Length,
-                rows.Max(r => FormatMetric(r.Result.Statistics.CpuCyclesPerOp, 0).Length)
+                CpuCyclesHeader.Length,
+                rows.Max(r => FormatCycles(r.Result.Statistics).Length)
             );
             columns.Add(
                 new TableColumn<ComparisonRow>(
-                    "CPU",
+                    CpuCyclesHeader,
                     cpuWidth,
-                    r => FormatMetric(r.Result.Statistics.CpuCyclesPerOp, 0)
+                    r => FormatCycles(r.Result.Statistics)
                 )
             );
         }

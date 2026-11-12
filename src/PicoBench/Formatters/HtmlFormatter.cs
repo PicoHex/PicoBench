@@ -370,7 +370,7 @@ footer {
 
         if (Options.IncludeCpuCycles)
         {
-            sb.AppendLine("<th class=\"number\">CPU Cycles</th>");
+            sb.AppendLine($"<th class=\"number\">{CpuCyclesHeader}</th>");
         }
 
         if (Options.IncludeGcInfo)
@@ -387,7 +387,7 @@ footer {
             var s = result.Statistics;
             sb.AppendLine("<tr>");
             sb.AppendLine(
-                $"<td>{Escape(result.Name)}{(s.Unmeasured ? " <span class=\"note\">(unmeasured)</span>" : s.ResolutionLimited ? " <span class=\"note\">(below resolution)</span>" : "")}</td>"
+                $"<td>{Escape(result.Name)}{MeasurementLimitMarker(s)}</td>"
             );
             sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.Avg, unit)}</td>");
             sb.AppendLine($"<td class=\"number\">{FormatPerOp(s, s.P50, unit)}</td>");
@@ -417,6 +417,8 @@ footer {
 
         sb.AppendLine("</tbody>");
         sb.AppendLine("</table>");
+
+        AppendMeasurementLimitNote(sb, results.Select(static r => r.Statistics));
 
         var noisy = results.Where(static r => r.Statistics.HasHighVariance).ToList();
         if (noisy.Count > 0)
@@ -476,6 +478,53 @@ footer {
         statistics.CpuCyclesAreApproximate
             ? "~" + FormatMetric(statistics.CpuCyclesPerOp, 0)
             : FormatMetric(statistics.CpuCyclesPerOp, 0);
+
+    /// <summary>
+    /// Header of the CPU-cycle column, spelled the same way in the results table
+    /// and in the comparison table (T4 · format parity): both tables hold the same
+    /// kind of cell, so they must name it the same way.
+    /// </summary>
+    private const string CpuCyclesHeader = "CPU Cycles";
+
+    /// <summary>
+    /// The marker a per-operation cell carries next to its value, as the
+    /// <c>note</c> span the results table uses: <c>(unmeasured)</c> when the clock
+    /// never advanced, <c>(below resolution)</c> when the value sits at the harness
+    /// floor. Shared by both tables, so one <see cref="Statistics"/> is marked the
+    /// same way in each.
+    /// </summary>
+    private static string MeasurementLimitMarker(Statistics statistics) =>
+        statistics.Unmeasured
+            ? " <span class=\"note\">(unmeasured)</span>"
+            : statistics.ResolutionLimited
+                ? " <span class=\"note\">(below resolution)</span>"
+                : "";
+
+    /// <summary>
+    /// The note that explains those markers, printed under a table whose cells use
+    /// them (shared by the results table and the comparison table): an upper bound
+    /// or a value that was never measured is not a number the document can leave
+    /// unexplained. A table whose cells are all plain numbers prints none.
+    /// </summary>
+    private void AppendMeasurementLimitNote(StringBuilder sb, IEnumerable<Statistics> statistics)
+    {
+        var list = statistics.ToList();
+        if (list.Exists(static s => s.Unmeasured))
+            sb.AppendLine(
+                "<p class=\"note\">unmeasured: the clock did not advance for the whole sample, so no per-operation value is shown (the timing source's granularity is coarser than the work).</p>"
+            );
+        else if (list.Exists(static s => s.ResolutionLimited))
+            sb.AppendLine(
+                "<p class=\"note\">below resolution: the value is at the measurement harness' own floor, so only an upper bound is shown.</p>"
+            );
+
+        // R-T4 · B7: a table with no cycle column prints no `~`, so it explains none.
+        if (Options.IncludeCpuCycles && list.Exists(static s => s.CpuCyclesAreApproximate))
+            sb.AppendLine(ApproximateCycles.HtmlPrefix + ApproximateCycles.Sentence + "</p>");
+    }
+
+    // The `~` sentence is shared with the other two display formats
+    // (<see cref="ApproximateCycles"/>); this format adds only its own <p> wrapper (R-T4 · B5).
 
     #endregion
 
@@ -553,7 +602,7 @@ footer {
 
         if (Options.IncludeCpuCycles)
         {
-            sb.AppendLine("<th class=\"number\">CPU</th>");
+            sb.AppendLine($"<th class=\"number\">{CpuCyclesHeader}</th>");
         }
 
         if (Options.IncludeGcInfo)
@@ -574,29 +623,41 @@ footer {
                 ? $"<span class=\"speedup {speedupClass}\">{FormatSpeedup(row.Speedup.Value)}</span><span class=\"indicator\">{indicator}</span>"
                 : "";
 
+            var stats = row.Stats;
+            // T4 · format parity: the per-operation cells of the comparison table
+            // carry the same `note` span the results table puts next to a value that
+            // is an upper bound or was never measured, so the marker cannot differ
+            // between the two tables of the document.
+            var limit = MeasurementLimitMarker(stats);
             sb.AppendLine("<tr>");
             sb.AppendLine($"<td>{Escape(testCase)}</td>");
-            sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.Avg, unit)}</td>");
+            sb.AppendLine($"<td class=\"number\">{FormatPerOp(stats, stats.Avg, unit)}{limit}</td>");
             sb.AppendLine($"<td class=\"number\">{speedupText}</td>");
 
             if (Options.IncludePercentiles)
             {
-                sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.P50, unit)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.P90, unit)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.P99, unit)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatPerOp(row.Stats, row.Stats.StandardError, unit)}</td>");
-                sb.AppendLine($"<td class=\"number\">{FormatMetric(row.Stats.RelativeStdDevPercent, 1)}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(stats, stats.P50, unit)}{limit}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(stats, stats.P90, unit)}{limit}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(stats, stats.P99, unit)}{limit}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatPerOp(stats, stats.StandardError, unit)}{limit}</td>");
+                sb.AppendLine($"<td class=\"number\">{FormatMetric(stats.RelativeStdDevPercent, 1)}</td>");
             }
 
             if (Options.IncludeCpuCycles)
             {
-                sb.AppendLine($"<td class=\"number\">{FormatMetric(row.Stats.CpuCyclesPerOp, 0)}</td>");
+                // The same cell as the results row: a proxy counter keeps its `~`.
+                sb.AppendLine($"<td class=\"number\">{FormatCycles(row.Stats)}</td>");
             }
 
             if (Options.IncludeGcInfo)
             {
-                sb.AppendLine($"<td class=\"gc-info\">{FormatGcInfo(row.Stats.GcInfo)}</td>");
-                sb.AppendLine($"<td class=\"gc-info\">{FormatGcBytes(row.Stats.GcInfo)}</td>");
+                // Two columns, one alias: T3 added `GC B` to this table and T4
+                // reads the row through `stats`. Both cells name the same
+                // `Statistics`, and each keeps its own tri-state (IFormatter):
+                // `N/A` when the counter was not collected, `~` when the
+                // reading is approximate.
+                sb.AppendLine($"<td class=\"gc-info\">{FormatGcInfo(stats.GcInfo)}</td>");
+                sb.AppendLine($"<td class=\"gc-info\">{FormatGcBytes(stats.GcInfo)}</td>");
             }
 
             sb.AppendLine("</tr>");
@@ -604,6 +665,8 @@ footer {
 
         sb.AppendLine("</tbody>");
         sb.AppendLine("</table>");
+
+        AppendMeasurementLimitNote(sb, rows.Select(static r => r.Stats));
     }
 
     private static string GetSpeedupClass(double speedup)
