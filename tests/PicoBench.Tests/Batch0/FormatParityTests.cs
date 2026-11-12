@@ -526,9 +526,25 @@ public class FormatParityTests
     /// could drift in any format unnoticed.
     /// <para>
     /// Each format keeps its own prefix (Console <c>~ CPU Cycles:</c>, Markdown a bold
-    /// lead-in, HTML a <c>note</c> paragraph), so the assertion is on the <b>end</b> of
-    /// the note line: every one of the six tables must end with the same
-    /// <see cref="ApproximateCycles.Sentence"/>.
+    /// lead-in, HTML a <c>note</c> paragraph), so the assertion is on the <b>whole</b>
+    /// note line: this format's own prefix, then the one shared sentence, and nothing
+    /// inserted between them or appended after it.
+    /// </para>
+    /// <para>
+    /// R-T4b: the assertion used to be <c>EndsWith(Sentence)</c>, i.e. it pinned only the
+    /// tail — text glued between a prefix and the shared sentence stayed green (their
+    /// mutation M5b: 10/10 green). The expected lines below are therefore spelled out
+    /// literally instead of being recomposed from the production constants: these lines
+    /// are frozen output, so the literals are the specification and
+    /// <see cref="ApproximateCycles"/> is the implementation. A drift on either side — a
+    /// reworded prefix, a reworded sentence, a clause glued in the middle — is a failure,
+    /// not a silent rewrite of what the tests expect.
+    /// </para>
+    /// <para>
+    /// No whitespace normalisation is needed: every note reader trims its line
+    /// (<c>ConsoleSectionTable</c> and <c>MarkdownSectionTable</c> trim the whole line,
+    /// <c>HtmlSectionTable</c> takes the <c>&lt;p class="note"&gt;</c> body and trims it),
+    /// so the compared text carries no indentation or padding to be brittle about.
     /// </para>
     /// </summary>
     [Test]
@@ -536,6 +552,18 @@ public class FormatParityTests
     [Property("Batch0", "T4/one sentence")]
     public async Task TheCycleNote_IsOneSentence_InAllThreeDisplayFormats()
     {
+        // The frozen wording, spelled out — see the doc comment for why it is not
+        // recomposed from ApproximateCycles.
+        const string sentence =
+            "the counter is process-wide (an asynchronous run can resume on another thread) "
+            + "or a monotonic clock proxy (macOS mach_absolute_time), not a thread-scoped cycle count.";
+
+        const string consoleNote = "~ CPU Cycles: " + sentence;
+        const string markdownNote = "> **~ CPU Cycle** — " + sentence;
+        // HtmlSectionTable consumes the `<p class="note">` opener, so the note body starts
+        // at the prefix the formatter puts inside that paragraph.
+        const string htmlNote = "~ CPU Cycles: " + sentence;
+
         var approximate = CycleStatistics(approximate: true);
         var suite = Suite(
             BenchmarkResultFactory.Create("proxy-counter", statistics: approximate),
@@ -546,25 +574,32 @@ public class FormatParityTests
         var markdown = new MarkdownFormatter().Format(suite);
         var html = new HtmlFormatter().Format(suite);
 
-        var notes = new (string Name, string Text)[]
+        var notes = new (string Name, string Text, string Expected)[]
         {
-            ("console results", ConsoleSectionTable(console, "Results").Notes),
-            ("console comparisons", ConsoleSectionTable(console, "Comparisons").Notes),
-            ("markdown results", MarkdownSectionTable(markdown, "Results").Notes),
-            ("markdown comparisons", MarkdownSectionTable(markdown, "Comparisons").Notes),
-            ("html results", HtmlSectionTable(html, "All Results").Notes),
-            ("html comparisons", HtmlSectionTable(html, "Detailed Comparisons").Notes),
+            ("console results", ConsoleSectionTable(console, "Results").Notes, consoleNote),
+            ("console comparisons", ConsoleSectionTable(console, "Comparisons").Notes, consoleNote),
+            ("markdown results", MarkdownSectionTable(markdown, "Results").Notes, markdownNote),
+            ("markdown comparisons", MarkdownSectionTable(markdown, "Comparisons").Notes, markdownNote),
+            ("html results", HtmlSectionTable(html, "All Results").Notes, htmlNote),
+            ("html comparisons", HtmlSectionTable(html, "Detailed Comparisons").Notes, htmlNote),
         };
 
-        foreach (var (name, text) in notes)
+        // One sentence means one constant: the three formatters only supply a prefix.
+        await Assert
+            .That(PicoBench.Formatters.ApproximateCycles.Sentence)
+            .IsEqualTo(sentence)
+            .Because("the shared `~` sentence is frozen output — the six lines below spell it out");
+
+        foreach (var (name, text, expected) in notes)
         {
             var lines = Lines(text).Where(line => line.Contains("monotonic clock proxy")).ToList();
             await Assert.That(lines.Count).IsEqualTo(1).Because($"{name}: exactly one `~` sentence");
             await Assert
-                .That(lines[0].EndsWith(PicoBench.Formatters.ApproximateCycles.Sentence, StringComparison.Ordinal))
-                .IsTrue()
+                .That(lines[0])
+                .IsEqualTo(expected)
                 .Because(
-                    $"{name}: the sentence after the format's own prefix must be the shared one, "
+                    $"{name}: the note must be this format's own prefix followed by the one shared "
+                        + "sentence — nothing inserted between them, nothing appended after it, "
                         + "not a per-format rewording"
                 );
         }
