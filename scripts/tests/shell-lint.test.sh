@@ -14,7 +14,12 @@
 #      and a build machine may have no network, so a missing binary is reported
 #      as an explicit SKIP that names every unlinted file - never a silent pass.
 #      Set SHELL_LINT_REQUIRE_SHELLCHECK=1 (ci.yml does) to turn a missing
-#      shellcheck into a failure, so CI cannot quietly lose the check.
+#      binary into a failure, so CI cannot quietly lose the check.
+#
+# Note for editors: never start a comment line with the bare word shellcheck.
+# ShellCheck reads `# shellcheck ...` as a directive, and a directive whose
+# first key carries no `=` is SC1073 + SC1072 - error level, so the gate would
+# fail on its own prose. Keep the word inside the sentence, as these lines do.
 #
 # Exit code: 0 when every executed check passes, 1 otherwise.
 set -uo pipefail
@@ -108,7 +113,7 @@ fi
 # word, and a comment that names them and must not be reported. The fixture is
 # written with printf rather than a heredoc so that this file does not itself
 # carry the token being searched for.
-backslash='\'
+backslash="\\"
 {
     printf '%s\n' '#!/usr/bin/env bash'
     printf '%s\n' "# a comment may name ${backslash}n without being the bug"
@@ -138,7 +143,7 @@ fi
     printf '%s\n' "grep -q -e 'a${backslash}nb' \"\$1\""
     printf '%s\n' "for x in ${backslash}"
     printf '%s\n' "    a ${backslash}"
-    printf '%s\n' '    b; do echo "$x"; done'
+    printf '%s\n' "    b; do echo \"\$x\"; done"
 } > "$work/legitimate.sh"
 if hits="$(scan_literal_n "$work/legitimate.sh")"; then
     no "a legitimate script was flagged:"
@@ -167,6 +172,7 @@ else
     for script in "${scripts[@]}"; do
         printf '         - %s\n' "$script"
     done
+    # shellcheck disable=SC2016  # literal backticks in a message, not a substitution
     printf '   SKIP: install it (e.g. `apt-get install -y shellcheck`) and re-run this script\n'
     if [ "${SHELL_LINT_REQUIRE_SHELLCHECK:-0}" = "1" ]; then
         no "SHELL_LINT_REQUIRE_SHELLCHECK=1 but shellcheck is not installed"
