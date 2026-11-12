@@ -11,10 +11,20 @@
          Written as "4.8" (not "4.8.0") on purpose: NuGet normalizes both to the
          same package 4.8.0, while the SDK-8 ceiling guard reads it with
          System.Version, where 4.8.0 > 4.8. Keep it spelled "4.8". -->
+    <!-- DELIBERATELY NOT BUMPED (5.9.0 is the current stable): this entry is a
+         compatibility floor, not a missed upgrade. The generator must stay
+         loadable by the oldest compiler we promise to support, and the repo
+         enforces that in two places: the SDK 8 consumer leg in
+         .github/workflows/ci.yml and the static guard test
+         PicoBench.Tests/Batch0/GeneratorRegressionTests
+         .Generator_RoslynVersion_IsLoadableBySdk8, which asserts <= 4.8.
+         Raising it turns that guard red and makes every SDK 8 host silently
+         skip the analyzer (CS9057). netstandard2.0 is NOT the blocker: the
+         5.9.0 package does ship lib/netstandard2.0. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8" />
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.401" />
-    <PackageVersion Include="System.IO.Abstractions" Version="22.2.0" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="11.0.100" />
+    <PackageVersion Include="System.IO.Abstractions" Version="23.0.0" />
     <PackageVersion Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
-    <PackageVersion Include="TUnit" Version="1.68.4" />
+    <PackageVersion Include="TUnit" Version="1.83.8" />
   </ItemGroup>
 </Project>
