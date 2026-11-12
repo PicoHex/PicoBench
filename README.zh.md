@@ -580,7 +580,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-发布遵循 PicoHex 版本规则 `<year>.<x>.<y>`：公共 API 发生变化时 **x** 加一，未变化时 **y** 加一。判定依据仓库内的 API 基线 `api/PicoBench.public.txt`，它始终保存上一个发布版本的公共表面。
+发布遵循 PicoHex 版本规则 `<year>.<x>.<y>`：公共 API 发生变化时 **x** 加一，未变化时 **y** 加一。判定依据仓库内的 API 基线 `api/PicoBench.public.txt`，它始终保存上一个发布版本的公共表面。 若基线缺失，用 `pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>` 初始化一次。
 
 ```bash
 # 查看 API 差异与下一个版本

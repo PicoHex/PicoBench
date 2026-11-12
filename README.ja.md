@@ -580,7 +580,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-リリースは PicoHex のバージョンルール `<year>.<x>.<y>` に従います。公開 API が変わった場合は **x** を、変わらない場合は **y** を進めます。判定は、直前のリリースの表面を保持する `api/PicoBench.public.txt` の API ベースラインに基づきます。
+リリースは PicoHex のバージョンルール `<year>.<x>.<y>` に従います。公開 API が変わった場合は **x** を、変わらない場合は **y** を進めます。判定は、直前のリリースの表面を保持する `api/PicoBench.public.txt` の API ベースラインに基づきます。 ベースラインが存在しない場合は、`pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>` で一度だけシードします。
 
 ```bash
 # API 差分と次バージョンを確認

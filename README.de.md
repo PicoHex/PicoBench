@@ -582,7 +582,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-Releases folgen der PicoHex-Versionsregel `<Jahr>.<x>.<y>`: **x** erhöht sich, wenn sich die öffentliche API geändert hat, **y**, wenn nicht. Die Entscheidung stammt aus der committeten API-Baseline `api/PicoBench.public.txt`, die immer die Oberfläche des letzten Releases enthält.
+Releases folgen der PicoHex-Versionsregel `<Jahr>.<x>.<y>`: **x** erhöht sich, wenn sich die öffentliche API geändert hat, **y**, wenn nicht. Die Entscheidung stammt aus der committeten API-Baseline `api/PicoBench.public.txt`, die immer die Oberfläche des letzten Releases enthält. Wenn die Baseline fehlt, legen Sie sie einmalig mit `pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>` an.
 
 ```bash
 # API-Delta und nächste Version anzeigen
