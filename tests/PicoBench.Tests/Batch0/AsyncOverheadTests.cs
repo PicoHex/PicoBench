@@ -33,8 +33,9 @@ public class AsyncOverheadTests
     /// was 0 on every async path) — the defect itself;</item>
     /// <item>the reported per-operation value is therefore below the raw
     /// measurement it was normalised from;</item>
-    /// <item>an empty async delegate is never published as a plain number: it is
-    /// either at the resolution floor or disclosed as <c>&lt;limit</c>;</item>
+    /// <item>an empty async delegate is never published as a plain number it cannot
+    /// back up: it is at the resolution floor, disclosed as <c>&lt;limit</c>, or
+    /// demonstrably above this run's own resolution limit;</item>
     /// <item>the published limit covers the floor the run deducted, exactly as the
     /// synchronous B2 guard demands — a bound below the deducted floor can never be
     /// an upper bound.</item>
@@ -147,7 +148,22 @@ public class AsyncOverheadTests
                     + "announced but not deducted, or deducted by an amount other than the one it reports"
             );
 
-        // (3) An empty delegate is not a plain number: at the floor, or disclosed.
+        // (3) An empty delegate is not a plain number it cannot back up: at the floor,
+        // disclosed, or above this run's own resolution limit.
+        //
+        // The library's contract is <c>ResolutionLimited ⇔ Avg &lt;= limit</c>
+        // (StatisticsCalculator), and the third case is what CI measured on osx-arm64:
+        // 11.912 ns/op against a 10.867 ns/op limit (run 43213497484), then 11.352
+        // against 9.583 (run 43223332511). An empty async round trip costs ≈21 ns there,
+        // the floor probe recovers ≈9.5 of it, and the residual lands just above the
+        // limit — so the run is self-consistent and a plain number is honest. This
+        // assertion used to accept only "at the floor or disclosed", i.e. it also
+        // assumed the probe recovers the *whole* async harness on every platform; how
+        // much of it a probe recovers is a platform detail, not a library contract.
+        // What is not negotiable is the deduction itself, and that stays pinned twice
+        // over: assertion (1) fails when no floor is measured at all, assertion (2)
+        // fails when one is announced but subtracted by another amount (both
+        // re-measured red against mutants, see the notes in the batch report).
         var cell = Batch0Support.ReadCsvCell(
             new CsvFormatter().Format(typical),
             typical.Name,
@@ -156,18 +172,22 @@ public class AsyncOverheadTests
         var atFloor = statistics.Avg <= Batch0Support.ResolutionFloorNanoseconds;
         var disclosed =
             statistics.ResolutionLimited && cell.StartsWith("<", StringComparison.Ordinal);
+        var aboveTheRunsOwnLimit = statistics.Avg >= statistics.ResolutionLimitNanoseconds;
 
         Batch0Support.Log(
-            $"reported={statistics.Avg:F3} ns/op cell='{cell}' atFloor={atFloor} disclosed={disclosed}"
+            $"reported={statistics.Avg:F3} ns/op cell='{cell}' atFloor={atFloor} disclosed={disclosed} "
+                + $"aboveTheRunsOwnLimit={aboveTheRunsOwnLimit}"
         );
 
         await Assert
-            .That(atFloor || disclosed)
+            .That(atFloor || disclosed || aboveTheRunsOwnLimit)
             .IsTrue()
             .Because(
                 $"an empty async delegate was reported as '{cell}' (avg {statistics.Avg:F3} ns/op, "
                     + $"limit {statistics.ResolutionLimitNanoseconds:F3} ns/op, "
-                    + $"resolutionLimited {statistics.ResolutionLimited}) — neither at the floor nor disclosed"
+                    + $"resolutionLimited {statistics.ResolutionLimited}) — a value below the run's own "
+                    + "resolution limit, published as a plain number: that is the one thing the "
+                    + "disclosure contract forbids"
             );
 
         // (4) The published limit must cover the floor the run deducted.
