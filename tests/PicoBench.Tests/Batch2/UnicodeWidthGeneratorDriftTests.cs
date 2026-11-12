@@ -67,6 +67,37 @@ public class UnicodeWidthGeneratorDriftTests
                 + "python3, which the repository's release tooling already needs."
         );
 
+        // The generator reads the UCD through Python's `unicodedata`, so what it produces
+        // is a function of the interpreter on PATH, not of this repository: CPython 3.12
+        // bundles Unicode 15.0.0 (the version both checked-in files were cut from), 3.13
+        // bundles 15.1.0, and later releases bundle newer ones. CI run 43213497484 is
+        // exactly that: win-arm64 regenerated "Unicode version : 15.1.0" and osx-arm64
+        // "17.0.0" against a checked-in "15.0.0", while the three legs whose `python3` is
+        // 3.12 passed. A byte comparison of two different UCD versions says nothing about
+        // hand-edits, so the equality gate is skipped — loudly, and only then — when the
+        // host cannot reproduce the checked-in UCD. The version to compare against is the
+        // one the generator stamped into the header.
+        var checkedInUcdVersion = UnicodeVersion
+            .Match(Normalise(ReadRepositoryFile(TableRelativePath)))
+            .Groups["version"]
+            .Value;
+        var hostUcdVersion = HostUcdVersion(python!);
+        Batch2Support.Log(
+            $"UCD version: checked in '{checkedInUcdVersion}', host python "
+                + $"'{hostUcdVersion ?? "unknown"}'"
+        );
+        Skip.Unless(
+            hostUcdVersion is null || hostUcdVersion == checkedInUcdVersion,
+            $"this machine's Python ships Unicode {hostUcdVersion}, but the checked-in table and "
+                + $"snapshot were generated from Unicode {checkedInUcdVersion}. "
+                + "tools/gen-unicode-width.py takes the UCD from Python's `unicodedata`, so "
+                + "regenerating on this interpreter can only differ — that is a version mismatch, "
+                + "not drift. Run this gate on an interpreter whose `unicodedata.unidata_version` "
+                + $"is {checkedInUcdVersion} (CPython 3.12 for 15.0.0), or regenerate the table and "
+                + "the snapshot together with a pinned one. The cross-file oracle check "
+                + "(TheCheckedInSnapshot_HoldsTheSameRangesAsTheTable) still runs everywhere."
+        );
+
         using var scratch = Scratch.Create();
 
         var generated = RunGenerator(python!, scratch.Root);
@@ -231,6 +262,33 @@ public class UnicodeWidthGeneratorDriftTests
                 )
             )
             .ToList();
+
+    /// <summary>
+    /// The UCD version bundled with the host interpreter, or <c>null</c> when it cannot
+    /// be read (an exotic interpreter) — the caller then falls back to plain byte
+    /// equality, which is the behaviour the gate had before this probe existed.
+    /// </summary>
+    private static string? HostUcdVersion(string python)
+    {
+        var result = Run(
+            python,
+            ["-c", "import unicodedata; print('UCD=' + unicodedata.unidata_version)"],
+            RepositoryRoot
+        );
+        if (result.ExitCode != 0)
+            return null;
+
+        // Prefixed so that anything else on the streams cannot be mistaken for the
+        // version; Run merges stdout and stderr.
+        foreach (var line in result.Output.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("UCD=", StringComparison.Ordinal))
+                return trimmed["UCD=".Length..].Trim();
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// The interpreter, or <c>null</c> when the machine has none — the caller turns
