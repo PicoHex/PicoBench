@@ -91,6 +91,7 @@ M:PicoBench.Formatters.FormatterBase.FormatCore(PicoBench.BenchmarkSuite suite) 
 M:PicoBench.Formatters.FormatterBase.FormatCore(PicoBench.ComparisonResult comparison) : string virtual
 M:PicoBench.Formatters.FormatterBase.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.BenchmarkResult> results) : string abstract
 M:PicoBench.Formatters.FormatterBase.FormatCore(System.Collections.Generic.IEnumerable`1<PicoBench.ComparisonResult> comparisons) : string abstract
+M:PicoBench.Formatters.FormatterBase.FormatGcBytes(PicoBench.GcInfo gc) : string static
 M:PicoBench.Formatters.FormatterBase.FormatGcInfo(PicoBench.GcInfo gc) : string static
 M:PicoBench.Formatters.FormatterBase.FormatSpeedup(double speedup) : string
 M:PicoBench.Formatters.FormatterBase.FormatTime(double nanoseconds) : string
@@ -222,6 +223,8 @@ P:PicoBench.Formatters.SummaryOptions.ShowDuration : bool { get; init; }
 P:PicoBench.Formatters.SummaryOptions.TableOptions : PicoBench.Formatters.FormatterOptions { get; init; }
 P:PicoBench.Formatters.SummaryOptions.Title : string { get; init; }
 P:PicoBench.Formatters.SummaryOptions.WinsLabel : string { get; init; }
+P:PicoBench.GcInfo.AllocatedBytes : System.Nullable`1<long> { get; init; }
+P:PicoBench.GcInfo.AllocatedBytesAreApproximate : bool { get; init; }
 P:PicoBench.GcInfo.Gen0 : int { get; init; }
 P:PicoBench.GcInfo.Gen1 : int { get; init; }
 P:PicoBench.GcInfo.Gen2 : int { get; init; }

@@ -116,6 +116,10 @@ internal static class ComparisonMeasurement
             gen2 = 0;
         var gcApproximate = false;
         var anyGc = false;
+        long allocated = 0;
+        var allocationApproximate = false;
+        var anyAllocation = false;
+        var allocationComplete = true;
 
         for (var i = 0; i < rounds.Count; i++)
         {
@@ -148,6 +152,17 @@ internal static class ComparisonMeasurement
                 gen1 += gc.Gen1;
                 gen2 += gc.Gen2;
                 gcApproximate |= gc.IsApproximate;
+
+                if (gc.AllocatedBytes is { } bytes)
+                {
+                    allocated += bytes;
+                    anyAllocation = true;
+                    allocationApproximate |= gc.AllocatedBytesAreApproximate;
+                }
+                else
+                {
+                    allocationComplete = false;
+                }
             }
         }
 
@@ -187,6 +202,9 @@ internal static class ComparisonMeasurement
                     Gen1 = gen1,
                     Gen2 = gen2,
                     IsApproximate = gcApproximate,
+                    AllocatedBytes =
+                        anyAllocation && allocationComplete ? allocated : (long?)null,
+                    AllocatedBytesAreApproximate = anyAllocation && allocationApproximate,
                 }
                 : null,
         };

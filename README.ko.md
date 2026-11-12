@@ -275,7 +275,7 @@ public partial class IoBenchmarks
 
 - **타이밍 모드** — `AsyncTimingMode.WallClock`(기본값)은 await 중단을 포함한 전체 시간을 측정합니다. `AsyncTimingMode.CpuOnly`는 `Process.TotalProcessorTime`을 측정하고 I/O 대기를 제외합니다. CPU 시계는 운영체제 타이머 틱(보통 10–16 ms) 단위로만 진행하므로, 이 모드의 자동 보정은 최소 샘플 예산을 측정된 시계 세분성까지 높입니다. CpuOnly 모드에서는 GC 데이터가 수집되지 않습니다.
 - **측정 불가 샘플** — `CpuOnly` 모드에서 운영체제 타이머 틱 하나보다 짧은 워크로드는 CPU 시간이 정확히 0으로 읽힙니다. 이런 샘플은 `Statistics.UnmeasuredSampleCount`에 집계되며(`Unmeasured`가 `true`), 작업당 값은 `0.000`이 아니라 **하나의 타이밍 양자 — 상한값**이 되고, 포맷터는 작업당 셀을 `N/A`로 표시합니다. 그런 실행의 통계는 작업에 대한 측정값이 아닙니다. "CPU 클록의 분해능 미만"으로 읽어야 합니다. 문제를 숨기기 위해 반복 횟수가 조용히 부풀려지지 않습니다 — 보정하는 것은 `AutoCalibrateIterations = true`(`Quick`/`Precise` 프리셋)인 경우뿐이며, `Default`는 구성된 `IterationsPerSample`을 그대로 사용합니다.
-- **GC 귀속** — 비동기 GC 카운트는 근사치로 표시됩니다(`GcInfo.IsApproximate`). setup/teardown 할당은 두 모드 모두에서 제외됩니다.
+- **GC 귀속** — 비동기 GC 카운트는 근사치로 표시됩니다(`GcInfo.IsApproximate`). setup/teardown 할당은 두 모드 모두에서 제외됩니다. 할당 **바이트 수**도 함께 게시됩니다(`GcInfo.AllocatedBytes`): 동기 경로는 스레드 범위의 `GC.GetAllocatedBytesForCurrentThread`를 정확히 읽고, 비동기 경로는 프로세스 전체의 `GC.GetTotalAllocatedBytes`를 읽어 `AllocatedBytesAreApproximate`로 표시되며(`~`로 렌더링), 두 카운터 모두 없는 런타임에서는 셀이 `N/A`가 됩니다 — 결코 `0`이 아닙니다.
 - **CPU 사이클** — 동기 경로는 스레드 범위 카운터를 읽고(Windows의 `QueryThreadCycleTime`, Linux에서는 측정 스레드를 위해 연 `perf_event`), 비동기 벤치마크는 프로세스 전역 카운터를 읽습니다(스레드별 카운터는 스레드 전환을 넘어 추적할 수 없기 때문). 그 수치에는 다른 스레드가 한 작업이 포함되며 `Statistics.CpuCyclesAreApproximate`로 플래그가 지정되어 Console, Markdown, HTML, CSV에서 `~`와 함께 렌더링됩니다. macOS에는 사이클 카운터가 없으며, `mach_absolute_time`은 아키텍처 사이클이 아닌 단조 *시간* 프록시이고 같은 방식으로 플래그가 지정됩니다.
 - **취소** — `BenchmarkConfig.CancellationToken`은 비동기 벤치마크의 샘플 경계에서만 확인됩니다. 동기 벤치마크는 이를 무시합니다.
 - **혼합 클래스** — 클래스에 다른 비동기 멤버가 있어도 동기 `[Benchmark]` 메서드는 직접 동기 측정 경로를 유지하므로 비동기 래퍼 오버헤드를 부담하지 않습니다.
@@ -435,9 +435,10 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | 13 | `CpuCycles` | 작업당 사이클 수. `~` 접두사는 스레드 사이클이 아니라 프로세스 전역 카운터 또는 클록 프록시(`CpuCyclesAreApproximate`)를 표시합니다 |
 | 14-16 | `GC0`, `GC1`, `GC2` | 수집 횟수. GC가 수집되지 않았으면 `N/A` |
 | 17 | `GCApproximate` | 카운터가 근사값(비동기 경로)이면 `1`, 정확하면 `0`, 수집되지 않았으면 `N/A` |
-| 18 | `SampleCount` | 샘플 수(정수) |
-| 19 | `IterationsPerSample` | 샘플당 반복 횟수(정수) |
-| 20 | `Timestamp` | ISO-8601 라운드트립(`o`, 인바리언트 컬처) |
+| 18 | `AllocBytes` | 측정 창에서 할당된 바이트 수; `~n`은 프로세스 전체 카운터(비동기 경로), 수집되지 않았으면 `N/A` |
+| 19 | `SampleCount` | 샘플 수(정수) |
+| 20 | `IterationsPerSample` | 샘플당 반복 횟수(정수) |
+| 21 | `Timestamp` | ISO-8601 라운드트립(`o`, 인바리언트 컬처) |
 
 작업당 열의 셀 상태:
 
@@ -449,16 +450,16 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 소비자에게 두 가지 영향이 있습니다: `<0.02` 때문에 작업당 열은 **숫자임이 보장되지 않으므로** pandas 같은 리더는 `object`로 추론하며 상한 행을 명시적으로 처리해야 합니다. 또한 `GCApproximate`가 `GC2`와 `SampleCount` 사이인 17번 위치에 삽입되었으므로 **위치 기반 리더는 `SampleCount`/`IterationsPerSample`을 하나씩 밀어야 합니다**(이름 기반 리더는 영향을 받지 않음).
 
-비교 열: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`, `SampleCount`, `IterationsPerSample`. 각 비교는 두 행(후보가 먼저, 기준선이 다음)을 쓰고 `Speedup`은 후보 행에만 채워집니다. 비교의 작업당 셀은 결과 테이블과 동일한 포맷터를 거치므로 `<limit`와 `N/A`가 거기에도 나타나며, `CpuCycles`에는 동일한 `~` 표시(`CpuCyclesAreApproximate`)가 붙습니다.
+비교 열: `TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`, `AllocBytes`, `SampleCount`, `IterationsPerSample`. 각 비교는 두 행(후보가 먼저, 기준선이 다음)을 쓰고 `Speedup`은 후보 행에만 채워집니다. 비교의 작업당 셀은 결과 테이블과 동일한 포맷터를 거치므로 `<limit`와 `N/A`가 거기에도 나타나며, `CpuCycles`에는 동일한 `~` 표시(`CpuCyclesAreApproximate`)가 붙습니다.
 
 `# Schema:` 행은 이미 반영되었고 **파일의 첫 행**입니다. 결과 파일(그리고 결과가 있는 스위트 파일)은 뒤따르는 열을 설명하는 계약 행으로 시작하며, 비교 섹션은 `# Comparisons` 바로 앞에 자체 계약 행을 씁니다:
 
 ```
-# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
-# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg, or the median of the per-round paired ratios for a direct comparison) | "N/A" (no finite ratio: a candidate average of zero is unbounded, a non-finite candidate average is unmeasurable, or too few usable paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|AllocBytes|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected); AllocBytes = bytes allocated | "~bytes" (approximate: process-wide counter) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|AllocBytes|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg, or the median of the per-round paired ratios for a direct comparison) | "N/A" (no finite ratio: a candidate average of zero is unbounded, a non-finite candidate average is unmeasurable, or too few usable paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected); AllocBytes = bytes allocated | "~bytes" (approximate: process-wide counter) | "N/A" (not collected)
 ```
 
-`v2`는 Batch 0의 형태 — 위의 작업당 세 가지 셀 상태에 `GCApproximate`를 더한 것입니다. `columns=` 목록은 실제로 쓰이는 헤더 행에서 파생되므로 위 표와 어긋날 수 없고, 옵션으로 빠진 열을 나열하지도 않습니다. `section=`이 두 계약 행을 구분합니다. 파서는 `#`로 시작하는 모든 행을 건너뛰고, 열 순서는 하드코딩하지 말고 `columns=` 목록에서 읽어야 합니다.
+`v2`는 Batch 0의 형태 — 위의 작업당 세 가지 셀 상태에 `GCApproximate`와 `AllocBytes`를 더한 것입니다. `columns=` 목록은 실제로 쓰이는 헤더 행에서 파생되므로 위 표와 어긋날 수 없고, 옵션으로 빠진 열을 나열하지도 않습니다. `section=`이 두 계약 행을 구분합니다. 파서는 `#`로 시작하는 모든 행을 건너뛰고, 열 순서는 하드코딩하지 말고 `columns=` 목록에서 읽어야 합니다.
 
 ---
 
@@ -473,7 +474,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | `ComparisonInterval` | Low, High, Contains(value), ToString() — 중앙값 페어 비율의 분포 비의존 95% 구간 |
 | `Statistics` | Avg, P50, P90, P95, P99, Min, Max, StdDev, StandardError, RelativeStdDevPercent, CpuCyclesPerOp, **CpuCyclesAreApproximate**, **OverheadNs**, **ResolutionLimitNanoseconds**, **ResolutionLimited**, **Unmeasured**, **UnmeasuredSampleCount**, GcInfo, HasHighVariance |
 | `TimingSample` | ElapsedNanoseconds, ElapsedMilliseconds, ElapsedTicks, CpuCycles, **CpuCyclesAreApproximate**, GcInfo |
-| `GcInfo` | Gen0, Gen1, Gen2, Total, IsZero, IsApproximate |
+| `GcInfo` | Gen0, Gen1, Gen2, Total, IsZero, IsApproximate, **AllocatedBytes**, **AllocatedBytesAreApproximate** |
 | `EnvironmentInfo` | Os, Architecture, RuntimeVersion, ProcessorCount, ExecutionMode, Configuration, CPU counter kind / availability / meaning, CustomTags |
 
 측정 충실도 작업으로 추가된 멤버의 의미:

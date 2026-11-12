@@ -271,7 +271,7 @@ public partial class IoBenchmarks
 
 - **計時模式** —— `AsyncTimingMode.WallClock`（預設）統計包含 await 掛起的完整時長；`AsyncTimingMode.CpuOnly` 統計 `Process.TotalProcessorTime`，排除 I/O 等待。CPU 時鐘以作業系統定時器刻度推進（通常 10–16 ms），因此該模式下自動校準會把最小採樣預算提升到實測時鐘粒度。CpuOnly 模式不收集 GC 資料。
 - **不可測樣本** —— 在 `CpuOnly` 模式下，短於一個作業系統定時器刻度的工作負載會被讀作恰好為零的 CPU 時間。此類樣本會計入 `Statistics.UnmeasuredSampleCount`（`Unmeasured` 為 `true`），其每操作值變成**一個計時量子 —— 一個上界 —— 而不是 `0.000`**，並且各格式化器會把每操作儲存格列印為 `N/A`。此類執行得到的統計不是對該工作的測量：應將其讀作「低於 CPU 時鐘的解析度」。迭代次數**不會**被默默放大來掩蓋問題 —— 只有 `AutoCalibrateIterations = true`（`Quick`/`Precise` 預設）才會校準；`Default` 原樣使用配置的 `IterationsPerSample`。
-- **GC 歸因** —— 非同步 GC 計數標記為近似值（`GcInfo.IsApproximate`）。兩種模式都會排除 setup/teardown 的配置。
+- **GC 歸因** —— 非同步 GC 計數標記為近似值（`GcInfo.IsApproximate`）。兩種模式都會排除 setup/teardown 的配置。配置**位元組數**也會一併發布（`GcInfo.AllocatedBytes`）：同步路徑讀取精確的執行緒層級 `GC.GetAllocatedBytesForCurrentThread`，非同步路徑讀取處理序層級 `GC.GetTotalAllocatedBytes` 並標記 `AllocatedBytesAreApproximate`（渲染為 `~`），而執行階段兩者皆不可用時該儲存格為 `N/A` —— 絕不會是 `0`。
 - **CPU 周期** —— 同步路徑讀取執行緒級計數器（Windows 上為 `QueryThreadCycleTime`，Linux 上為針對測量執行緒開啟的 `perf_event`）。非同步基準讀取進程級計數器，因為執行緒級計數器無法跨執行緒切換追蹤：該數值包含其他執行緒完成的工作，並被標記為 `Statistics.CpuCyclesAreApproximate`，在 Console、Markdown、HTML 和 CSV 中渲染為 `~`。macOS 沒有週期計數器 —— `mach_absolute_time` 是單調的*時間*代理而非架構週期，同樣會被標記。
 - **取消** —— `BenchmarkConfig.CancellationToken` 僅在非同步基準的樣本邊界檢查；同步基準忽略它。
 - **混合類** —— 即使類中存在其他非同步成員，同步 `[Benchmark]` 方法仍走直接同步測量路徑。
@@ -433,9 +433,10 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | 13 | `CpuCycles` | 每操作週期數；`~` 前綴表示進程級計數器或時鐘代理（`CpuCyclesAreApproximate`），而非執行緒週期 |
 | 14-16 | `GC0`, `GC1`, `GC2` | 回收計數，未收集 GC 時為 `N/A` |
 | 17 | `GCApproximate` | 計數器為近似值時是 `1`（非同步路徑），精確時為 `0`，未收集時為 `N/A` |
-| 18 | `SampleCount` | 樣本數（整數） |
-| 19 | `IterationsPerSample` | 每樣本迭代數（整數） |
-| 20 | `Timestamp` | ISO-8601 往返格式（`o`，固定不變文化） |
+| 18 | `AllocBytes` | 測量視窗內配置的位元組數；`~n` 表示處理序層級計數器（非同步路徑），未收集時為 `N/A` |
+| 19 | `SampleCount` | 樣本數（整數） |
+| 20 | `IterationsPerSample` | 每樣本迭代數（整數） |
+| 21 | `Timestamp` | ISO-8601 往返格式（`o`，固定不變文化） |
 
 每操作欄的儲存格狀態：
 
@@ -447,16 +448,16 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 
 對使用者而言有兩點後果：由於 `<0.02` 的存在，每操作欄**不保證是數值型**，因此 pandas 之類的讀取器會推斷為 `object`，你必須顯式處理上界列；而 `GCApproximate` 被插入到第 17 位，位於 `GC2` 與 `SampleCount` 之間，所以**按位置讀取的程式碼必須把 `SampleCount`/`IterationsPerSample` 後移一位**（按欄名讀取不受影響）。
 
-比較欄：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`, `SampleCount`, `IterationsPerSample`。每個比較會寫出兩列 —— 候選在前，基準在後 —— 並且 `Speedup` 只填在候選列。比較的每操作儲存格與結果表走同一個格式化器，因此 `<limit` 與 `N/A` 也會出現在那裡，`CpuCycles` 帶同樣的 `~` 標記（`CpuCyclesAreApproximate`）。
+比較欄：`TestCase`, `Provider`, `Avg_ns`, `Speedup`, `P50_ns`, `P90_ns`, `P99_ns`, `StdErr_ns`, `RSD_pct`, `CpuCycles`, `GC0`, `GC1`, `GC2`, `GCApproximate`, `AllocBytes`, `SampleCount`, `IterationsPerSample`。每個比較會寫出兩列 —— 候選在前，基準在後 —— 並且 `Speedup` 只填在候選列。比較的每操作儲存格與結果表走同一個格式化器，因此 `<limit` 與 `N/A` 也會出現在那裡，`CpuCycles` 帶同樣的 `~` 標記（`CpuCyclesAreApproximate`）。
 
 `# Schema:` 行已經落地，並且就是**檔案首行**：結果檔案（以及含結果的套件檔案）以這段描述後續欄位的契約行開頭，比較區段則在 `# Comparisons` 之前再寫一條自己的契約行：
 
 ```
-# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
-# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg, or the median of the per-round paired ratios for a direct comparison) | "N/A" (no finite ratio: a candidate average of zero is unbounded, a non-finite candidate average is unmeasurable, or too few usable paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected)
+# Schema: v2; section=results; columns=Name|Category|Avg_ns|P50_ns|P90_ns|P95_ns|P99_ns|Min_ns|Max_ns|StdDev_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|AllocBytes|SampleCount|IterationsPerSample|Timestamp; per-op cells (Avg_ns,P50_ns,P90_ns,P95_ns,P99_ns,Min_ns,Max_ns,StdDev_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected); AllocBytes = bytes allocated | "~bytes" (approximate: process-wide counter) | "N/A" (not collected)
+# Schema: v2; section=comparisons; columns=TestCase|Provider|Avg_ns|Speedup|P50_ns|P90_ns|P99_ns|StdErr_ns|RSD_pct|CpuCycles|GC0|GC1|GC2|GCApproximate|AllocBytes|SampleCount|IterationsPerSample; per-op cells (Avg_ns,P50_ns,P90_ns,P99_ns,StdErr_ns) = number (nanoseconds) | "<limit" (upper bound: the value is at the harness floor) | "N/A" (not measured); RSD_pct = percent; Speedup = ratio (baseline avg / candidate avg, or the median of the per-round paired ratios for a direct comparison) | "N/A" (no finite ratio: a candidate average of zero is unbounded, a non-finite candidate average is unmeasurable, or too few usable paired rounds); SampleCount = samples taken | IterationsPerSample = iterations per sample; CpuCycles = count | "~count" (not a thread-scoped cycle count); GC counters = count | "N/A" (not collected); GCApproximate = 1 (approximate counters) | 0 (exact) | "N/A" (not collected); AllocBytes = bytes allocated | "~bytes" (approximate: process-wide counter) | "N/A" (not collected)
 ```
 
-`v2` 即 Batch 0 的形態 —— 上文的每操作三態加上 `GCApproximate`。`columns=` 清單由實際寫出的表頭行推導，因此不會與上面的表偏離，也不會列出被選項關掉的欄；`section=` 用來區分兩條契約行。解析器必須跳過所有以 `#` 開頭的行，並從 `columns=` 清單讀取欄序，而不是硬編碼。
+`v2` 即 Batch 0 的形態 —— 上文的每操作三態加上 `GCApproximate` 與 `AllocBytes`。`columns=` 清單由實際寫出的表頭行推導，因此不會與上面的表偏離，也不會列出被選項關掉的欄；`section=` 用來區分兩條契約行。解析器必須跳過所有以 `#` 開頭的行，並從 `columns=` 清單讀取欄序，而不是硬編碼。
 
 ---
 
@@ -471,7 +472,7 @@ File.WriteAllText(Path.Combine(dir, "results.csv"),  new CsvFormatter().Format(s
 | `ComparisonInterval` | Low, High, Contains(value), ToString() —— 中位配對比值的分佈無關 95% 區間 |
 | `Statistics` | `Avg`、`P50`、`P90`、`P95`、`P99`、`Min`、`Max`、`StdDev`、`StandardError`、`RelativeStdDevPercent`、`CpuCyclesPerOp`、**CpuCyclesAreApproximate**、**OverheadNs**、**ResolutionLimitNanoseconds**、**ResolutionLimited**、**Unmeasured**、**UnmeasuredSampleCount**、`GcInfo`、HasHighVariance |
 | `TimingSample` | 奈秒耗時、毫秒耗時、計時器滴答數、CPU 週期、**CpuCyclesAreApproximate**、GC 信息 |
-| `GcInfo` | Gen0、Gen1、Gen2、總計、是否為零、IsApproximate |
+| `GcInfo` | Gen0、Gen1、Gen2、總計、是否為零、IsApproximate、**AllocatedBytes**、**AllocatedBytesAreApproximate** |
 | `EnvironmentInfo` | 操作系統、架構、執行時版本、處理器數量、執行模式、配置、CPU 計數器類型 / 可用性 / 是否有意義、自訂標籤 |
 
 測量保真度工作中新增成員的涵義：

@@ -422,6 +422,49 @@ public abstract class FormatterBase(FormatterOptions? options = null) : IFormatt
     }
 
     /// <summary>
+    /// The aligned header of the allocation column. Kept beside the other column
+    /// headers so the four formats cannot drift: <c>GC B</c> sits next to
+    /// <c>GC (0/1/2)</c>.
+    /// </summary>
+    internal const string GcBytesHeader = "GC B";
+
+    /// <summary>
+    /// Allocation bytes as a human-readable figure, prefixed with <c>~</c> when the
+    /// reading came from a process-wide counter (the asynchronous path), so it reads
+    /// the same way at every call site. <c>null</c> (counter not collected) renders
+    /// as <see cref="NotCollected"/> and never as <c>0 B</c> — the same tri-state the
+    /// GC counters and the CPU-cycle column already follow.
+    /// <para>
+    /// A measured zero stays a real <c>0 B</c>: the counter ran and did not move,
+    /// which is a different statement from "not collected".
+    /// </para>
+    /// </summary>
+    protected static string FormatGcBytes(GcInfo? gc)
+    {
+        if (gc?.AllocatedBytes is not { } bytes)
+            return NotCollected;
+
+        var text = FormatByteSize(bytes);
+        return gc.AllocatedBytesAreApproximate ? "~" + text : text;
+    }
+
+    /// <summary>
+    /// One byte count with its unit, invariant, in the binary multiples a reader
+    /// expects (B / KB / MB / GB); the scaled forms carry one decimal, like every
+    /// other display figure in the library.
+    /// </summary>
+    internal static string FormatByteSize(long bytes)
+    {
+        if (bytes < 1024L)
+            return bytes.ToString(CultureInfo.InvariantCulture) + " B";
+        if (bytes < 1024L * 1024L)
+            return FormatMetric(bytes / 1024.0, 1) + " KB";
+        if (bytes < 1024L * 1024L * 1024L)
+            return FormatMetric(bytes / (1024.0 * 1024.0), 1) + " MB";
+        return FormatMetric(bytes / (1024.0 * 1024.0 * 1024.0), 1) + " GB";
+    }
+
+    /// <summary>
     /// Get a visual indicator for the speedup magnitude.
     /// </summary>
     public static string GetSpeedupIndicator(double speedup)

@@ -376,6 +376,7 @@ footer {
         if (Options.IncludeGcInfo)
         {
             sb.AppendLine("<th>GC (0/1/2)</th>");
+            sb.AppendLine("<th>GC B</th>");
         }
 
         sb.AppendLine("</tr></thead>");
@@ -408,6 +409,7 @@ footer {
             if (Options.IncludeGcInfo)
             {
                 sb.AppendLine($"<td class=\"gc-info\">{FormatGcInfo(s.GcInfo)}</td>");
+                sb.AppendLine($"<td class=\"gc-info\">{FormatGcBytes(s.GcInfo)}</td>");
             }
 
             sb.AppendLine("</tr>");
@@ -557,6 +559,7 @@ footer {
         if (Options.IncludeGcInfo)
         {
             sb.AppendLine("<th>GC</th>");
+            sb.AppendLine("<th>GC B</th>");
         }
 
         sb.AppendLine("</tr></thead>");
@@ -593,6 +596,7 @@ footer {
             if (Options.IncludeGcInfo)
             {
                 sb.AppendLine($"<td class=\"gc-info\">{FormatGcInfo(row.Stats.GcInfo)}</td>");
+                sb.AppendLine($"<td class=\"gc-info\">{FormatGcBytes(row.Stats.GcInfo)}</td>");
             }
 
             sb.AppendLine("</tr>");

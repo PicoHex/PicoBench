@@ -153,7 +153,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeGcInfo)
         {
-            columns.AddRange(["GC0", "GC1", "GC2", GcApproximateColumn]);
+            columns.AddRange(["GC0", "GC1", "GC2", GcApproximateColumn, AllocBytesColumn]);
         }
 
         columns.AddRange(["SampleCount", "IterationsPerSample"]);
@@ -200,6 +200,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         {
             values.AddRange(FormatGcCounts(s.GcInfo));
             values.Add(FormatGcApproximate(s.GcInfo));
+            values.Add(FormatGcBytesCell(s.GcInfo));
         }
 
         values.Add(result.SampleCount.ToString(CultureInfo.InvariantCulture));
@@ -233,7 +234,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
 
         if (Options.IncludeGcInfo)
         {
-            columns.AddRange(["GC0", "GC1", "GC2", GcApproximateColumn]);
+            columns.AddRange(["GC0", "GC1", "GC2", GcApproximateColumn, AllocBytesColumn]);
         }
 
         // Batch 2 · 2.3 (B2-M3): without these two columns a ratio could not be
@@ -294,6 +295,7 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
         {
             values.AddRange(FormatGcCounts(stats.GcInfo));
             values.Add(FormatGcApproximate(stats.GcInfo));
+            values.Add(FormatGcBytesCell(stats.GcInfo));
         }
 
         // The run behind this ratio: how many samples, how many iterations each.
@@ -410,6 +412,14 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
                 + "\" (not collected)";
         }
 
+        if (Array.IndexOf(columns, AllocBytesColumn) >= 0)
+            schema +=
+                "; "
+                + AllocBytesColumn
+                + " = bytes allocated | \"~bytes\" (approximate: process-wide counter) | \""
+                + FormatterBase.NotCollected
+                + "\" (not collected)";
+
         sb.AppendLine(schema);
     }
 
@@ -483,6 +493,13 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
     private const string GcApproximateColumn = "GCApproximate";
 
     /// <summary>
+    /// Header of the allocation column: bytes allocated during the measured window,
+    /// or <c>N/A</c> when the counter was not collected. A <c>~</c> prefix marks a
+    /// process-wide reading (the asynchronous path).
+    /// </summary>
+    private const string AllocBytesColumn = "AllocBytes";
+
+    /// <summary>
     /// Render the three GC counters. A missing <see cref="GcInfo"/> means "not
     /// collected" and becomes <see cref="FormatterBase.NotCollected"/> rather
     /// than <c>0</c>, so a CSV consumer cannot mistake it for "zero collections".
@@ -501,6 +518,21 @@ public sealed class CsvFormatter(FormatterOptions? options = null) : FormatterBa
             gc.Gen1.ToString(CultureInfo.InvariantCulture),
             gc.Gen2.ToString(CultureInfo.InvariantCulture),
         ];
+    }
+
+    /// <summary>
+    /// Render the <c>AllocBytes</c> cell. The CSV is the machine-readable format, so
+    /// the raw byte count is written: <c>0</c> is a measured zero, <c>~n</c> is a
+    /// process-wide reading (asynchronous path), and a missing counter is "not
+    /// collected" — never <c>0</c>.
+    /// </summary>
+    private static string FormatGcBytesCell(GcInfo? gc)
+    {
+        if (gc?.AllocatedBytes is not { } bytes)
+            return FormatterBase.NotCollected;
+
+        var text = bytes.ToString(CultureInfo.InvariantCulture);
+        return gc.AllocatedBytesAreApproximate ? "~" + text : text;
     }
 
     /// <summary>

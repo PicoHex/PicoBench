@@ -18,7 +18,7 @@
 | `IBenchmarkClass.cs` | ソースジェネレーターが装飾クラスで実装するインターフェース |
 | `BenchmarkConfig.cs` | Quick / Default / Preciseプリセットに加え、オプションの自動キャリブレーションを備えた設定 |
 | `Runner.cs` | 低レベルのタイミングフローとサンプル生成 |
-| `Runner.Gc.cs` | GC ベースラインと差分追跡 |
+| `Runner.Gc.cs` | GC カウントと割り当てバイト数（ベースラインと差分、カウンターは実行時に解決） |
 | `Runner.Cpu.cs` | プラットフォーム固有の CPU カウンター実装 |
 | `StatisticsCalculator.cs` | パーセンタイルと統計計算 |
 | `Models.cs` | `Statistics` の精度フィールドと `EnvironmentInfo` の CPU カウンターメタデータを含む結果タイプ |

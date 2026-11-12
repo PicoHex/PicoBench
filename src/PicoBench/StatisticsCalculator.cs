@@ -41,6 +41,13 @@ internal static class StatisticsCalculator
             gen2Sum = 0;
         bool anyApproximate = false;
         int gcInfoCount = 0;
+        // Allocation bytes are summed only when every sample that carried a GcInfo
+        // also carried a byte reading; one unread sample would otherwise turn the
+        // sum into an understated total published as if it were the run's.
+        long allocatedSum = 0;
+        var allocationComplete = true;
+        var allocationApproximate = false;
+        var anyAllocation = false;
 
         // A sample whose timing source did not advance carries no measurement:
         // CpuOnly reads Process.TotalProcessorTime, which only moves in whole
@@ -61,6 +68,18 @@ internal static class StatisticsCalculator
             if (gc.IsApproximate)
                 anyApproximate = true;
             gcInfoCount++;
+
+            if (gc.AllocatedBytes is { } bytes)
+            {
+                allocatedSum += bytes;
+                anyAllocation = true;
+                if (gc.AllocatedBytesAreApproximate)
+                    allocationApproximate = true;
+            }
+            else
+            {
+                allocationComplete = false;
+            }
         }
 
         GcInfo? aggregatedGcInfo = null;
@@ -72,6 +91,11 @@ internal static class StatisticsCalculator
                 Gen1 = gen1Sum,
                 Gen2 = gen2Sum,
                 IsApproximate = anyApproximate,
+                // Null ("not collected") when no sample could report bytes, or when
+                // only some could: a partial sum is not the run's allocation.
+                AllocatedBytes =
+                    anyAllocation && allocationComplete ? allocatedSum : (long?)null,
+                AllocatedBytesAreApproximate = anyAllocation && allocationApproximate,
             };
         }
 

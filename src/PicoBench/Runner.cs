@@ -475,7 +475,7 @@ public static partial class Runner
 
         // GC baseline is captured after setup so setup allocations are
         // not attributed to the benchmark.
-        var gcBaseline = GetGcBaselineCounts();
+        var gcBaseline = GetGcBaseline();
 
         // Start timing. Synchronous benchmarks never hop threads, so the
         // thread-scoped counter is both valid and immune to work done by other
@@ -495,7 +495,7 @@ public static partial class Runner
 
             // GC delta is computed before teardown so teardown allocations
             // are not attributed to the benchmark.
-            var gcInfo = CalculateGcDelta(gcBaseline);
+            var gcInfo = CalculateGcDelta(gcBaseline, processWideAllocation: false);
 
             return CreateSample(
                 watch,
@@ -525,7 +525,7 @@ public static partial class Runner
         if (action == null)
             throw new ArgumentNullException(nameof(action));
 
-        var gcBaseline = GetGcBaselineCounts();
+        var gcBaseline = GetGcBaseline();
 
         // Thread-scoped counter: see Time(int, Action, Action?, Action?).
         var cycleStart = GetCpuCycles();
@@ -541,7 +541,7 @@ public static partial class Runner
             watch,
             cycleStart,
             cycleEnd,
-            CalculateGcDelta(gcBaseline),
+            CalculateGcDelta(gcBaseline, processWideAllocation: false),
             areCpuCyclesApproximate: !HasMeaningfulCpuCycles()
         );
     }
@@ -581,6 +581,10 @@ public static partial class Runner
                 Gen1 = gcInfo.Gen1,
                 Gen2 = gcInfo.Gen2,
                 IsApproximate = true,
+                // The async path reads the process-wide allocation counter, so its
+                // bytes carry the same "approximate" disclosure as its counts.
+                AllocatedBytes = gcInfo.AllocatedBytes,
+                AllocatedBytesAreApproximate = gcInfo.AllocatedBytesAreApproximate,
             };
         }
 
@@ -622,7 +626,7 @@ public static partial class Runner
 
         // GC baseline is captured after setup so setup allocations are
         // not attributed to the benchmark.
-        var gcBaseline = GetGcBaselineCounts();
+        var gcBaseline = GetGcBaseline();
 
         // Process-wide counters stay valid when an await resumes on a
         // different thread; per-thread counters do not.
@@ -639,7 +643,7 @@ public static partial class Runner
 
             // GC delta is computed before teardown so teardown allocations
             // are not attributed to the benchmark.
-            var gcInfo = CalculateGcDelta(gcBaseline);
+            var gcInfo = CalculateGcDelta(gcBaseline, processWideAllocation: true);
 
             return CreateSample(
                 watch,
@@ -673,7 +677,7 @@ public static partial class Runner
         if (action == null)
             throw new ArgumentNullException(nameof(action));
 
-        var gcBaseline = GetGcBaselineCounts();
+        var gcBaseline = GetGcBaseline();
 
         var cycleStart = GetProcessCpuCycles();
         var watch = Stopwatch.StartNew();
@@ -688,7 +692,7 @@ public static partial class Runner
             watch,
             cycleStart,
             cycleEnd,
-            CalculateGcDelta(gcBaseline),
+            CalculateGcDelta(gcBaseline, processWideAllocation: true),
             isGcApproximate: true,
             areCpuCyclesApproximate: true
         );
