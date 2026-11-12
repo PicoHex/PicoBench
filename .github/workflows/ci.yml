@@ -533,6 +533,17 @@ jobs:
           SHELL_LINT_REQUIRE_SHELLCHECK: '1'
         run: bash scripts/tests/shell-lint.test.sh
 
+      # v2026.4.0 was tagged and pushed, and the release run then died at exit
+      # 126 - `./scripts/verify-release-commit-on-main.sh: Permission denied` -
+      # because the file was 100644 in the git index while a Windows checkout
+      # still reported it as rwxr-xr-x. Pack never ran, Publish was skipped and
+      # nothing was published. Every script a workflow invokes as `./<path>`
+      # must therefore be 100755 in the index, and this is the only step that
+      # can see that before release day.
+      - name: Every workflow-invoked script is executable in the index
+        shell: bash
+        run: bash scripts/tests/workflow-script-mode.test.sh
+
       # Planning mode only - the live `gh api` review needs network and a token
       # and is a scheduled human task (docs/releasing.md). What this step proves
       # is that the allowlist record still parses: a mutable tag cannot sit here
