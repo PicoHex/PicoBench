@@ -356,8 +356,14 @@ public static class Benchmark
             perOpTimes,
             perOpCycles,
             samples,
-            overhead.Nanoseconds / iterationsPerSample,
-            overhead.ResolutionLimitNanoseconds
+            // The measured floor is a *per-sample* total; it must be published in
+            // the same unit the asynchronous path publishes it in, and in the same
+            // unit the two formatter sites divide back down to a per-operation
+            // value (V-FINAL2 · C1). Dividing it here made the one property mean
+            // two different things depending on the entry point: 1.9 ns/op from a
+            // synchronous run, 26 200 ns/sample from an asynchronous one.
+            harnessOverheadNanoseconds: overhead.Nanoseconds,
+            resolutionLimitNanoseconds: overhead.ResolutionLimitNanoseconds
         );
 
         return new BenchmarkResult(

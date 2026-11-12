@@ -191,13 +191,13 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
             sb.AppendLine(
                 $"  Resolution: below the measurement floor (resolution limit "
                     + $"~{FormatMetric(result.Statistics.ResolutionLimitNanoseconds, 3)} ns/op, "
-                    + $"harness overhead {FormatMetric(result.Statistics.OverheadNs, 3)} ns/op deducted)"
+                    + $"harness overhead {FormatMetric(OverheadPerOp(result), 3)} ns/op deducted)"
             );
         }
         else if (result.Statistics.OverheadNs > 0)
         {
             sb.AppendLine(
-                $"  Overhead: {FormatMetric(result.Statistics.OverheadNs, 3)} ns/op deducted (delegate/loop floor)"
+                $"  Overhead: {FormatMetric(OverheadPerOp(result), 3)} ns/op deducted (delegate/loop floor)"
             );
         }
 
@@ -430,6 +430,23 @@ public sealed class ConsoleFormatter(FormatterOptions? options = null) : Formatt
         statistics.Unmeasured
             ? NotCollected + " (unmeasured)"
             : $"{FormatPerOp(statistics, nanoseconds, unit)} {unit.Symbol}";
+
+    /// <summary>
+    /// The deducted harness floor as a <b>per-operation</b> value.
+    /// <para>
+    /// <see cref="Statistics.OverheadNs"/> is the cost <b>one sample</b> carries:
+    /// it is subtracted from a whole sample's elapsed time, and the residual is only
+    /// then divided by the iteration count. Printed as-is beside a per-operation
+    /// figure it overstated the deduction by exactly
+    /// <see cref="BenchmarkResult.IterationsPerSample"/> times: a 47.8 ns/op floor
+    /// measured on a 1 000-iteration run read <c>47800.000 ns/op deducted</c> next to
+    /// <c>Avg: 2.7 µs</c>, i.e. a deduction larger than the measurement it belongs to
+    /// (V-FINAL2 · C1). Every site that prints the floor beside a per-operation
+    /// figure goes through here, so the label and the number agree.
+    /// </para>
+    /// </summary>
+    private static double OverheadPerOp(BenchmarkResult result) =>
+        result.Statistics.OverheadNs / result.IterationsPerSample;
 
     /// <summary>
     /// The measurement-quality marker printed next to a benchmark name:

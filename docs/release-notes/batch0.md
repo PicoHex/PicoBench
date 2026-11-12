@@ -94,9 +94,11 @@ resolve. A workload at or below that floor is now printed as an **upper bound**
 
 **Affected API / output**
 
-- `Statistics.OverheadNs` (new) — the per-operation harness cost that was
-  measured and deducted. It is `0` for asynchronous runs, whose overhead is not
-  deducted.
+- `Statistics.OverheadNs` (new) — the harness cost **one sample** carries (delegate
+  dispatch, loop bookkeeping, clock and counter reads), as a per-sample total that
+  was measured and deducted; divide it by the result's iteration count for the
+  per-operation figure. It is `0` for asynchronous runs in this batch, whose
+  overhead was not deducted yet (Batch 0 · 0.1b adds the asynchronous deduction).
 - `Statistics.ResolutionLimitNanoseconds` (new) — the smallest per-operation
   value this run can resolve: the largest of one clock tick spread over the
   iterations, the spread of the deducted overhead, and the per-operation size of

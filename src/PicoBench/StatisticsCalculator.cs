@@ -11,7 +11,11 @@ internal static class StatisticsCalculator
     /// <param name="perOpTimes">Per-operation nanoseconds, with the harness overhead already deducted.</param>
     /// <param name="perOpCycles">Per-operation CPU cycles.</param>
     /// <param name="samples">The raw samples the per-operation values were derived from.</param>
-    /// <param name="harnessOverheadNanoseconds">Per-operation harness overhead that was deducted.</param>
+    /// <param name="harnessOverheadNanoseconds">
+    /// Harness overhead that was deducted, as the <b>per-sample total</b> both
+    /// entry points publish in <see cref="Statistics.OverheadNs"/> (divide by the
+    /// iteration count for the per-operation figure); never a per-operation value.
+    /// </param>
     /// <param name="resolutionLimitNanoseconds">
     /// Smallest per-operation value this run can resolve; 0 when unknown.
     /// </param>
