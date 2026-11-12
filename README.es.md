@@ -2,6 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
+![CI](https://github.com/PicoHex/PicoBench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Una biblioteca de benchmarking ligera para .NET con **dos API complementarias**: una API imperativa y una API basada en atributos, generada por código fuente, completamente **compatible con AOT**. La única referencia NuGet es un polyfill BCL (`System.Threading.Tasks.Extensions`) para `ValueTask<T>` en netstandard2.0.
 
 ## Características
@@ -338,7 +342,7 @@ Cuando la auto-calibración está habilitada, PicoBench incrementa `IterationsPe
 
 ## Formateadores de Salida
 
-Cinco formateadores incorporados implementan `IFormatter`:
+Cuatro formateadores incorporados implementan `IFormatter`, y `SummaryFormatter` proporciona un ayudante de resumen aparte:
 
 ```csharp
 using PicoBench.Formatters;
@@ -578,7 +582,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-Las versiones siguen la regla PicoHex `<año>.<x>.<y>`: **x** aumenta cuando cambió la API pública, **y** cuando no. La decisión proviene de la baseline de API comprometida en `api/PicoBench.public.txt`, que siempre contiene la superficie del último release.
+Las versiones siguen la regla PicoHex `<año>.<x>.<y>`: **x** aumenta cuando cambió la API pública, **y** cuando no. La decisión proviene de la baseline de API comprometida en `api/PicoBench.public.txt`, que siempre contiene la superficie del último release. Si la baseline falta, siémbrala una vez con `pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>`.
 
 ```bash
 # ver el delta de API y la próxima versión

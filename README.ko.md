@@ -128,6 +128,8 @@ var comparison = Benchmark.Compare(
 Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%) [{(comparison.Interval?.ToString() ?? "no interval")}] -> {comparison.Outcome}");
 ```
 
+`Benchmark.Compare(name, baselineAction, candidateAction)`는 각 레인을 한 번씩만 실행하지 **않습니다**. 두 레인을 10개 라운드에 걸쳐 교차 실행하고(매 라운드 어느 쪽이 먼저인지가 번갈아 바뀌므로 어느 쪽도 더 뜨거운 프로세스를 물려받지 않습니다) **라운드별 페어 비율의 중앙값**을 보고합니다. 이것이 수치에 대해 의미하는 바는 다음과 같습니다:
+
 - **`Speedup`** — 기준선 시간 ÷ 후보 시간이며, `> 1`이면 후보가 더 빠릅니다. 후보가 아무것도 측정하지 못한 라운드는 비율에 전혀 기여하지 않습니다. 사용 가능한 비율이 하나도 없는 경우 비교는 판정을 만들어내지 않고 `NaN`을 보고합니다(`ImprovementPercent`도 함께 `NaN`이 됩니다). 두 개의 독립적인 `BenchmarkResult`로 구성된 `ComparisonResult`는 두 평균의 비율을 보고합니다. 0/0 라운드가 바로 이 경우이며 `1.0`이 아니라 `NaN`입니다(모두 0인 두 독립 결과로 만든 비교는 기존처럼 `1.0`을 유지합니다).
 - **`Interval`** — 그 중앙값의 분포 비의존 95% 구간입니다(10개 페어 비율의 2번째/9번째 순서 통계량). `Interval.Contains(1.0)`은 동등성이 여전히 그럴듯하다는 뜻입니다. 두 개의 독립적인 결과로 구성된 비교에는 **구간이 없습니다**(`Interval`은 `null`) — 페어로 묶을 교차 라운드가 없으므로 산포에 대해 말할 수 있는 것이 없습니다.
 - **`Outcome`** — 판정입니다. `Faster` / `Slower`는 비율이 **5% 데드 밴드**를 벗어나고 *그리고* (구간이 존재할 때) 구간이 1을 배제할 것을 요구합니다. 그 안에 있으면 `Inconclusive`, 계산할 수 없는 비율(비유한 또는 비양수)은 `Unknown`이며, 사용 가능한 페어 라운드가 6개 미만인 비교도 마찬가지입니다(그 미만에서는 구간이 중앙값을 95% 신뢰도로 포함할 수 없습니다).
@@ -336,7 +338,7 @@ var config = new BenchmarkConfig
 var result = Benchmark.Run("Test", action, config);
 ```
 
-자동 보정이 활성화되면 PicoBench는 최소 샘플 시간 예산에 도달하거나 `MaxAutoIterationsPerSample`에 도달할 때까지 `IterationsPerSample`을 늘립니다. 이는 타이머 노이즈에 지배될 수 있는 초고속 작업에 특히 유용합니다. `ForceGcBeforeBenchmark = false`로 설정하면 수집 단계 전의 강제 전체 GC를 건너뜁니다. 많은 벤치마크와 매개변수 조합을 실행할 때 유용합니다.
+자동 보정이 활성화되면 PicoBench는 최소 샘플 시간 예산에 도달하거나 `MaxAutoIterationsPerSample`에 도달할 때까지 `IterationsPerSample`을 늘립니다. 이는 타이머 노이즈에 지배될 수 있는 초고속 작업에 특히 유용합니다. 자동 보정은 **옵트인**입니다(`AutoCalibrateIterations`의 기본값은 `false`이며 `Default` 프리셋은 설정된 반복 횟수를 건드리지 않습니다): PicoBench는 결과가 측정 가능해 보이도록 반복 횟수를 조용히 부풀리지 않습니다 — `CpuOnly` 모드에서 올려진 예산은 측정된 CPU 클럭 입도이며, 그보다 짧은 값은 0으로 읽히기 때문입니다. `ForceGcBeforeBenchmark = false`로 설정하면 수집 단계 전의 강제 전체 GC를 건너뜁니다. 많은 벤치마크와 매개변수 조합을 실행할 때 유용합니다.
 
 ---
 

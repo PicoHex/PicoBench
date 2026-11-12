@@ -2,6 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
+![CI](https://github.com/PicoHex/PicoBench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 一個輕量級的 .NET 基準測試庫，提供 **兩種互補的 API**：命令式 API 和基於屬性、源生成的 API，完全 **AOT 相容**。除了一個 BCL polyfill（`System.Threading.Tasks.Extensions`，用於在 netstandard2.0 補回 `ValueTask<T>`）以外沒有任何 NuGet 引用。
 
 ## 特性
@@ -338,7 +342,7 @@ var result = Benchmark.Run("Test", action, config);
 
 ## 輸出格式化器
 
-五個內置格式化器實現 `IFormatter`：
+四個內置格式化器實現 `IFormatter`，`SummaryFormatter` 則提供單獨的摘要輔助：
 
 ```csharp
 using PicoBench.Formatters;
@@ -578,7 +582,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-發佈遵循 PicoHex 版本規則 `<year>.<x>.<y>`：公開 API 變化時 **x** 加一，未變化時 **y** 加一。判定依據倉庫內的 API 基線 `api/PicoBench.public.txt`，它始終保存上一個發佈版本的公開表面。
+發佈遵循 PicoHex 版本規則 `<year>.<x>.<y>`：公開 API 變化時 **x** 加一，未變化時 **y** 加一。判定依據倉庫內的 API 基線 `api/PicoBench.public.txt`，它始終保存上一個發佈版本的公開表面。 若基線缺失，用 `pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>` 初始化一次。
 
 ```bash
 # 查看 API 差異與下一個版本

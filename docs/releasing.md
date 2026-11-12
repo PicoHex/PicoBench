@@ -100,6 +100,72 @@ absorbed by a baseline refresh at release time.
    re-pack has a different hash - compare the commit sha across builds, and
    compare the hash only against the file you actually ship.
 
+## Review the unpinned actions (quarterly)
+
+Every third-party action in `.github/workflows/` is pinned to a full commit SHA,
+except the ones listed in `.github/workflows/unpinned-actions.allowlist`. A pin is
+only as good as the SHA it names: `workflow_lint.py` proves the *form* (40 hex
+characters) and nothing about the *meaning*, so a tag that has moved - or a SHA
+that was pasted from the wrong endpoint - looks exactly like a correct one. The
+allowlist carries a review record per entry (period, last-reviewed date, resolve
+command, note) and the lint rejects an entry that is missing one, so a mutable
+tag cannot be parked there without a schedule attached (R6).
+
+Once a quarter, from a checkout with network and an authenticated `gh`:
+
+```bash
+# 1. what is on the list, when each entry is next due, and the exact command
+python3 scripts/tests/action_pin_review.py
+
+# 2. run the resolver and print the commit each ref points at TODAY
+python3 scripts/tests/action_pin_review.py --resolve
+
+# 3. gate: exit 1 if anything is overdue or has never been reviewed
+python3 scripts/tests/action_pin_review.py --require-reviewed
+```
+
+Step 2 prints, for `NuGet/login@v1`:
+
+```
+   ref             v1
+   last reviewed   2026-11-07
+   next due        2027-02-06
+   status          OK
+   resolve with    gh api repos/NuGet/login/commits/v1 --jq .sha || git ls-remote https://github.com/NuGet/login 'refs/tags/v1^{}' 'refs/tags/v1'
+   resolves to     8d196754b4036150537f80ac539e15c2f1028841
+```
+
+Do the same by hand if you prefer; the two commands are equivalent:
+
+```bash
+gh api repos/NuGet/login/commits/v1 --jq .sha
+# 8d196754b4036150537f80ac539e15c2f1028841
+git ls-remote https://github.com/NuGet/login 'refs/tags/v1^{}' 'refs/tags/v1'
+# 8d196754b4036150537f80ac539e15c2f1028841  refs/tags/v1^{}
+# ebc737b6fc418a6ca0073cf116ec8dc156d8b81e  refs/tags/v1
+```
+
+**Use the peeling form.** `gh api repos/<owner>/<repo>/git/ref/tags/<ref>` is the
+obvious endpoint and the wrong one: `v1` is an *annotated* tag, so its `object`
+is the tag object (`ebc737b6…`, type `tag`), not the commit a workflow pin runs.
+`commits/<ref>` - and the `^{}` line of `git ls-remote` - peel it to the commit
+(`8d196754…`). Pinning the tag object's SHA would produce a workflow that cannot
+resolve.
+
+The review is a *record*, not an automatic fix. Paste the SHA and today's date
+back into the allowlist entry, then decide separately whether to re-pin: adopting
+a new SHA changes what runs in a job that can mint a nuget.org API key, so it
+belongs in a release-day pull request with a green `ci.yml` run behind it, not in
+a review commit.
+
+### What was and was not verified
+
+The review above was run once, on 2026-11-07, on the authoring machine, against
+the live registry: the commands are real and the SHA is a real observation. The
+**workflow was not run on GitHub** - nothing here proves the runner accepts
+`NuGet/login@<sha>`, that the OIDC exchange still succeeds, or that any release
+job passes. The pin itself was deliberately left at `@v1` for that reason.
+
 ## Compatibility the release is expected to keep
 
 `tests/compat/` holds the smoke projects that stand in for consumers; each one

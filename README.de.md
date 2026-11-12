@@ -2,6 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
+![CI](https://github.com/PicoHex/PicoBench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Eine leichte Benchmarking-Bibliothek für .NET mit **zwei komplementären APIs**: einer imperativen API und einer attributbasierten, quellgenerierten API, die vollständig **AOT-kompatibel** ist. Die einzige NuGet-Referenz ist ein BCL-Polyfill (`System.Threading.Tasks.Extensions`) für `ValueTask<T>` auf netstandard2.0.
 
 ## Funktionen
@@ -338,7 +342,7 @@ Wenn die Auto-Kalibrierung aktiviert ist, erhöht PicoBench `IterationsPerSample
 
 ## Ausgabeformatierer
 
-Fünf eingebaute Formatierer implementieren `IFormatter`:
+Vier eingebaute Formatierer implementieren `IFormatter`, und `SummaryFormatter` stellt einen separaten Helfer für Zusammenfassungen bereit:
 
 ```csharp
 using PicoBench.Formatters;
@@ -578,7 +582,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-Releases folgen der PicoHex-Versionsregel `<Jahr>.<x>.<y>`: **x** erhöht sich, wenn sich die öffentliche API geändert hat, **y**, wenn nicht. Die Entscheidung stammt aus der committeten API-Baseline `api/PicoBench.public.txt`, die immer die Oberfläche des letzten Releases enthält.
+Releases folgen der PicoHex-Versionsregel `<Jahr>.<x>.<y>`: **x** erhöht sich, wenn sich die öffentliche API geändert hat, **y**, wenn nicht. Die Entscheidung stammt aus der committeten API-Baseline `api/PicoBench.public.txt`, die immer die Oberfläche des letzten Releases enthält. Wenn die Baseline fehlt, legen Sie sie einmalig mit `pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>` an.
 
 ```bash
 # API-Delta und nächste Version anzeigen

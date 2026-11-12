@@ -2,6 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
+![CI](https://github.com/PicoHex/PicoBench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 軽量な.NETベンチマークライブラリで、**2つの補完的API**を提供します：命令型APIと、属性ベースでソース生成される、完全に**AOT互換**のAPIです。NuGet 参照は netstandard2.0 で `ValueTask<T>` を補う BCL polyfill（`System.Threading.Tasks.Extensions`）が 1 つだけです。
 
 ## 特徴
@@ -123,6 +127,8 @@ var comparison = Benchmark.Compare(
 
 Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%) [{(comparison.Interval?.ToString() ?? "no interval")}] -> {comparison.Outcome}");
 ```
+
+`Benchmark.Compare(name, baselineAction, candidateAction)` は、各レーンを1回だけ実行する**のではありません**。2つのレーンを10ラウンドにわたって交互に実行し（どちらを先に実行するかは毎ラウンド入れ替わるため、どちらの側も暖まったプロセスを引き継ぎません）、**ラウンドごとのペア比の中央値**を報告します。これが数値にとって何を意味するか：
 
 - **`Speedup`** — ベースライン時間 ÷ 候補時間で、`> 1` なら候補が高速です。候補が何も計測できなかったラウンドは比率にまったく寄与しません。使用可能な比率が1つも得られない場合、比較は判定を捏造せず `NaN` を報告します（`ImprovementPercent` も同時に `NaN` になります）。2つの独立した `BenchmarkResult` から構築した `ComparisonResult` は、2つの平均値の比率を報告します。 0/0 のラウンドはまさにこのケースで、`1.0` ではなく `NaN` になります（全ゼロの2つの独立した結果から構築した比較では従来どおり `1.0` です）。
 - **`Interval`** — その中央値の分布非依存な95%区間（10個のペア比の2番目/9番目の順序統計量）です。`Interval.Contains(1.0)` は同等性がまだ妥当であることを意味します。2つの独立した結果から構築した比較には**区間がありません**（`Interval` は `null`） — ペアにできる交互ラウンドが存在しないため、ばらつきについて何も言えません。
@@ -336,7 +342,7 @@ var result = Benchmark.Run("Test", action, config);
 
 ## 出力フォーマッター
 
-5つの組み込みフォーマッターが`IFormatter`を実装：
+4つの組み込みフォーマッターが`IFormatter`を実装し、`SummaryFormatter`は別途要約ヘルパーを提供します：
 
 ```csharp
 using PicoBench.Formatters;
@@ -576,7 +582,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-リリースは PicoHex のバージョンルール `<year>.<x>.<y>` に従います。公開 API が変わった場合は **x** を、変わらない場合は **y** を進めます。判定は、直前のリリースの表面を保持する `api/PicoBench.public.txt` の API ベースラインに基づきます。
+リリースは PicoHex のバージョンルール `<year>.<x>.<y>` に従います。公開 API が変わった場合は **x** を、変わらない場合は **y** を進めます。判定は、直前のリリースの表面を保持する `api/PicoBench.public.txt` の API ベースラインに基づきます。 ベースラインが存在しない場合は、`pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>` で一度だけシードします。
 
 ```bash
 # API 差分と次バージョンを確認

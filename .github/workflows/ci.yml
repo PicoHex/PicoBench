@@ -519,6 +519,36 @@ jobs:
         shell: bash
         run: python3 scripts/tests/workflow_lint.py
 
+      # shellcheck is not vendored, so the lint script reports an explicit SKIP
+      # when it is absent (a local run without network). This step installs it
+      # from the runner's package cache and SHELL_LINT_REQUIRE_SHELLCHECK=1 makes
+      # its absence a failure, so CI can never quietly lose the check (R5).
+      - name: Install shellcheck
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint the shell scripts (bash -n, continuation typo, shellcheck)
+        shell: bash
+        env:
+          SHELL_LINT_REQUIRE_SHELLCHECK: '1'
+        run: bash scripts/tests/shell-lint.test.sh
+
+      # Planning mode only - the live `gh api` review needs network and a token
+      # and is a scheduled human task (docs/releasing.md). What this step proves
+      # is that the allowlist record still parses: a mutable tag cannot sit here
+      # without a review period and a resolve command, so the quarterly review
+      # cannot silently stop being due (R6).
+      - name: Check the unpinned-action review record
+        shell: bash
+        run: python3 scripts/tests/action_pin_review.py
+
+      # The ten READMEs are hand-edited and nothing compiles them. This fails on
+      # structural drift (a lost section, table, code block, badge or nav bar)
+      # and prints the identifier-level divergences for a native reader (R7).
+      - name: Check the translated READMEs against the English one
+        shell: bash
+        run: python3 scripts/tests/readme_translation_probe.py
+
       - name: Release tag gate
         shell: bash
         run: bash scripts/tests/release-tag-validation.test.sh

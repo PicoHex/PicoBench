@@ -2,6 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Español](README.es.md) | [Português](README.pt.md) | [繁體中文](README.zh-tw.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)
 
+![CI](https://github.com/PicoHex/PicoBench/actions/workflows/ci.yml/badge.svg)
+[![NuGet](https://img.shields.io/nuget/v/PicoBench.svg)](https://www.nuget.org/packages/PicoBench)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Легковесная библиотека для бенчмаркинга в .NET с **двумя взаимодополняющими API**: императивным API и API на основе атрибутов, генерируемым из исходного кода, полностью **совместимым с AOT**. Единственная ссылка NuGet — BCL polyfill (`System.Threading.Tasks.Extensions`) для `ValueTask<T>` на netstandard2.0.
 
 ## Особенности
@@ -123,6 +127,8 @@ var comparison = Benchmark.Compare(
 
 Console.WriteLine($"Speedup: {comparison.Speedup:F2}x ({comparison.ImprovementPercent:F1}%) [{(comparison.Interval?.ToString() ?? "no interval")}] -> {comparison.Outcome}");
 ```
+
+`Benchmark.Compare(name, baselineAction, candidateAction)` **не** прогоняет каждую полосу по одному разу. Он чередует две полосы на протяжении 10 раундов (какая полоса идёт первой, меняется каждый раунд, поэтому ни одна сторона не наследует более прогретый процесс) и сообщает **медиану парных отношений по раундам**. Что это значит для чисел:
 
 - **`Speedup`** - время базового варианта ÷ время кандидата; `> 1` означает, что кандидат быстрее. Раунд, в котором кандидат ничего не измерил, не даёт отношения вовсе; когда ни один раунд не даёт пригодного отношения, сравнение сообщает `NaN` (и `ImprovementPercent` вместе с ним — `NaN`) вместо выдуманного вердикта. `ComparisonResult`, построенный из двух независимых `BenchmarkResult`, всё равно сообщает отношение двух средних. Раунд 0/0 — это ровно такой случай: `NaN`, а не `1.0` (сравнение, построенное из двух независимых нулевых результатов, сохраняет прежнее `1.0`).
 - **`Interval`** - свободный от распределения 95%-й интервал этой медианы (2-я/9-я порядковая статистика из 10 парных отношений). `Interval.Contains(1.0)` означает, что паритет всё ещё правдоподобен. Сравнение, построенное из двух независимых результатов, **не имеет интервала** (`Interval` равен `null`) — парных чередующихся раундов нет, поэтому о разбросе сказать нечего.
@@ -336,7 +342,7 @@ var result = Benchmark.Run("Test", action, config);
 
 ## Форматтеры вывода
 
-Пять встроенных форматтеров реализуют `IFormatter`:
+Четыре встроенных форматтера реализуют `IFormatter`, а `SummaryFormatter` предоставляет отдельный помощник для сводок:
 
 ```csharp
 using PicoBench.Formatters;
@@ -576,7 +582,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-Релизы следуют правилу PicoHex `<year>.<x>.<y>`: **x** увеличивается при изменении публичного API, **y** — когда API не менялся. Решение основано на коммитнутом базисе API `api/PicoBench.public.txt`, который всегда содержит поверхность последнего релиза.
+Релизы следуют правилу PicoHex `<year>.<x>.<y>`: **x** увеличивается при изменении публичного API, **y** — когда API не менялся. Решение основано на коммитнутом базисе API `api/PicoBench.public.txt`, который всегда содержит поверхность последнего релиза. Если базис отсутствует, создайте его один раз командой `pwsh ./scripts/release.ps1 -Bootstrap -FromTag <last-tag>`.
 
 ```bash
 # показать дельту API и следующую версию
