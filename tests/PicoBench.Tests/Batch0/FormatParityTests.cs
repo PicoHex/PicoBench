@@ -517,6 +517,59 @@ public class FormatParityTests
         await Assert.That(console).Contains("monotonic clock proxy");
     }
 
+    /// <summary>
+    /// R-T4 · B5 — the three display formats print <b>one</b> sentence, not three that
+    /// happen to look alike. It used to be three <c>internal const</c> fields with three
+    /// different wordings, each documented as "the one sentence the three display
+    /// formats print", and the tests only looked for a stock phrase
+    /// (<c>monotonic clock proxy</c>) that all three shared — so the tail of the sentence
+    /// could drift in any format unnoticed.
+    /// <para>
+    /// Each format keeps its own prefix (Console <c>~ CPU Cycles:</c>, Markdown a bold
+    /// lead-in, HTML a <c>note</c> paragraph), so the assertion is on the <b>end</b> of
+    /// the note line: every one of the six tables must end with the same
+    /// <see cref="ApproximateCycles.Sentence"/>.
+    /// </para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch0")]
+    [Property("Batch0", "T4/one sentence")]
+    public async Task TheCycleNote_IsOneSentence_InAllThreeDisplayFormats()
+    {
+        var approximate = CycleStatistics(approximate: true);
+        var suite = Suite(
+            BenchmarkResultFactory.Create("proxy-counter", statistics: approximate),
+            ComparisonOf(approximate, "proxy-counter-pair")
+        );
+
+        var console = new ConsoleFormatter().Format(suite);
+        var markdown = new MarkdownFormatter().Format(suite);
+        var html = new HtmlFormatter().Format(suite);
+
+        var notes = new (string Name, string Text)[]
+        {
+            ("console results", ConsoleSectionTable(console, "Results").Notes),
+            ("console comparisons", ConsoleSectionTable(console, "Comparisons").Notes),
+            ("markdown results", MarkdownSectionTable(markdown, "Results").Notes),
+            ("markdown comparisons", MarkdownSectionTable(markdown, "Comparisons").Notes),
+            ("html results", HtmlSectionTable(html, "All Results").Notes),
+            ("html comparisons", HtmlSectionTable(html, "Detailed Comparisons").Notes),
+        };
+
+        foreach (var (name, text) in notes)
+        {
+            var lines = Lines(text).Where(line => line.Contains("monotonic clock proxy")).ToList();
+            await Assert.That(lines.Count).IsEqualTo(1).Because($"{name}: exactly one `~` sentence");
+            await Assert
+                .That(lines[0].EndsWith(PicoBench.Formatters.ApproximateCycles.Sentence, StringComparison.Ordinal))
+                .IsTrue()
+                .Because(
+                    $"{name}: the sentence after the format's own prefix must be the shared one, "
+                        + "not a per-format rewording"
+                );
+        }
+    }
+
     // ─── Per-state fixtures (R-T4 · B1) ────────────────────────────
 
     /// <summary>

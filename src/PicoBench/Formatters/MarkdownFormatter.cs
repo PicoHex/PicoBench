@@ -363,18 +363,12 @@ public sealed class MarkdownFormatter(FormatterOptions? options = null) : Format
         if (Options.IncludeCpuCycles && list.Exists(static s => s.CpuCyclesAreApproximate))
         {
             sb.AppendLine();
-            sb.AppendLine("> **~ CPU Cycle** — " + ApproximateCyclesNote);
+            sb.AppendLine(ApproximateCycles.MarkdownPrefix + ApproximateCycles.Sentence);
         }
     }
 
-    /// <summary>
-    /// The one sentence the three display formats print under a table whose cycle
-    /// cells carry a <c>~</c> (T4 · macOS cycle semantics): the number is kept, the
-    /// marker is the same in every format, and the header names the column. CSV
-    /// states the same contract in its <c># Schema:</c> line.
-    /// </summary>
-    internal const string ApproximateCyclesNote =
-        "the counter is process-wide (an asynchronous run can resume on another thread) or a monotonic clock proxy (macOS `mach_absolute_time`), not a thread-scoped cycle count; the value is kept because it is a valid duration on macOS, not because it is a cycle count.";
+    // The `~` sentence is shared with the other two display formats
+    // (<see cref="ApproximateCycles"/>); this format adds only its own bold lead-in (R-T4 · B5).
 
     /// <summary>Every per-operation figure a statistics object contributes.</summary>
     private static IEnumerable<double> PerOpValues(Statistics statistics)

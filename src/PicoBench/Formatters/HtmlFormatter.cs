@@ -518,17 +518,11 @@ footer {
 
         // R-T4 · B7: a table with no cycle column prints no `~`, so it explains none.
         if (Options.IncludeCpuCycles && list.Exists(static s => s.CpuCyclesAreApproximate))
-            sb.AppendLine("<p class=\"note\">" + ApproximateCyclesNote + "</p>");
+            sb.AppendLine(ApproximateCycles.HtmlPrefix + ApproximateCycles.Sentence + "</p>");
     }
 
-    /// <summary>
-    /// The one sentence the three display formats print under a table whose cycle
-    /// cells carry a <c>~</c> (T4 · macOS cycle semantics): the number is kept, the
-    /// marker is the same in every format, and the header names the column. CSV
-    /// states the same contract in its <c># Schema:</c> line.
-    /// </summary>
-    internal const string ApproximateCyclesNote =
-        "~ CPU Cycles: the counter is process-wide (an asynchronous run can resume on another thread) or a monotonic clock proxy (macOS mach_absolute_time), not a thread-scoped cycle count; the value is kept as a duration.";
+    // The `~` sentence is shared with the other two display formats
+    // (<see cref="ApproximateCycles"/>); this format adds only its own <p> wrapper (R-T4 · B5).
 
     #endregion
 
