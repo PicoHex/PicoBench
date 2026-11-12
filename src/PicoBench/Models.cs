@@ -169,12 +169,20 @@ public sealed class Statistics
     public bool CpuCyclesAreApproximate { get; init; }
 
     /// <summary>
-    /// Fixed per-operation overhead of the measurement harness itself (delegate
-    /// dispatch, loop bookkeeping, clock and counter reads) that was measured
-    /// with the same iteration count and deducted from the per-operation values.
-    /// Both the synchronous and the asynchronous paths measure and deduct it; 0
+    /// Fixed cost of the measurement harness itself (delegate dispatch, loop
+    /// bookkeeping, clock and counter reads) that was measured with the same
+    /// iteration count and deducted from the per-operation values.
+    /// <para>
+    /// This is a <b>per-sample total</b>, not a per-operation figure: it is what
+    /// one sample costs before any of it is attributed to a single iteration, and
+    /// it is subtracted from a sample's elapsed time before that residual is
+    /// divided by <see cref="BenchmarkResult.IterationsPerSample"/>. Divide it by
+    /// that iteration count to read it as ns/op — a 47.8 ns/op floor on a
+    /// 1 000-iteration run is published here as <c>47 800</c>. Both the synchronous
+    /// and the asynchronous paths measure, publish and deduct it in this unit; 0
     /// only when the caller supplied no probe to measure it with, i.e. when
     /// nothing was deducted and the per-operation values carry the floor.
+    /// </para>
     /// </summary>
     public double OverheadNs { get; init; }
 
