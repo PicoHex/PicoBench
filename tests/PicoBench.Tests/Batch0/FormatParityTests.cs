@@ -605,6 +605,102 @@ public class FormatParityTests
         }
     }
 
+    /// <summary>
+    /// The GC pair — <c>GC</c> (generation counts) and <c>GC B</c> (bytes allocated) —
+    /// is a column pair in <b>both</b> tables of all three display formats, and the two
+    /// tables read the same <see cref="GcInfo"/> the same way.
+    /// <para>
+    /// Why this is a test and not just a merge note: the <c>GC B</c> column arrived on
+    /// <c>main</c> (T3) at the very comparison cell this branch rewrote, so the merge
+    /// had to choose between one column and two. It kept both — the byte column has a
+    /// CSV schema and a README contract behind it, so dropping it to make a conflict go
+    /// away would be a silent contract break. This test is the guard that the column
+    /// survives a future merge too: a table without <c>GC B</c> is an
+    /// <see cref="InvalidOperationException"/> out of <see cref="ParsedTable.IndexOf"/>,
+    /// never a skipped loop.
+    /// </para>
+    /// <para>
+    /// The pair's tri-state is asserted in both tables, as the shared helpers define it:
+    /// <c>N/A</c> when the counter was not collected (<c>null</c>, never a fabricated
+    /// <c>0</c>), <c>~</c> when the reading is approximate (async / process-wide), and
+    /// the plain figure otherwise. A marker that held in one table and not the other
+    /// would be exactly the drift this branch exists to stop.
+    /// </para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch0")]
+    [Property("Batch0", "T4/both gc columns")]
+    public async Task BothGcColumns_AreInBothTables_AndReadTheSameGcInfo()
+    {
+        var states = new (string Name, GcInfo? Gc, string Counts, string Bytes)[]
+        {
+            (
+                "approximate",
+                new GcInfo
+                {
+                    Gen0 = 10,
+                    Gen1 = 2,
+                    Gen2 = 0,
+                    IsApproximate = true,
+                    AllocatedBytes = 1536,
+                    AllocatedBytesAreApproximate = true,
+                },
+                "~10/2/0",
+                "~1.5 KB"
+            ),
+            ("exact", new GcInfo { Gen0 = 10, Gen1 = 2, Gen2 = 0, AllocatedBytes = 1536 }, "10/2/0", "1.5 KB"),
+            ("not collected", null, "N/A", "N/A"),
+        };
+
+        foreach (var (state, gc, counts, bytes) in states)
+        {
+            var statistics = GcStatistics(gc);
+            var suite = Suite(
+                BenchmarkResultFactory.Create("gc-" + state.Replace(' ', '-'), statistics: statistics),
+                ComparisonOf(statistics, "gc-" + state.Replace(' ', '-'))
+            );
+
+            var console = new ConsoleFormatter().Format(suite);
+            var markdown = new MarkdownFormatter().Format(suite);
+            var html = new HtmlFormatter().Format(suite);
+
+            // The counter column is named `GC (0/1/2)` where the table has room for the
+            // generation legend and `GC` where it does not — the two spellings the four
+            // formats already use. The byte column is `GC B` in all six tables.
+            var tables = new (string Name, ParsedTable Table, string CounterHeader)[]
+            {
+                ("console results", ConsoleSectionTable(console, "Results").Table, "GC (0/1/2)"),
+                ("console comparisons", ConsoleSectionTable(console, "Comparisons").Table, "GC"),
+                ("markdown results", MarkdownSectionTable(markdown, "Results").Table, "GC (0/1/2)"),
+                ("markdown comparisons", MarkdownSectionTable(markdown, "Comparisons").Table, "GC"),
+                ("html results", HtmlSectionTable(html, "All Results").Table, "GC (0/1/2)"),
+                ("html comparisons", HtmlSectionTable(html, "Detailed Comparisons").Table, "GC"),
+            };
+
+            foreach (var (name, table, counterHeader) in tables)
+            {
+                var where = $"{name} ({state})";
+                var counterIndex = table.IndexOf(counterHeader);
+                var bytesIndex = table.IndexOf("GC B");
+
+                await Assert
+                    .That(bytesIndex)
+                    .IsEqualTo(counterIndex + 1)
+                    .Because($"{where}: `GC B` must sit next to the counter column, not somewhere else in the row");
+
+                var counterCells = table.ColumnCells(counterHeader).ToList();
+                var byteCells = table.ColumnCells("GC B").ToList();
+                await Assert.That(counterCells.Count).IsEqualTo(table.Rows.Count).Because($"{where}: one counter cell per row");
+                await Assert.That(byteCells.Count).IsEqualTo(table.Rows.Count).Because($"{where}: one byte cell per row");
+
+                foreach (var cell in counterCells)
+                    await Assert.That(cell).IsEqualTo(counts).Because($"{where}: the counter cell must read `{counts}`");
+                foreach (var cell in byteCells)
+                    await Assert.That(cell).IsEqualTo(bytes).Because($"{where}: the byte cell must read `{bytes}`");
+            }
+        }
+    }
+
     // ─── Per-state fixtures (R-T4 · B1) ────────────────────────────
 
     /// <summary>
@@ -905,6 +1001,28 @@ public class FormatParityTests
             CpuCyclesPerOp = 42.0,
             CpuCyclesAreApproximate = approximate,
             GcInfo = GcInfoFactory.Create(),
+        };
+
+    /// <summary>
+    /// A resolved workload carrying one <see cref="GcInfo"/> — or none at all, the
+    /// "counter not collected" state, which is not the same as "collected nothing".
+    /// </summary>
+    private static Statistics GcStatistics(GcInfo? gc) =>
+        new()
+        {
+            Avg = 100.0,
+            P50 = 100.0,
+            P90 = 100.0,
+            P95 = 100.0,
+            P99 = 100.0,
+            Min = 100.0,
+            Max = 100.0,
+            StdDev = 1.0,
+            StandardError = 0.5,
+            RelativeStdDevPercent = 1.0,
+            CpuCyclesPerOp = 42.0,
+            CpuCyclesAreApproximate = false,
+            GcInfo = gc,
         };
 
     /// <summary>
