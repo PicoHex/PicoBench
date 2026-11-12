@@ -340,7 +340,7 @@ var result = Benchmark.Run("Test", action, config);
 
 ## 出力フォーマッター
 
-5つの組み込みフォーマッターが`IFormatter`を実装：
+4つの組み込みフォーマッターが`IFormatter`を実装し、`SummaryFormatter`は別途要約ヘルパーを提供します：
 
 ```csharp
 using PicoBench.Formatters;

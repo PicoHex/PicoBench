@@ -340,7 +340,7 @@ var result = Benchmark.Run("Test", action, config);
 
 ## Форматтеры вывода
 
-Пять встроенных форматтеров реализуют `IFormatter`:
+Четыре встроенных форматтера реализуют `IFormatter`, а `SummaryFormatter` предоставляет отдельный помощник для сводок:
 
 ```csharp
 using PicoBench.Formatters;

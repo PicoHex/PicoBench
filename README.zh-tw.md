@@ -342,7 +342,7 @@ var result = Benchmark.Run("Test", action, config);
 
 ## 輸出格式化器
 
-五個內置格式化器實現 `IFormatter`：
+四個內置格式化器實現 `IFormatter`，`SummaryFormatter` 則提供單獨的摘要輔助：
 
 ```csharp
 using PicoBench.Formatters;

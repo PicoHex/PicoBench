@@ -342,7 +342,7 @@ Lorsque l'auto-calibrage est activé, PicoBench augmente `IterationsPerSample` j
 
 ## Formateurs de Sortie
 
-Cinq formateurs intégrés implémentent `IFormatter` :
+Quatre formateurs intégrés implémentent `IFormatter`, et `SummaryFormatter` fournit un assistant de résumé distinct :
 
 ```csharp
 using PicoBench.Formatters;
