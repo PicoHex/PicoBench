@@ -1,0 +1,32 @@
+<Project>
+  <!-- ═══════════════════════════════════════════════════════
+       PicoBench repo-wide build properties
+       (src/ has its own Directory.Build.props, which imports this one)
+       ═══════════════════════════════════════════════════════ -->
+
+  <PropertyGroup>
+    <!--
+      Lock files. A restore records what it actually resolved in a
+      packages.lock.json next to each project, and the main CI restore steps run
+      with RestoreLockedMode=true (.github/workflows/ci.yml), so a dependency can
+      only move when a lock file moves. A lock file that nobody refreshes would
+      freeze the graph instead, which is why .github/workflows/deps-refresh.yml
+      re-evaluates it weekly and turns any delta into a PR.
+
+      Not every project commits a lock file, and that is deliberate:
+
+        * tests/compat/ConsumerSdk8 and tests/compat/ConsumerNetStandard20
+          install a freshly packed PicoBench at a per-run CI version
+          (0.0.0-ci.<run_number>) from a local feed, so their graph is a
+          property of the run, not of the repository;
+        * the harness fixtures (tests/aot-negative,
+          tests/compat/PicoBench.Net4xSmoke) are restored by CI steps that
+          publish for a specific RID and deliberately do NOT run in locked mode,
+          so their lock would be rewritten on every run.
+
+      Both are restored without RestoreLockedMode, so a missing lock file there
+      is created freely and can never fail a build.
+    -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+</Project>

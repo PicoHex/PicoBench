@@ -58,10 +58,14 @@ jobs:
           LOGICAL_TARGET: ${{ matrix.logical-target }}
         run: echo testing $LOGICAL_TARGET
 
+      # Locked mode: packages.lock.json is the source of truth here, so a
+      # dependency can only move through a committed lock update
+      # (.github/workflows/deps-refresh.yml). Without it this restore would
+      # silently re-resolve the graph and the lock files would be documentation.
       - name: Restore dependencies
         run: |
           mkdir -p ./artifacts/nupkg
-          dotnet restore PicoBench.slnx -p:UseProjectReferences=true
+          dotnet restore PicoBench.slnx -p:UseProjectReferences=true -p:RestoreLockedMode=true
 
       - name: Build
         run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:UseProjectReferences=true
@@ -470,11 +474,15 @@ jobs:
           LOGICAL_TARGET: ${{ matrix.logical-target }}
         run: echo "running every sample on $LOGICAL_TARGET"
 
+      # Locked mode: packages.lock.json is the source of truth here, so a
+      # dependency can only move through a committed lock update
+      # (.github/workflows/deps-refresh.yml). Without it this restore would
+      # silently re-resolve the graph and the lock files would be documentation.
       - name: Restore dependencies
         shell: bash
         run: |
           mkdir -p ./artifacts/nupkg
-          dotnet restore PicoBench.slnx -p:UseProjectReferences=true
+          dotnet restore PicoBench.slnx -p:UseProjectReferences=true -p:RestoreLockedMode=true
 
       - name: Build
         run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:UseProjectReferences=true
