@@ -4,7 +4,7 @@
     ".NETStandard,Version=v2.0": {
       "Microsoft.SourceLink.GitHub": {
         "type": "Direct",
-        "requested": "[11.0.100, )",
+        "requested": "[11.0.*, )",
         "resolved": "11.0.100",
         "contentHash": "aBHHGAxLog2OC1nbXyCFyfy1lG9qwYO/COBPc/5cJEqbXpiznmz+wxLU+TVrI+2LzQYFSKpn7pk+RHtx9eHe9w==",
         "dependencies": {
@@ -24,7 +24,7 @@
       },
       "System.Threading.Tasks.Extensions": {
         "type": "Direct",
-        "requested": "[4.6.3, )",
+        "requested": "[4.6.*, )",
         "resolved": "4.6.3",
         "contentHash": "7sCiwilJLYbTZELaKnc7RecBBXWXA+xMLQWZKWawBxYjp6DBlSE3v9/UcvKBvr1vv2tTOhipiogM8rRmxlhrVA==",
         "dependencies": {

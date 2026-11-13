@@ -1,16 +1,57 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <!--
+      Dependency policy: float the fix segment, and only the fix segment.
+
+      A version here is `<major>.<minor>.*`, which tells NuGet "any patch in this
+      band". The band is the unit of the promise: a maintainer pledges no
+      breaking change *within* it, so a patch may move on its own, while a minor
+      or major move is a decision that has to be made in this file.
+
+      This has to be enabled explicitly: central package management rejects a
+      floating version in a PackageVersion item until this switch is true
+      (NU1011). The locks are the record of what each band actually resolved to,
+      and deps-refresh.yml is what turns a new patch release into a reviewable
+      PR instead of an invisible slide.
+    -->
+    <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
+
+    <!--
+      Transitive pinning: when a package listed below also arrives transitively,
+      the central version wins instead of being shadowed by whatever the
+      intermediate package asked for. Without it a version here is a suggestion
+      for direct references only, so the graph can run a *different* version of
+      the same package than the one written down - which is exactly the drift the
+      locks are supposed to make visible (and it changes the lock's own shape:
+      the winner is recorded as CentralTransitive).
+    -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
+
   <ItemGroup>
-    <!-- Roslyn: follow the latest stable, like every other package here. There
-         is no version ceiling any more - the repository builds on the .NET 10
-         SDK, so the generator targets the compiler that ships with it. If a
-         future bump breaks the generator, the fix is in our code, not a pin. -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="11.0.100" />
-    <PackageVersion Include="System.IO.Abstractions" Version="23.0.0" />
-    <PackageVersion Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
-    <PackageVersion Include="TUnit" Version="1.83.8" />
+    <!-- Roslyn. Floating the fix segment means "any 5.9.x", not "any 5.x": the
+         repository builds on the .NET 10 SDK and the generator targets the
+         compiler that ships with it, so a minor bump is a deliberate edit here
+         rather than something a restore can do on its own. There is no ceiling
+         at 4.8 any more - if a future bump breaks the generator, the fix is in
+         our code, not a pin. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.*" />
+
+    <!-- Build only (SourceLink), not shipped to consumers. -->
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="11.0.*" />
+
+    <!-- Third party (Testably). Same band rule as the official packages: the
+         promise is per maintainer, not per "is this a Microsoft package", so the
+         fix segment floats here too. -->
+    <PackageVersion Include="System.IO.Abstractions" Version="23.0.*" />
+
+    <!-- ValueTask support for netstandard2.0; also arrives transitively through
+         Roslyn, which is what CentralPackageTransitivePinningEnabled settles. -->
+    <PackageVersion Include="System.Threading.Tasks.Extensions" Version="4.6.*" />
+
+    <!-- Third party test framework. -->
+    <PackageVersion Include="TUnit" Version="1.83.*" />
   </ItemGroup>
 </Project>

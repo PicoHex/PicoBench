@@ -4,7 +4,7 @@
     ".NETStandard,Version=v2.0": {
       "Microsoft.CodeAnalysis.CSharp": {
         "type": "Direct",
-        "requested": "[5.9.0, )",
+        "requested": "[5.9.*, )",
         "resolved": "5.9.0",
         "contentHash": "7JGDA0UT1+h7k9ZcA3rF4eFC8+QPq1xyYaXxag4p8r/zzPurEJxvdi7aM+MRL/SfP7XADXpWF/pl/eUYXOq/ww==",
         "dependencies": {
@@ -108,7 +108,7 @@
       },
       "System.Threading.Tasks.Extensions": {
         "type": "CentralTransitive",
-        "requested": "[4.6.3, )",
+        "requested": "[4.6.*, )",
         "resolved": "4.6.3",
         "contentHash": "7sCiwilJLYbTZELaKnc7RecBBXWXA+xMLQWZKWawBxYjp6DBlSE3v9/UcvKBvr1vv2tTOhipiogM8rRmxlhrVA==",
         "dependencies": {

@@ -29,4 +29,26 @@
     -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      Never infer a RuntimeIdentifier. A RID that is picked for us is a RID that
+      ends up in a lock file that is shared by every machine.
+
+      PublishAot needs a runtime, so publish defaults this switch to true and
+      fills in the *host* RID when the command line does not name one. The lock
+      file then records a runtime section that is only true on the machine that
+      produced it (win-x64 on a developer box, linux-x64 on a runner), and the
+      next locked restore anywhere else fails with NU1004: the lock file is not
+      up to date with the project's dependencies. That is a red build which says
+      nothing about the code.
+
+      The RID belongs on the command line, where a workflow that genuinely
+      publishes for a specific platform names it (ci.yml and the AOT probe both
+      pass the runtime explicitly). Nothing is inferred, so nothing leaks into
+      the locks.
+    -->
+    <UseDefaultPublishRuntimeIdentifier>false</UseDefaultPublishRuntimeIdentifier>
+  </PropertyGroup>
 </Project>
+
