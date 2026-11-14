@@ -9,8 +9,8 @@
 # Every package in this repository is currently pinned exactly (see
 # Directory.Packages.props), so most weeks this job finds nothing and says so.
 # The mechanism is here anyway: the moment one version becomes a range
-# (`2026.<x>.*` for a one-party package), this is what turns its weekly
-# re-resolution into a reviewable PR instead of an invisible drift or a freeze.
+# (`2026.<x>.*` for a one-party package), this is what turns its re-resolution
+# into a reviewable PR instead of an invisible drift or a freeze.
 #
 # Deliberately does NOT build. The PR it opens runs the normal `ci` matrix, and
 # a refresh that breaks the build must fail there, visibly — not be swept into a
@@ -19,10 +19,6 @@
 name: deps-refresh
 
 on:
-  schedule:
-    # Mondays, 04:17 UTC. Off the hour on purpose: :00 is the cron stampede, and
-    # the exact minute carries no meaning.
-    - cron: "17 4 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -124,7 +120,7 @@ jobs:
             '' \
             'Every restore in `ci.yml` runs in locked mode, so the committed locks are exactly the graph a build sees. This PR is the only path by which a dependency moves; the diff is lock files and nothing else.' \
             '' \
-            'The build is the judge: this PR runs the normal `ci` matrix. Close it without merging to keep the currently pinned versions until the next weekly run.' \
+            'The build is the judge: this PR runs the normal `ci` matrix. Close it without merging to keep the currently pinned versions until the next pre-release refresh.' \
             '' \
             'Note: a PR opened with `GITHUB_TOKEN` does not trigger CI (GitHub suppresses runs it authored itself). The locked-mode restore runs on the push to `main` after merge, which is where a bad lock shows up - so merge only what you have read.')
 
