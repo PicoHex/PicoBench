@@ -196,7 +196,6 @@ REQUIRED_JOBS = {
         "aot-negative-probe.test.sh",
     ],
     "net4x-smoke": ["PicoBench.Net4xSmoke", "net472", "net48"],
-    "consumer-sdk8": ["ConsumerSdk8", "8.0.x", "Benchmarks: 2"],
     "consumer-netstandard20": ["ConsumerNetStandard20", "--source"],
     "samples": ["AttributeBased", "StringVsStringBuilder", "AsyncBenchmarks"],
     "release-scripting": [
