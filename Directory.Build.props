@@ -15,7 +15,7 @@
 
       Not every project commits a lock file, and that is deliberate:
 
-        * tests/compat/ConsumerSdk8 and tests/compat/ConsumerNetStandard20
+        * tests/compat/ConsumerNetStandard20
           install a freshly packed PicoBench at a per-run CI version
           (0.0.0-ci.<run_number>) from a local feed, so their graph is a
           property of the run, not of the repository;
