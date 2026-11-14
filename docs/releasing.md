@@ -176,7 +176,6 @@ is built by a CI job:
 | `api-guard` | no public member disappeared (or the break is explicit) |
 | `aot-validation` | the library AOT-publishes with zero trim/AOT warnings **and the artifact runs** |
 | `net4x-smoke` | `netstandard2.0` really compiles and runs on .NET Framework 4.7.2/4.8 |
-| `consumer-sdk8` | the generator works inside the SDK 8 compiler (Roslyn 4.8) |
 | `consumer-netstandard20` | another netstandard2.0 library can compile the generated code |
 | `samples` | all four samples run on Windows, Linux and macOS |
 | `release-scripting` | the tag gate, both release scripts' exit codes, the package shape and the workflows themselves |

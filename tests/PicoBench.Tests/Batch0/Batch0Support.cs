@@ -2,7 +2,6 @@ namespace PicoBench.Tests.Batch0;
 
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 
 /// <summary>
 /// Shared helpers for the Batch 0 "known cost" regression net
@@ -309,23 +308,6 @@ internal static class Batch0Support
                 + $"{Directory.GetCurrentDirectory()} or {callerFilePath}",
             fileName
         );
-    }
-
-    /// <summary>Reads a centrally managed package version out of <c>Directory.Packages.props</c>.</summary>
-    internal static string? ReadCentralPackageVersion(string packageId)
-    {
-        var props = XDocument.Load(FindRepositoryFile("Directory.Packages.props"));
-        return props
-            .Descendants("PackageVersion")
-            .FirstOrDefault(element =>
-                string.Equals(
-                    (string?)element.Attribute("Include"),
-                    packageId,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
-            ?.Attribute("Version")
-            ?.Value;
     }
 
     /// <summary>

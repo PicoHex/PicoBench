@@ -1,4 +1,13 @@
 <Project>
+  <!-- MSBuild stops at the NEAREST Directory.Build.props, so src/ projects read
+       this file and never the one at the repo root. Pull the root in explicitly,
+       or the repo-wide properties (currently the packages.lock.json switch)
+       would not reach the two projects that ship. -->
+  <PropertyGroup>
+    <RepoRootDirectoryBuildProps>$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))</RepoRootDirectoryBuildProps>
+  </PropertyGroup>
+  <Import Project="$(RepoRootDirectoryBuildProps)" Condition="'$(RepoRootDirectoryBuildProps)' != ''" />
+
   <PropertyGroup>
     <!-- Default: do not produce NuGet packages from every project in the repo -->
     <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>

@@ -1,0 +1,129 @@
+# Dependency refresh — the only writer of the lock files.
+#
+# Every restore in ci.yml runs with RestoreLockedMode=true, so the graph that a
+# build sees is exactly what the committed packages.lock.json files say. That is
+# what makes a restore reproducible, but it also means a dependency can never
+# move on its own: without this job a lock file would freeze the graph forever
+# and the "visible automatic upgrade" half of the policy would be decoration.
+#
+# Every package in this repository is currently pinned exactly (see
+# Directory.Packages.props), so most weeks this job finds nothing and says so.
+# The mechanism is here anyway: the moment one version becomes a range
+# (`2026.<x>.*` for a one-party package), this is what turns its re-resolution
+# into a reviewable PR instead of an invisible drift or a freeze.
+#
+# Deliberately does NOT build. The PR it opens runs the normal `ci` matrix, and
+# a refresh that breaks the build must fail there, visibly — not be swept into a
+# green commit by the job that produced it.
+
+name: deps-refresh
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deps-refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  DOTNET_VERSION: 10.0.x
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+jobs:
+  refresh:
+    name: Re-evaluate the lock files
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # The refresh commits and pushes a branch, so it needs the full history
+          # rather than the shallow default.
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # NuGet.config declares artifacts/nupkg as a source; on a fresh checkout
+      # the directory does not exist and restore fails on the missing source.
+      # (ci.yml creates it for the same reason.)
+      - name: Create local feed dir (NuGet.config local source)
+        run: mkdir -p ./artifacts/nupkg
+
+      # --force-evaluate is the whole point: a plain restore trusts the resolved
+      # versions already recorded in the lock files and would report "up to date"
+      # forever.
+      - name: Re-evaluate the lock files
+        run: dotnet restore PicoBench.slnx --force-evaluate
+
+      - name: Detect what moved
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Scoped to lock files: a locked-mode step elsewhere in the repo could
+          # leave an unrelated file behind, and that must not open this PR.
+          if [ -z "$(git status --porcelain -- '*packages.lock.json')" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::the committed locks still match what the feeds resolve - nothing to do"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git status --porcelain -- '*packages.lock.json'
+          # One line per resolved-version change, so the log says WHAT moved
+          # instead of making a reviewer unpack the lock files by hand.
+          git --no-pager diff --unified=0 -- '*packages.lock.json' \
+            | grep -E '^[+-].*"(resolved|requested)":' || true
+
+      - name: Commit the refreshed locks and open a PR
+        if: steps.diff.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch=chore/deps-refresh
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "$branch"
+          git add -- '*packages.lock.json'
+          if git diff --cached --quiet; then
+            echo "::notice::lock files were touched but staged nothing - nothing to commit"
+            exit 0
+          fi
+          git commit -m "build(deps): refresh packages.lock.json"
+
+          # --force-with-lease: this branch belongs to the bot alone and is
+          # rebuilt from the default branch on every run.
+          git push --force-with-lease origin "$branch"
+
+          existing=$(gh pr list --head "$branch" --state open --json number --jq '.[].number')
+          if [ -n "$existing" ]; then
+            echo "::notice::PR #$existing is already open for $branch - the refresh was pushed into it"
+            exit 0
+          fi
+
+          # Single-quoted strings so the markdown backticks stay literal and no
+          # line picks up the YAML indentation.
+          notes=$(printf '%s\n' \
+            'Automated `dotnet restore PicoBench.slnx --force-evaluate`: at least one `packages.lock.json` no longer matches what the configured feeds resolve.' \
+            '' \
+            'Every restore in `ci.yml` runs in locked mode, so the committed locks are exactly the graph a build sees. This PR is the only path by which a dependency moves; the diff is lock files and nothing else.' \
+            '' \
+            'The build is the judge: this PR runs the normal `ci` matrix. Close it without merging to keep the currently pinned versions until the next pre-release refresh.' \
+            '' \
+            'Note: a PR opened with `GITHUB_TOKEN` does not trigger CI (GitHub suppresses runs it authored itself). The locked-mode restore runs on the push to `main` after merge, which is where a bad lock shows up - so merge only what you have read.')
+
+          gh pr create --head "$branch" --base main \
+            --title "build(deps): refresh packages.lock.json" \
+            --body "$notes"
