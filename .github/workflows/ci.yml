@@ -115,6 +115,13 @@ jobs:
             **/*.csproj
             global.json
 
+      # NuGet.config declares artifacts/nupkg as a source. On a fresh checkout the
+      # directory does not exist, and because `Directory.Packages.props` floats
+      # its patch segment, restore must enumerate every configured source - a
+      # missing one is a hard NU1301 even for a project that never uses it.
+      - name: Create local feed dir (NuGet.config local source)
+        run: mkdir -p ./artifacts/nupkg
+
       # `-DryRun` builds every assembly that ships to consumers (the library and
       # the bundled source generator), dumps each public API surface and diffs it
       # against the committed baselines in api/. A removed member fails this step
@@ -306,6 +313,11 @@ jobs:
             **/*.csproj
             global.json
 
+      # See api-guard: a floating patch segment makes restore enumerate every
+      # configured source, and the missing local feed dir fails the build.
+      - name: Create local feed dir (NuGet.config local source)
+        run: mkdir -p ./artifacts/nupkg
+
       - name: Build the net4x compatibility project
         shell: pwsh
         run: dotnet build tests/compat/PicoBench.Net4xSmoke/PicoBench.Net4xSmoke.csproj --configuration Release
@@ -351,6 +363,11 @@ jobs:
           cache-dependency-path: |
             **/*.csproj
             global.json
+
+      # See api-guard: the local feed dir must exist before any restore, or the
+      # floating patch segment turns the missing source into NU1301.
+      - name: Create local feed dir (NuGet.config local source)
+        run: mkdir -p ./artifacts/nupkg
 
       - name: Pack PicoBench for consumption
         shell: bash
@@ -462,6 +479,11 @@ jobs:
           cache-dependency-path: |
             **/*.csproj
             global.json
+
+      # See api-guard: the packaging guard packs the project, so the local feed
+      # dir must exist before that restore runs.
+      - name: Create local feed dir (NuGet.config local source)
+        run: mkdir -p ./artifacts/nupkg
 
       - name: Lint the workflows (expressions, pinned actions, job contracts)
         shell: bash
