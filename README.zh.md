@@ -25,7 +25,7 @@
 - **参数化基准测试** - `[Params]` 属性，支持自动笛卡尔积迭代
 - **比较支持** - 基准与候选在交错轮次中测量；结论取每轮配对比值的中位数，并且必须同时满足 5% 死区与排除持平的无分布区间，因此轮次间的噪声不会被当作性能提升发布
 - **可配置** - Quick、Default 和 Precise 预设、自动校准或完全自定义配置
-- **netstandard2.0** - 兼容 .NET Framework **4.7.2+**（`RuntimeInformation` 被无条件使用，因此不支持更早的 .NET Framework 版本）、.NET Core 2.0+、.NET 5+
+- **netstandard2.0** - 兼容 .NET Framework **4.7.2+**（`RuntimeInformation` 被无条件使用，因此不支持更早的 .NET Framework 版本）、.NET Core 2.0+、.NET 5+。运行时目标与构建要求不是一回事：上面这条是**运行时**承诺。构建或宿主使用 PicoBench 需要 **.NET SDK 10 或更高**（`net10.0` / `net11.0`）。
 
 ## 安装
 
@@ -34,6 +34,11 @@
 ```bash
 dotnet add package PicoBench
 ```
+
+### 环境要求
+
+- **构建 / 宿主 SDK** —— 需要 **.NET SDK 10 或更高**（`net10.0` / `net11.0`）。捆绑的源生成器（`PicoBench.Generators`）基于随 SDK 10 一同发布的 **Roslyn 5.9+** 编译；更早的 SDK 无法加载它（编译器会以 `CS9057` 警告跳过该分析器，生成的入口点随之缺失）。
+- **运行时目标** —— 包的目标框架是 `netstandard2.0`，因此编译出的程序集可在 .NET Framework 4.7.2+、.NET Core 2.0+ 和 .NET 5+ 上运行。这是**运行时**承诺，不是构建承诺：这些使用方同样需要 **SDK 10 或更高** 来构建。
 
 ## 快速开始
 

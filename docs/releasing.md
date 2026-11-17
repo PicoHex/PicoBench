@@ -168,6 +168,17 @@ job passes. The pin itself was deliberately left at `@v1` for that reason.
 
 ## Compatibility the release is expected to keep
 
+**The baseline is the .NET SDK 10 or newer** (`net10.0` / `net11.0`). `global.json`
+requests `10.0.100` with `rollForward: latestMajor` and `allowPrerelease: false`,
+which is how "10 or newer" is expressed: any installed SDK with a major of 10 or
+more - an SDK 11 included - resolves without a repository edit, while a floating
+preview SDK is never selected. `DOTNET_VERSION: 10.0.x` in `ci.yml` is the leg
+every job sets up, so the pipeline is built and tested on SDK 10 whatever else a
+runner image carries. The generator is compiled against **Roslyn 5.9+**, the
+compiler that ships with that SDK. There is no SDK 8 or SDK 9 leg any more: the `consumer-sdk8` job
+was retired together with the Roslyn 4.8 ceiling, because the package no longer
+claims to load in an older compiler (see `docs/release-notes/batch4.md`).
+
 `tests/compat/` holds the smoke projects that stand in for consumers; each one
 is built by a CI job:
 
@@ -175,18 +186,20 @@ is built by a CI job:
 |---|---|
 | `api-guard` | no public member disappeared (or the break is explicit) |
 | `aot-validation` | the library AOT-publishes with zero trim/AOT warnings **and the artifact runs** |
-| `net4x-smoke` | `netstandard2.0` really compiles and runs on .NET Framework 4.7.2/4.8 |
+| `net4x-smoke` | `netstandard2.0` really compiles and runs on .NET Framework 4.7.2/4.8 (a *runtime* floor - the build SDK is still 10+) |
 | `consumer-netstandard20` | another netstandard2.0 library can compile the generated code |
 | `samples` | all four samples run on Windows, Linux and macOS |
 | `release-scripting` | the tag gate, both release scripts' exit codes, the package shape and the workflows themselves |
 
-Note for .NET Framework and netstandard2.0 consumers: the generated code is
-**C# 7.3-compatible** (G20), so a project can rely on the SDK's default language
-version for those target frameworks. The `#nullable` directive and the nullable
-annotation on the generated interface member are emitted only when the consumer
-compiles at C# 8 or later (decided from `Compilation.LanguageVersion`), so a
-default (C# 7.3) consumer compiles and a C# 8+ consumer keeps the nullable-aware
-signature. See `tests/compat/README.md`.
+Note for .NET Framework and netstandard2.0 consumers: those are **runtime**
+floors, not build floors - such a project still builds with the .NET SDK 10 or
+newer. The generated code is **C# 7.3-compatible** (G20), so a project can rely
+on the SDK's default language version for those target frameworks. The
+`#nullable` directive and the nullable annotation on the generated interface
+member are emitted only when the consumer compiles at C# 8 or later (decided
+from `Compilation.LanguageVersion`), so a default (C# 7.3) consumer compiles and
+a C# 8+ consumer keeps the nullable-aware signature. See
+`tests/compat/README.md`.
 
 ## Why this rule exists
 

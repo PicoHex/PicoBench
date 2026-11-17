@@ -25,7 +25,7 @@
 - **參數化基準測試** - `[Params]` 屬性，支援自動笛卡爾積迭代
 - **比較支援** - 基準與候選在交錯輪次中測量；結論取每輪配對比值的中位數，並且必須同時滿足 5% 死區與排除持平的分佈無關區間，因此輪次間的雜訊不會被當作效能提升發佈
 - **可配置** - Quick、Default 和 Precise 預設、自動校準或完全自訂配置
-- **netstandard2.0** - 相容 .NET Framework **4.7.2+**（`RuntimeInformation` 被無條件使用，因此不支援更早的 .NET Framework 版本）、.NET Core 2.0+、.NET 5+
+- **netstandard2.0** - 相容 .NET Framework **4.7.2+**（`RuntimeInformation` 被無條件使用，因此不支援更早的 .NET Framework 版本）、.NET Core 2.0+、.NET 5+。執行階段目標與建置需求不是同一件事：上面這條是**執行階段**承諾。建置或宿主使用 PicoBench 需要 **.NET SDK 10 或更高**（`net10.0` / `net11.0`）。
 
 ## 安裝
 
@@ -34,6 +34,11 @@
 ```bash
 dotnet add package PicoBench
 ```
+
+### 環境需求
+
+- **建置 / 宿主 SDK** —— 需要 **.NET SDK 10 或更高**（`net10.0` / `net11.0`）。隨附的源生成器（`PicoBench.Generators`）以 SDK 10 一併發佈的 **Roslyn 5.9+** 編譯；更早的 SDK 無法載入它（編譯器會以 `CS9057` 警告略過該分析器，生成的進入點也隨之缺失）。
+- **執行階段目標** —— 套件的目標框架是 `netstandard2.0`，因此編譯出的組件可在 .NET Framework 4.7.2+、.NET Core 2.0+ 與 .NET 5+ 上執行。這是**執行階段**承諾，不是建置承諾：這些使用方同樣需要 **SDK 10 或更高** 來建置。
 
 ## 快速開始
 

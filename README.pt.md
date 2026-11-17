@@ -25,7 +25,7 @@ Uma biblioteca de benchmarking leve para .NET com **duas APIs complementares**: 
 - **Benchmarks Parametrizados** - Atributo `[Params]` com iteração automática de produto cartesiano
 - **Suporte a Comparações** - Baseline vs candidato medidos em rodadas intercaladas; o veredicto é a mediana das razões pareadas por rodada e exige tanto uma faixa morta de 5% quanto um intervalo livre de distribuição que exclua a paridade, para que o ruído entre rodadas não seja publicado como melhoria
 - **Configurável** - Predefinições Rápido, Padrão e Preciso, auto-calibração ou configuração totalmente personalizada
-- **netstandard2.0** - Compatível com .NET Framework **4.7.2+** (`RuntimeInformation` é usado incondicionalmente, portanto versões anteriores do .NET Framework não são suportadas), .NET Core 2.0+, .NET 5+
+- **netstandard2.0** - Compatível com .NET Framework **4.7.2+** (`RuntimeInformation` é usado incondicionalmente, portanto versões anteriores do .NET Framework não são suportadas), .NET Core 2.0+, .NET 5+. Destinos de execução e requisitos de compilação não são a mesma coisa: essa linha é uma afirmação de *tempo de execução*. Compilar contra o PicoBench — ou hospedá-lo — exige o **SDK do .NET 10 ou superior** (`net10.0` / `net11.0`).
 
 ## Instalação
 
@@ -34,6 +34,11 @@ Referencie o pacote NuGet **PicoBench**. O gerador de código fonte (`PicoBench.
 ```bash
 dotnet add package PicoBench
 ```
+
+### Requisitos
+
+- **SDK de compilação / host** — o **SDK do .NET 10 ou superior** (`net10.0` / `net11.0`). O gerador de código fonte incluído (`PicoBench.Generators`) é compilado contra **Roslyn 5.9+**, o compilador que acompanha o SDK 10; um SDK anterior não consegue carregá-lo (o compilador ignora o analisador com um aviso `CS9057` e então os pontos de entrada gerados ficam ausentes).
+- **Destinos em tempo de execução** — o pacote tem como destino `netstandard2.0`, portanto o assembly compilado roda em .NET Framework 4.7.2+, .NET Core 2.0+ e .NET 5+. É uma afirmação de *tempo de execução*, não de compilação: esses consumidores também compilam com o **SDK 10 ou superior**.
 
 ## Início Rápido
 

@@ -27,7 +27,7 @@ is therefore a **behaviour** change first and an **addition** second.
 | 3 | `CpuOnly` samples that measured nothing are `Unmeasured`, not `0.000` | [3](#3-cpuonly-zero-is-not-zero) |
 | 4 | CPU cycles are thread-scoped only on the synchronous path; everything else is flagged `~` | [4](#4-cpu-cycles-are-thread-scoped-or-flagged) |
 | 5 | CSV schema `v2`: a `# Schema:` first line and a new `GCApproximate` column | [5](#5-csv-has-a-versioned-schema-v2) |
-| 6 | Source generator loads on Roslyn 4.8+ (SDK 8); netstandard2.0 floor is .NET Framework 4.7.2 | [6](#6-compatibility) |
+| 6 | Source generator loads inside the compiler of the **.NET SDK 10 or newer** (Roslyn 5.9+) — the Batch 0 floor of Roslyn 4.8 was withdrawn in Batch 4; netstandard2.0 floor is .NET Framework 4.7.2 | [6](#6-compatibility) |
 | 7 | What is still deliberately imprecise, and what Batch 1 owns | [7](#7-known-limitations-deferred-to-batch-1) |
 
 ---
@@ -233,13 +233,22 @@ both lines are in the README (*CSV Column Contract*) and in the file itself.
 4. Keep the schema version (`v2`) with the data you archive, so a future v3 can be
    told apart from today's files.
 
+> **Superseded — read the floor from Batch 4, not from here.** Batch 0 promised
+> that the generator loads on the compiler of the .NET SDK 8 (Roslyn 4.8). That
+> promise was **withdrawn**: the generator is now compiled against **Roslyn
+> 5.9+**, so the minimum is the **.NET SDK 10 or newer** (`net10.0` / `net11.0`)
+> and a host on an earlier SDK cannot load it. See
+> [`batch4.md`](./batch4.md) §1. The text below records what Batch 0 shipped.
+
 ## 6. Compatibility
 
 **Affected API / output**
 
-- **Source generator:** `PicoBench.Generators` ships compiled against **Roslyn
-  4.8**, the oldest host it promises to support, so it loads on the **.NET 8 SDK
-  (8.0.4xx)** and anything newer — those compilers ship Roslyn 4.8+. The code it
+- **Source generator:** `PicoBench.Generators` shipped compiled against **Roslyn
+  4.8**, the oldest host that batch promised to support, so it loaded on the
+  **.NET SDK 8 (8.0.4xx)** and anything newer. **That pin no longer exists:** the
+  generator is built against Roslyn 5.9+, so the host floor is the **.NET SDK 10
+  or newer** and earlier SDKs are not supported (see the note above). The code it
   emits also compiles on every supported target framework now: it no longer
   depends on a static factory that is missing on older TFMs.
 - **netstandard2.0 consumers:** the minimum supported .NET Framework is now
@@ -249,11 +258,13 @@ both lines are in the README (*CSV Column Contract*) and in the file itself.
 
 **Migration**
 
-- Build with the .NET 8 SDK (8.0.4xx) or newer. A host whose compiler ships Roslyn
-  older than 4.8 cannot load the generator: the compiler skips it (a `CS9057`
-  warning) and the generated `RunBenchmarksAsync` / typed entry points are missing
-  (`CS1061`-style errors). Pinning an older `Microsoft.CodeAnalysis.CSharp` in the
-  same build has the same effect — the rule belongs to the host, not to PicoBench.
+- Build with the **.NET SDK 10 or newer** (`net10.0` / `net11.0`) — the current
+  floor, raised from the SDK 8 of this batch by Batch 4. A host whose compiler
+  ships an older Roslyn cannot load the generator: the compiler skips it (a
+  `CS9057` warning) and the generated `RunBenchmarksAsync` / typed entry points
+  are missing (`CS1061`-style errors). Pinning an older
+  `Microsoft.CodeAnalysis.CSharp` in the same build has the same effect — the rule
+  belongs to the host, not to PicoBench.
 - If you target .NET Framework, retarget to 4.7.2 or newer before taking this
   package version; builds on older .NET Framework targets keep working only on the
   previous package version.

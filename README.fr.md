@@ -25,7 +25,7 @@ Une bibliothèque de benchmarking légère pour .NET avec **deux API complément
 - **Benchmarks Paramétrés** - Attribut `[Params]` avec itération automatique du produit cartésien
 - **Support de Comparaison** - Base et candidat mesurés en rounds entrelacés ; le verdict est la médiane des ratios appariés par round et exige à la fois une bande morte de 5% et un intervalle sans hypothèse de distribution qui exclut la parité, afin que le bruit d'un round à l'autre ne soit pas publié comme une amélioration
 - **Configurable** - Préconfigurations Quick, Default et Precise, auto-calibrage ou configuration entièrement personnalisée
-- **netstandard2.0** - Compatible avec .NET Framework **4.7.2+** (`RuntimeInformation` est utilisé inconditionnellement, donc les versions antérieures de .NET Framework ne sont pas prises en charge), .NET Core 2.0+, .NET 5+
+- **netstandard2.0** - Compatible avec .NET Framework **4.7.2+** (`RuntimeInformation` est utilisé inconditionnellement, donc les versions antérieures de .NET Framework ne sont pas prises en charge), .NET Core 2.0+, .NET 5+. Les cibles d'exécution et les exigences de compilation ne sont pas la même chose : cette ligne est une affirmation **d'exécution**. Compiler contre PicoBench — ou l'héberger — exige le **SDK .NET 10 ou plus récent** (`net10.0` / `net11.0`).
 
 ## Installation
 
@@ -34,6 +34,11 @@ Référencez le package NuGet **PicoBench**. Le générateur de source (`PicoBen
 ```bash
 dotnet add package PicoBench
 ```
+
+### Prérequis
+
+- **SDK de compilation / hôte** — le **SDK .NET 10 ou plus récent** (`net10.0` / `net11.0`). Le générateur de source embarqué (`PicoBench.Generators`) est compilé contre **Roslyn 5.9+**, le compilateur fourni avec le SDK 10 ; un SDK antérieur ne peut pas le charger (le compilateur ignore l'analyseur avec un avertissement `CS9057`, et les points d'entrée générés manquent alors).
+- **Cibles d'exécution** — le package cible `netstandard2.0`, donc l'assembly compilé s'exécute sur .NET Framework 4.7.2+, .NET Core 2.0+ et .NET 5+. C'est une affirmation **d'exécution**, pas de compilation : ces consommateurs compilent eux aussi avec le **SDK 10 ou plus récent**.
 
 ## Démarrage Rapide
 

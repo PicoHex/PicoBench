@@ -25,7 +25,7 @@ A lightweight benchmarking library for .NET with **two complementary APIs**: an 
 - **Parameterised Benchmarks** - `[Params]` attribute with automatic Cartesian product iteration
 - **Comparison Support** - Baseline vs candidate measured in interleaved rounds; the verdict is the median of the paired per-round ratios and needs both a 5% dead band and a distribution-free interval that excludes parity, so round-to-round noise is not published as an improvement
 - **Configurable** - Quick, Default, and Precise presets, auto-calibration, or fully custom configuration
-- **netstandard2.0** - Compatible with .NET Framework **4.7.2+** (`RuntimeInformation` is used unconditionally, so earlier .NET Framework versions are not supported), .NET Core 2.0+, .NET 5+
+- **netstandard2.0** - Compatible with .NET Framework **4.7.2+** (`RuntimeInformation` is used unconditionally, so earlier .NET Framework versions are not supported), .NET Core 2.0+, .NET 5+. Runtime **and** build targets are not the same thing: that line is a *runtime* statement. Building against PicoBench - or running it as a host - requires the **.NET SDK 10 or newer** (`net10.0` / `net11.0`).
 
 ## Installation
 
@@ -34,6 +34,11 @@ Reference the **PicoBench** NuGet package. The source generator (`PicoBench.Gene
 ```bash
 dotnet add package PicoBench
 ```
+
+### Requirements
+
+- **Build / host SDK** — the **.NET SDK 10 or newer** (`net10.0` / `net11.0`). The bundled source generator (`PicoBench.Generators`) is compiled against **Roslyn 5.9+**, the compiler that ships with SDK 10; an earlier SDK cannot load it (the compiler skips the analyzer with a `CS9057` warning, and the generated entry points are then missing).
+- **Runtime targets** — the package targets `netstandard2.0`, so the compiled assembly runs on .NET Framework 4.7.2+, .NET Core 2.0+ and .NET 5+. That is a *runtime* statement, not a build one: those consumers still build with **SDK 10 or newer**.
 
 ## Quick Start
 
