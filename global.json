@@ -1,7 +1,30 @@
 {
+  // ───────────────────────────────────────────────────────────────────────
+  // Support baseline: the .NET SDK 10 or newer (net10.0 / net11.0).
+  //
+  // The package itself targets netstandard2.0, so the *compiled assembly* runs
+  // on .NET Framework 4.7.2+, .NET Core 2.0+ and .NET 5+ - that is a runtime
+  // statement. Building it, or loading the bundled source generator (compiled
+  // against Roslyn 5.9+), needs SDK 10+: an older SDK has no compiler this
+  // generator loads in, and there is no SDK 8 / Roslyn 4.8 promise any more
+  // (see docs/release-notes/batch4.md).
+  //
+  // rollForward: latestMajor is what expresses "10 OR NEWER" - any installed
+  // SDK with a major >= 10 resolves without editing this file, so SDK 11
+  // (the net11 target of the claim) is covered, while latestFeature would
+  // strand an SDK-11-only machine. allowPrerelease: false keeps that from
+  // becoming a preview-only dependency: a floating preview SDK is never
+  // selected, only a released one.
+  //
+  // CI does not depend on that: every job sets up the 10.0.x leg explicitly
+  // (DOTNET_VERSION in .github/workflows/ci.yml), so the pipeline is still
+  // built and tested on SDK 10 even on a runner image that also carries a
+  // newer SDK.
+  // ───────────────────────────────────────────────────────────────────────
   "sdk": {
     "version": "10.0.100",
-    "rollForward": "latestFeature"
+    "rollForward": "latestMajor",
+    "allowPrerelease": false
   },
   "test": {
     "runner": "Microsoft.Testing.Platform"
