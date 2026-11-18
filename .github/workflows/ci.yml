@@ -620,3 +620,15 @@ jobs:
       - name: Package shape (snupkg, contents, dependencies)
         shell: bash
         run: bash scripts/tests/packaging-guard.test.sh
+
+  # Dependency policy gate (R1-R7, R7b, R10 of picohex-dependency-policy).
+  # The checker is vendored: scripts/check-dependency-policy.sh carries the same
+  # bytes in every PicoHex repo and names the canonical source in its header.
+  policy:
+    name: dependency policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the dependency policy
+        run: bash scripts/check-dependency-policy.sh .
