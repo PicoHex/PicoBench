@@ -9,23 +9,19 @@
   // generator loads in, and there is no SDK 8 / Roslyn 4.8 promise any more
   // (see docs/release-notes/batch4.md).
   //
-  // rollForward: latestMajor is what expresses "10 OR NEWER" - any installed
-  // SDK with a major >= 10 resolves without editing this file, so SDK 11
-  // (the net11 target of the claim) is covered, while latestFeature would
-  // strand an SDK-11-only machine. allowPrerelease: false keeps that from
-  // becoming a preview-only dependency: a floating preview SDK is never
-  // selected, only a released one.
+  // NO SDK is pinned here, deliberately. The floor is declared where it belongs
+  // now: the target frameworks (`net10.0;net11.0`) state which SDKs must be able
+  // to build the repository, so an SDK is never a number in this file.
+  // Reproducibility is CI's job instead - every job sets up the 11.0.x leg
+  // explicitly (DOTNET_VERSION in .github/workflows/ci.yml), so the pipeline
+  // builds and tests on one known SDK whatever the runner image carries.
   //
-  // CI does not depend on that: every job sets up the 10.0.x leg explicitly
-  // (DOTNET_VERSION in .github/workflows/ci.yml), so the pipeline is still
-  // built and tested on SDK 10 even on a runner image that also carries a
-  // newer SDK.
+  // History, for the reader who remembers the block that used to be here: it
+  // declared `version: 10.0.100` with `rollForward: latestMajor` (plus
+  // `allowPrerelease: false`), and latestMajor was the only thing that let a
+  // pinned 10.0.100 accept SDK 11. With the pin gone that escape hatch has
+  // nothing left to escape, so all three fields went with it.
   // ───────────────────────────────────────────────────────────────────────
-  "sdk": {
-    "version": "10.0.100",
-    "rollForward": "latestMajor",
-    "allowPrerelease": false
-  },
   "test": {
     "runner": "Microsoft.Testing.Platform"
   }

@@ -43,7 +43,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
 
       # Both inputs arrive through `env:` and are validated before use: they are
       # typed into a workflow_dispatch form, and a package id is just as capable

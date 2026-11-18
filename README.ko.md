@@ -557,10 +557,10 @@ macOS에서 내보내는 CPU 카운터는 아키텍처 사이클 수가 아닌 �
 | `AsyncBenchmarks` | 특성(비동기) | 비동기 진입점과 혼합 수명 주기: `BenchmarkRunner.RunAsync<T>()`, 비동기 `[GlobalSetup]`/`[IterationSetup]`, `Task`를 반환하는 `[Benchmark]`, `SummaryFormatter` |
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release
-dotnet run --project samples/AttributeBased -c Release
-dotnet run --project samples/CollectionBenchmarks -c Release
-dotnet run --project samples/AsyncBenchmarks -c Release
+dotnet run --project samples/StringVsStringBuilder -c Release --framework net10.0
+dotnet run --project samples/AttributeBased -c Release --framework net10.0
+dotnet run --project samples/CollectionBenchmarks -c Release --framework net10.0
+dotnet run --project samples/AsyncBenchmarks -c Release --framework net10.0
 ```
 
 ---

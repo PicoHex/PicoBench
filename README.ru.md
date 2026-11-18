@@ -555,10 +555,10 @@ src/
 | `AsyncBenchmarks` | Атрибутный (асинхронный) | Асинхронная точка входа и смешанный жизненный цикл: `BenchmarkRunner.RunAsync<T>()`, асинхронные `[GlobalSetup]`/`[IterationSetup]`, `[Benchmark]`, возвращающий `Task`, и `SummaryFormatter` |
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release
-dotnet run --project samples/AttributeBased -c Release
-dotnet run --project samples/CollectionBenchmarks -c Release
-dotnet run --project samples/AsyncBenchmarks -c Release
+dotnet run --project samples/StringVsStringBuilder -c Release --framework net10.0
+dotnet run --project samples/AttributeBased -c Release --framework net10.0
+dotnet run --project samples/CollectionBenchmarks -c Release --framework net10.0
+dotnet run --project samples/AsyncBenchmarks -c Release --framework net10.0
 ```
 
 ---

@@ -555,10 +555,10 @@ macOS では、エクスポートされる CPU カウンターはアーキテク
 | `AsyncBenchmarks` | 属性（非同期） | 非同期エントリーポイントと混在ライフサイクル：`BenchmarkRunner.RunAsync<T>()`、非同期 `[GlobalSetup]`/`[IterationSetup]`、`Task` を返す `[Benchmark]`、`SummaryFormatter` |
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release
-dotnet run --project samples/AttributeBased -c Release
-dotnet run --project samples/CollectionBenchmarks -c Release
-dotnet run --project samples/AsyncBenchmarks -c Release
+dotnet run --project samples/StringVsStringBuilder -c Release --framework net10.0
+dotnet run --project samples/AttributeBased -c Release --framework net10.0
+dotnet run --project samples/CollectionBenchmarks -c Release --framework net10.0
+dotnet run --project samples/AsyncBenchmarks -c Release --framework net10.0
 ```
 
 ---

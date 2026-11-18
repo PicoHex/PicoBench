@@ -557,10 +557,10 @@ On macOS the exported CPU counter is a high-resolution monotonic *time* proxy ra
 | `AsyncBenchmarks` | Attribute (async) | Async entry point and mixed lifecycle: `BenchmarkRunner.RunAsync<T>()`, async `[GlobalSetup]`/`[IterationSetup]`, `[Benchmark]` returning `Task`, and `SummaryFormatter` |
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release
-dotnet run --project samples/AttributeBased -c Release
-dotnet run --project samples/CollectionBenchmarks -c Release
-dotnet run --project samples/AsyncBenchmarks -c Release
+dotnet run --project samples/StringVsStringBuilder -c Release --framework net10.0
+dotnet run --project samples/AttributeBased -c Release --framework net10.0
+dotnet run --project samples/CollectionBenchmarks -c Release --framework net10.0
+dotnet run --project samples/AsyncBenchmarks -c Release --framework net10.0
 ```
 
 ---

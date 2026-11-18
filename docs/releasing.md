@@ -168,14 +168,14 @@ job passes. The pin itself was deliberately left at `@v1` for that reason.
 
 ## Compatibility the release is expected to keep
 
-**The baseline is the .NET SDK 10 or newer** (`net10.0` / `net11.0`). `global.json`
-requests `10.0.100` with `rollForward: latestMajor` and `allowPrerelease: false`,
-which is how "10 or newer" is expressed: any installed SDK with a major of 10 or
-more - an SDK 11 included - resolves without a repository edit, while a floating
-preview SDK is never selected. `DOTNET_VERSION: 10.0.x` in `ci.yml` is the leg
-every job sets up, so the pipeline is built and tested on SDK 10 whatever else a
-runner image carries. The generator is compiled against **Roslyn 5.9+**, the
-compiler that ships with that SDK. There is no SDK 8 or SDK 9 leg any more: the `consumer-sdk8` job
+**The baseline is the .NET SDK 10 or newer** (`net10.0` / `net11.0`), and no SDK is
+pinned: `global.json` carries no `sdk` block, so the floor is what the projects
+themselves declare - `net10.0;net11.0` - and any installed SDK 10 or newer builds
+the repository. Reproducibility is CI's job instead: `DOTNET_VERSION: 11.0.x` in
+`ci.yml` is the leg every job sets up, so the pipeline is built and tested on SDK
+11 whatever else a runner image carries. The generator is compiled against
+**Roslyn 5.9+**, the compiler that ships with SDK 10 (and loads in the newer
+compilers of later SDKs). There is no SDK 8 or SDK 9 leg any more: the `consumer-sdk8` job
 was retired together with the Roslyn 4.8 ceiling, because the package no longer
 claims to load in an older compiler (see `docs/release-notes/batch4.md`).
 

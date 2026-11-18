@@ -45,10 +45,11 @@ public class AnalyzerDeduplicationMsBuildTests
     private const string UnrelatedFileName = "SomeOther.Analyzer.dll";
 
     /// <summary>
-    /// Child processes run here so <c>global.json</c> pins the same SDK the rest of
-    /// the suite runs on — a consumer builds under their own pin too, and an
-    /// MSBuild evaluation must not silently float to whatever preview happens to
-    /// be installed on the machine.
+    /// Child processes run here, at the repository root, so they resolve the same
+    /// SDK the rest of the suite runs on rather than whatever a temp directory
+    /// would float to. <c>global.json</c> pins no version any more, so "the same
+    /// SDK" means the one this suite itself resolved - a consumer bringing their
+    /// own pin is the situation these children stand in for.
     /// </summary>
     private static readonly string RepositoryRoot = Path.GetDirectoryName(
         Batch0Support.FindRepositoryFile("PicoBench.slnx")

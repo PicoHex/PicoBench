@@ -555,10 +555,10 @@ En macOS, el contador de CPU exportado es un proxy de *tiempo* monotónico de al
 | `AsyncBenchmarks` | Atributo (asíncrono) | Punto de entrada asíncrono y ciclo de vida mixto: `BenchmarkRunner.RunAsync<T>()`, `[GlobalSetup]`/`[IterationSetup]` asíncronos, `[Benchmark]` que devuelve `Task`, y `SummaryFormatter` |
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release
-dotnet run --project samples/AttributeBased -c Release
-dotnet run --project samples/CollectionBenchmarks -c Release
-dotnet run --project samples/AsyncBenchmarks -c Release
+dotnet run --project samples/StringVsStringBuilder -c Release --framework net10.0
+dotnet run --project samples/AttributeBased -c Release --framework net10.0
+dotnet run --project samples/CollectionBenchmarks -c Release --framework net10.0
+dotnet run --project samples/AsyncBenchmarks -c Release --framework net10.0
 ```
 
 ---

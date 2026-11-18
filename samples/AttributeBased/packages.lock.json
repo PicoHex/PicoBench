@@ -5,6 +5,11 @@
       "picobench": {
         "type": "Project"
       }
+    },
+    "net11.0": {
+      "picobench": {
+        "type": "Project"
+      }
     }
   }
 }

@@ -16,13 +16,14 @@ concurrency:
 env:
   # Support baseline: .NET SDK 10 or newer (net10.0 / net11.0). Every job sets
   # up this one leg explicitly, so the pipeline always builds and tests on SDK
-  # 10 whatever else a runner image carries; global.json accepts any SDK of
-  # major 10 or newer (rollForward: latestMajor, no prerelease), which is what
-  # makes the net11 half of the claim true. There is no SDK 8 / SDK 9 leg: the
-  # SDK 8 consumer leg was retired together with the Roslyn 4.8 ceiling
+  # 11 whatever else a runner image carries. That leg is the whole
+  # reproducibility story now: global.json pins no SDK, so the floor is what the
+  # projects declare (net10.0;net11.0) and the SDK under test is named here
+  # instead of narrowed there. There is no SDK 8 / SDK 9 leg: the SDK 8
+  # consumer leg was retired together with the Roslyn 4.8 ceiling
   # (docs/release-notes/batch4.md), and the package no longer promises to load
   # in an older compiler. Do not add one back.
-  DOTNET_VERSION: 10.0.x
+  DOTNET_VERSION: 11.0.x
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
 jobs:
@@ -92,7 +93,7 @@ jobs:
           set -euo pipefail
           for sample in $SAMPLES; do
             echo "== $sample"
-            dotnet run --project "samples/$sample/$sample.csproj" --configuration Release --no-build
+            dotnet run --project "samples/$sample/$sample.csproj" --framework net10.0 --configuration Release --no-build
           done
 
   api-guard:
@@ -452,7 +453,7 @@ jobs:
           set -euo pipefail
           for sample in $SAMPLES; do
             echo "== $sample"
-            dotnet run --project "samples/$sample/$sample.csproj" --configuration Release --no-build
+            dotnet run --project "samples/$sample/$sample.csproj" --framework net10.0 --configuration Release --no-build
           done
 
   # ------------------------------------------------ release scripting ------
