@@ -366,6 +366,138 @@ public class GeneratorIsolationTests
     }
 
     /// <summary>
+    /// H2-A6 of <c>.review-2026-11/ablation-consolidated.md</c> (its §7 item 1) —
+    /// a throw in the <b>emit</b> stage, the other half of 1.1 / B3-C2.
+    /// <para>
+    /// <see cref="TransformStageFault_Injected_FailsOneClassOnly"/> pins the
+    /// transform stage. The ablation deleted the per-class <c>try/catch</c> around
+    /// <c>Emitter.Generate</c> in <c>BenchmarkGenerator.Execute</c> and the whole
+    /// suite stayed green (742/742): the emit-stage containment existed but no
+    /// test was ever load-bearing on it — the only thing that used to reach it was
+    /// a hint-name collision, which is now prevented rather than caught. An
+    /// unguarded throw here is <c>CS8785</c> plus <b>every</b> <c>.g.cs</c> in the
+    /// project gone, and the consumer sees a pile of CS0535 on their own partial
+    /// class with no hint about which generator did it.
+    /// </para>
+    /// <para>
+    /// The throw is forced through the emitter's test-only seam
+    /// (<c>Emitter.EmitFaultForTests</c>, filtered by class name so an overlapping
+    /// run is unaffected): no <c>CS8785</c>, exactly one <c>PBGEN018</c> naming the
+    /// one class that failed, both sibling classes still get their <c>.g.cs</c>,
+    /// and the run is compiled — so "still generates" means the compiler accepts
+    /// it, not that a string came out.
+    /// </para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch4")]
+    [Property("Batch4", "ablation-H2-A6/emit-fault-injection")]
+    [NotInParallel("generator-emit-seam")]
+    public async Task EmitStageFault_Injected_FailsOneClassOnly()
+    {
+        const string source = """
+            using PicoBench;
+
+            namespace Demo
+            {
+                [BenchmarkClass]
+                public partial class InjectedEmitFault
+                {
+                    [Benchmark]
+                    public void Work() { }
+                }
+
+                [BenchmarkClass]
+                public partial class Sibling
+                {
+                    [Benchmark]
+                    public void Work() { }
+                }
+
+                [BenchmarkClass]
+                public partial class OtherSibling
+                {
+                    [Benchmark]
+                    public async System.Threading.Tasks.Task WorkAsync() => await System.Threading.Tasks.Task.Yield();
+                }
+            }
+            """;
+
+        GeneratorHarness.GeneratorOutput output;
+        try
+        {
+            Emitter.EmitFaultForTests = static model =>
+            {
+                if (string.Equals(model.ClassName, "InjectedEmitFault", StringComparison.Ordinal))
+                    throw new InvalidOperationException("injected emit fault (H2-A6 seam)");
+            };
+
+            output = GeneratorHarness.RunGenerator(source);
+        }
+        finally
+        {
+            Emitter.EmitFaultForTests = null;
+        }
+
+        var compilerErrors = GeneratorHarness.CompileErrors(source, output);
+        Batch1Support.LogRun("injected emit fault", output, compilerErrors);
+
+        // An unguarded throw in the emit stage escapes RegisterSourceOutput as a
+        // whole: CS8785, and every class in the project loses its generated half.
+        await Assert
+            .That(Batch1Support.HasGeneratorFailure(output))
+            .IsFalse()
+            .Because("one class failing must never abort the generator run (CS8785)");
+
+        var generatorErrors = Batch1Support.GeneratorErrors(output);
+        await Assert
+            .That(generatorErrors.Count)
+            .IsEqualTo(1)
+            .Because("exactly one diagnostic, for the one class that failed");
+        await Assert.That(generatorErrors[0].Id).IsEqualTo("PBGEN018");
+
+        var message = generatorErrors[0].GetMessage(CultureInfo.InvariantCulture);
+        Batch0Support.Log($"injected emit fault diagnostic: {message}");
+        await Assert
+            .That(message)
+            .Contains("injected emit fault")
+            .Because("the user must be told what the generator choked on");
+        await Assert.That(message).Contains("InjectedEmitFault");
+
+        // Both siblings still generate; the failed class has no hint at all (a
+        // half-emitted partial class could not compile).
+        await Assert
+            .That(output.HintNames.Any(static h => h.Contains("Sibling", StringComparison.Ordinal)))
+            .IsTrue();
+        await Assert
+            .That(
+                output.HintNames.Any(static h =>
+                    h.Contains("OtherSibling", StringComparison.Ordinal)
+                )
+            )
+            .IsTrue();
+        await Assert
+            .That(
+                output.HintNames.Any(static h =>
+                    h.Contains("InjectedEmitFault", StringComparison.Ordinal)
+                )
+            )
+            .IsFalse();
+        await Assert.That(output.Sources.Length).IsEqualTo(2);
+
+        // "The other classes still generate" = the compiler accepts their output.
+        await Assert
+            .That(compilerErrors.Count)
+            .IsEqualTo(0)
+            .Because(
+                "the failing class must not cost the project its compilable generated code: "
+                    + Batch1Support.DescribeAll(compilerErrors)
+            );
+        await Assert
+            .That(Batch1Support.ErrorsInGeneratedCode(output, compilerErrors).Count)
+            .IsEqualTo(0);
+    }
+
+    /// <summary>
     /// F6 / §6 of <c>.review-2026-11/31-verify-b1.md</c> — <c>[Params(null)]</c>
     /// is legal C# and used to surface as
     /// <c>PBGEN018 … failed: Object reference not set to an instance of an object.</c>
