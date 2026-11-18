@@ -489,6 +489,16 @@ jobs:
         shell: bash
         run: python3 scripts/tests/workflow_lint.py
 
+      # A guard that is present but no longer executed is the failure mode this
+      # repository keeps hitting (H2-A8'): the lint judged the ancestry guard by
+      # `re.search` over the whole yml, so `run: echo "skipped: ./scripts/
+      # verify-release-commit-on-main.sh"` left it green while release.yml no
+      # longer checked anything. The lint now parses the step structure, and this
+      # step proves that decision can fail - the echo fixture must exit non-zero.
+      - name: Prove the workflow lint rejects a disabled gate
+        shell: bash
+        run: bash scripts/tests/workflow-lint.test.sh
+
       # shellcheck is not vendored, so the lint script reports an explicit SKIP
       # when it is absent (a local run without network). This step installs it
       # from the runner's package cache and SHELL_LINT_REQUIRE_SHELLCHECK=1 makes
