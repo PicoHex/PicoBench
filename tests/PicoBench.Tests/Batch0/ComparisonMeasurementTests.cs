@@ -180,6 +180,181 @@ public class ComparisonMeasurementTests
         await Assert.That(comparison.Outcome).IsEqualTo(ComparisonOutcome.Inconclusive);
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Ablation holes H1-A18 / H1-A19 (branch fix/ablation-holes-runtime).
+    //
+    // The 2026-11 ablation pass (`.review-2026-11/ablation-consolidated.md` §5)
+    // changed two of the statistics below and the whole suite stayed green:
+    //
+    //   H1-A18  MedianConfidenceRank → "any count returns rank 1"   (742/742 green)
+    //   H1-A19  Merge: Avg = Median(avgs) → avgs.Sum() / Length      (742/742 green)
+    //
+    // Nothing in the repository called the rank function directly, and no test
+    // asserted a numeric value that a mean (instead of a median) would move, so
+    // both defects lived inside a green suite. The tests below are the missing
+    // assertions; they are the reason the corresponding mutations now go red.
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// H1-A18 — the sign-test interval must actually narrow as the round count
+    /// grows, and the ten-round comparison must drop the <b>outermost pair</b> of
+    /// order statistics.
+    /// <para>
+    /// Coverage of <c>[x_(k), x_(n+1-k)]</c> is <c>1 - 2·P(Bin(n, ½) ≤ k-1)</c>, so
+    /// k = 2 is the first rank that reaches 95% at n = 10 (97.9%) and k = 3 is the
+    /// first at n = 12 (98.4%). A rank pinned to 1 for every count returns the full
+    /// range <c>[x₁, x_n]</c>, i.e. a single stray round decides the interval —
+    /// while the UI still advertises 95%.
+    /// </para>
+    /// <para>Expected with <c>MedianConfidenceRank</c> returning 1 for every count
+    /// (the H1-A18 mutation <c>count &lt; 3</c> → <c>count &lt; int.MaxValue</c>):
+    /// <b>RED</b> — rank(10) = 1 instead of 2 and rank(12) = 1 instead of 3.</para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch0")]
+    [Property("Ablation", "H1-A18")]
+    public async Task MedianConfidenceRank_TenAndTwelveRounds_DropTheOutermostOrderStatistics()
+    {
+        var rank10 = ComparisonMeasurement.MedianConfidenceRank(10);
+        var rank12 = ComparisonMeasurement.MedianConfidenceRank(12);
+        var rank6 = ComparisonMeasurement.MedianConfidenceRank(
+            ComparisonMeasurement.MinimumUsableRounds
+        );
+
+        Batch0Support.Log(
+            $"rank(6)={rank6} rank(10)={rank10} rank(12)={rank12} (n=10 must drop x1 and x10)"
+        );
+
+        // Ten interleaved rounds: [x_(2), x_(9)] — the first and the last ratio are
+        // both discarded, which is exactly what the Rounds doc comment claims.
+        await Assert
+            .That(rank10)
+            .IsEqualTo(2)
+            .Because($"rank(10) = {rank10}: ten rounds must drop the outermost pair");
+        // Twelve usable ratios narrow it one step further: [x_(3), x_(10)].
+        await Assert
+            .That(rank12)
+            .IsEqualTo(3)
+            .Because($"rank(12) = {rank12}: twelve rounds reach 95% with three dropped per side");
+        // Six is the smallest count that reaches 95%, and it does so with the full
+        // range (96.875% = 1 - 2·P(Bin(6, ½) ≤ 0)) — no order statistic is dropped.
+        await Assert
+            .That(rank6)
+            .IsEqualTo(1)
+            .Because($"rank(6) = {rank6}: n = 6 is the 95% boundary at k = 1");
+    }
+
+    /// <summary>
+    /// H1-A18 — rank <c>k</c> is the <i>narrowest</i> interval that keeps 95%, so it
+    /// can only grow with the round count: more rounds buy a tighter tail, never a
+    /// wider one. A constant rank (the surviving mutation) is monotone by accident,
+    /// which is why the equality assertions above are the ones that bite; this test
+    /// pins the property a re-derivation of the loop must preserve, together with the
+    /// two bounds the loop enforces itself (<c>1 ≤ k ≤ (n+1)/2</c>).
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch0")]
+    [Property("Ablation", "H1-A18")]
+    public async Task MedianConfidenceRank_IsMonotonicNonDecreasingInRoundCount()
+    {
+        var ranks = new List<int>(40);
+        var previous = 0;
+
+        for (var count = 3; count <= 40; count++)
+        {
+            var rank = ComparisonMeasurement.MedianConfidenceRank(count);
+            ranks.Add(rank);
+
+            // A rank below 1 indexes outside the array; above (n+1)/2 it reverses
+            // the interval ends.
+            await Assert.That(rank).IsGreaterThanOrEqualTo(1);
+            await Assert.That(rank).IsLessThanOrEqualTo((count + 1) / 2);
+
+            if (count > 3)
+            {
+                await Assert
+                    .That(rank)
+                    .IsGreaterThanOrEqualTo(previous)
+                    .Because(
+                        $"rank({count}) = {rank} fell below rank({count - 1}) = {previous}: "
+                            + "more rounds can only narrow the 95% interval"
+                    );
+            }
+
+            previous = rank;
+        }
+
+        Batch0Support.Log(
+            "rank by count 3..40: "
+                + string.Join(' ', ranks.Select((rank, i) => $"{i + 3}:{rank}"))
+        );
+    }
+
+    /// <summary>
+    /// H1-A18 — the interval <see cref="ComparisonMeasurement.PairedSpeedup"/> builds
+    /// from those ratios must be <b>strictly inside</b> the full range of the ten
+    /// ratios whenever the two extremes are outliers.
+    /// <para>
+    /// The input carries a 20× low outlier (0.5) and a 10× high outlier (10.0); the
+    /// remaining eight sit between 0.9 and 1.1. With rank 2 the interval is
+    /// <c>[x_(2), x_(9)] = [0.9, 1.1]</c>, so both ends are strictly inside the run's
+    /// own extremes and the width collapses from 9.5 to 0.2. With the rank forced to
+    /// 1 (H1-A18) it degenerates to <c>[0.5, 10.0]</c>: the low outlier drags
+    /// <c>Low</c> down to <c>min</c>, the high outlier drags <c>High</c> up to
+    /// <c>max</c>, and one bad round per side decides the very verdict the interval
+    /// is supposed to guard.
+    /// </para>
+    /// <para>Expected with the H1-A18 mutation: <b>RED</b> — <c>Low == min = 0.5</c>
+    /// and <c>High == max = 10.0</c>.</para>
+    /// </summary>
+    [Test]
+    [Property("Category", "Batch0")]
+    [Property("Ablation", "H1-A18")]
+    public async Task PairedSpeedup_IntervalIsStrictlyInsideTheFullRatioRange()
+    {
+        double[] ratios = [0.5, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.1, 10.0];
+        var min = ratios.Min();
+        var max = ratios.Max();
+
+        var (speedup, interval) = ComparisonMeasurement.PairedSpeedup(ratios);
+        var comparison = Comparison(speedup, interval);
+
+        Batch0Support.Log(
+            $"full range=[{min:F3}, {max:F3}] median={speedup:F4} "
+                + $"interval={interval?.ToString() ?? "<none>"} outcome={comparison.Outcome}"
+        );
+
+        await Assert.That(interval).IsNotNull();
+        var (low, high) = (interval!.Value.Low, interval.Value.High);
+
+        // The point estimate is the median, i.e. inside the narrowed interval…
+        await Assert.That(speedup).IsEqualTo(1.0);
+        await Assert.That(low).IsLessThanOrEqualTo(speedup);
+        await Assert.That(high).IsGreaterThanOrEqualTo(speedup);
+
+        // …and the interval is strictly narrower than the run's own extremes:
+        // both outliers are dropped, not merely covered.
+        await Assert
+            .That(low)
+            .IsGreaterThan(min)
+            .Because(
+                $"Low = {low:F3} equals the run minimum {min:F3}: the low outlier was not dropped"
+            );
+        await Assert
+            .That(high)
+            .IsLessThan(max)
+            .Because(
+                $"High = {high:F3} equals the run maximum {max:F3}: the high outlier was not dropped"
+            );
+
+        // Quantified: the 95% interval is under a quarter of the range it sits in
+        // (0.2 against 9.5). A rank of 1 makes this ratio exactly 1.0.
+        await Assert
+            .That(high - low)
+            .IsLessThan(0.25 * (max - min))
+            .Because($"interval width {high - low:F3} vs full range {max - min:F3}");
+    }
+
     /// <summary>Ten identical ratios — the shape a perfectly consistent comparison produces.</summary>
     private static double[] Uniform(double ratio)
     {
