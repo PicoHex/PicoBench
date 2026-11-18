@@ -30,6 +30,112 @@ internal static class Batch0Support
     internal const double ResolutionFloorNanoseconds = 1.5;
 
     /// <summary>
+    /// How far above the floor <b>the same run measured</b> a closure may report
+    /// before the value is treated as grossly inflated (FIX-FLAKY-2).
+    /// <para>
+    /// The floor is <c>max(Statistics.OverheadNs / iterations, ResolutionLimitNanoseconds)</c>;
+    /// both quantities come from the run under test, so the bound carries no absolute
+    /// nanosecond constant and a slow runner cannot break it on its own.
+    /// </para>
+    /// <para>
+    /// Measured ratio <c>reported / floor</c> for an empty delegate, the smallest closure
+    /// there is (FIX-FLAKY-2 section 1: 10 rounds per machine state, each round 5 trials of
+    /// 20 x 5000 iterations, floors 1.5-3.1 ns/op): worst round <b>0.15</b> on an idle
+    /// 16-CPU box, <b>0.11</b> on the same box pinned to 2 CPUs, <b>0.27</b> with 2 competing
+    /// busy loops and <b>0.46</b> with 4 of them. 4.0 therefore sits 8.7x above the worst
+    /// measured ratio, i.e. a runner would have to inflate an empty delegate by 4x its own
+    /// measured floor before this leg moves. The 2-vCPU CI runner that reported 1.900 ns/op
+    /// against the old 1.5 ns constant (run 44285730921, win-x64) printed a plain number, so
+    /// its floor was somewhere below 1.900 ns/op and its ratio is not known; it is covered
+    /// by the same factor as long as that floor exceeds 0.475 ns/op, which no real machine
+    /// gets below (an empty delegate plus loop bookkeeping is 3-5 cycles). The leg still
+    /// fails the undisclosed 5.5-15.4 ns/op the same empty delegate reported before 0.1
+    /// (ratio 3.4-10 on the reference machine). It is a <b>gross-inflation net</b>, not the
+    /// defect detector: the detector is the arithmetic identity in
+    /// <see cref="RecomputedPerOpAvg"/>, which is exact and carries no noise at all.
+    /// </para>
+    /// </summary>
+    internal const double ResidualNoiseFactor = 4.0;
+
+    /// <summary>
+    /// Recomputes <see cref="Statistics.Avg"/> from the raw samples a synchronous run
+    /// retained, using only public values, so that "the harness floor was deducted" is
+    /// checkable <b>arithmetically</b> instead of by comparing two noisy statistics
+    /// (FIX-FLAKY-2, acceptance item 3).
+    /// <para>
+    /// The synchronous path publishes, per sample,
+    /// <c>max(0, elapsed - OverheadNs) / IterationsPerSample</c>: the residual is clamped
+    /// at zero and <b>not</b> at the deducted floor (unlike the asynchronous path, whose
+    /// floor clamp is mirrored in <c>AsyncOverheadTests.RecomputedAvgFromRawSamples</c>).
+    /// The identity therefore holds exactly, whatever the machine does: it contains the
+    /// elapsed times only arithmetically, never statistically.
+    /// </para>
+    /// <para>
+    /// A run that skips the subtraction but still publishes the measured floor misses this
+    /// by the whole floor per operation (measured under that mutant: delta = 1.6 ns/op
+    /// against a tolerance of 1e-9), and a run that deducts an amount other than the one it
+    /// publishes misses it by the difference. A run that never measures a floor reports
+    /// <c>OverheadNs == 0</c>, which makes the identity vacuous: that shape is the caller's
+    /// <c>OverheadNs &gt; 0</c> assertion.
+    /// </para>
+    /// </summary>
+    internal static double RecomputedPerOpAvg(BenchmarkResult result)
+    {
+        var samples = result.Samples;
+        if (samples is null || samples.Count == 0)
+            throw new InvalidOperationException(
+                "the run did not retain its samples, so its average cannot be re-derived"
+            );
+
+        var iterations = result.IterationsPerSample;
+        var overhead = result.Statistics.OverheadNs;
+
+        var sum = 0.0;
+        foreach (var sample in samples)
+        {
+            var net = sample.ElapsedNanoseconds - overhead;
+            sum += (net > 0 ? net : 0.0) / iterations;
+        }
+
+        return sum / samples.Count;
+    }
+
+    /// <summary>
+    /// Parses the numeric part of a formatted per-operation cell such as <c>&lt;1.643</c>
+    /// (the published upper bound).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The cell is not an upper bound.</exception>
+    internal static double ParseUpperBound(string cell)
+    {
+        if (!cell.StartsWith("<", StringComparison.Ordinal) || cell.Length < 2)
+            throw new InvalidOperationException(
+                $"the per-op cell '{cell}' is not an upper bound, so it discloses no limit"
+            );
+
+        return double.Parse(cell[1..], NumberStyles.Float, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Reads the source file of the calling test, so a test can pin a requirement it cannot
+    /// observe at runtime: a deleted assertion makes its test pass by construction, and only
+    /// the text can tell the two apart (the same ablation idea the workflow lint applies to
+    /// <c>.github/workflows/ci.yml</c>).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The source file is not where the compile-time path says it is. Thrown rather than
+    /// skipped: a guard that silently disappears is the defect it guards against.
+    /// </exception>
+    internal static string ReadOwnSource([CallerFilePath] string path = "")
+    {
+        if (!File.Exists(path))
+            throw new InvalidOperationException(
+                $"the test source {path} was not found, so the ablation guard cannot run"
+            );
+
+        return File.ReadAllText(path);
+    }
+
+    /// <summary>
     /// Configuration for short runs that are *not* auto-calibrated, so the
     /// requested iteration count reaches the timing loop unchanged. Warmup is
     /// pinned to 0 because <see cref="Benchmark.Run(string, Action, Action?, BenchmarkConfig?, Action?, Action?)"/>
