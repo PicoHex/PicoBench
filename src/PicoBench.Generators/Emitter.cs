@@ -6,12 +6,36 @@ namespace PicoBench.Generators;
 /// </summary>
 internal static class Emitter
 {
+    /// <summary>
+    /// Test seam — the <b>emit</b> stage's fault-injection hook, reachable only
+    /// from <c>PicoBench.Tests</c> (<c>InternalsVisibleTo</c>) and the mirror image
+    /// of <c>BenchmarkClassAnalyzer.TransformFaultForTests</c>.
+    /// <para>
+    /// H2-A6 of <c>.review-2026-11/ablation-consolidated.md</c>: the per-class
+    /// <c>try/catch</c> in <c>BenchmarkGenerator.Execute</c> could be deleted and
+    /// all 742 tests stayed green, because the only failure that ever reached it
+    /// (a hint-name collision) is now prevented by hashing instead of caught. A
+    /// throw here is <c>CS8785</c> plus <b>every</b> <c>.g.cs</c> in the project
+    /// gone, so the containment has to be testable on purpose.
+    /// </para>
+    /// <para>
+    /// Always <c>null</c> in production; it is a filter, so a test run that
+    /// overlaps another one is unaffected.
+    /// </para>
+    /// </summary>
+    internal static Action<BenchmarkClassModel>? EmitFaultForTests;
+
     private const string Bench = "global::PicoBench";
     private const string SystemAction = "global::System.Action";
     private const string ValueTaskType = "global::System.Threading.Tasks.ValueTask";
 
     public static string Generate(BenchmarkClassModel model)
     {
+        // Test-only fault injection (see EmitFaultForTests). Deliberately the
+        // first statement so it throws exactly where a real emitter fault would:
+        // inside the caller's per-class try/catch, not before it.
+        EmitFaultForTests?.Invoke(model);
+
         var sb = new StringBuilder();
         var isAsync = model.IsAsync;
         var hasParams = model.ParamsProperties.Length > 0;
