@@ -12,9 +12,10 @@
 
       This has to be enabled explicitly: central package management rejects a
       floating version in a PackageVersion item until this switch is true
-      (NU1011). The locks are the record of what each band actually resolved to,
-      and deps-refresh.yml is what turns a new patch release into a reviewable
-      PR instead of an invisible slide.
+      (NU1011). Nothing is locked to what a restore resolved: the newest version
+      inside each declared range is taken on every restore, so a patch release
+      arrives on its own, and a band move (the one thing a restore cannot see) is
+      reported by upstream-watch.yml instead.
     -->
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
 

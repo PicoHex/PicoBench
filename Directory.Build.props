@@ -6,14 +6,20 @@
 
   <PropertyGroup>
     <!--
-      Lock files. A restore records what it actually resolved in a
-      packages.lock.json next to each project, and the main CI restore steps run
-      with RestoreLockedMode=true (.github/workflows/ci.yml), so a dependency can
-      only move when a lock file moves. A lock file that nobody refreshes would
-      freeze the graph instead, which is why .github/workflows/deps-refresh.yml
-      re-evaluates it weekly and turns any delta into a PR.
+      packages.lock.json is a RECORD, not a pin, and this switch is what writes it.
 
-      Not every project commits a lock file, and that is deliberate:
+      What floats: the DECLARATIONS in Directory.Packages.props ("which safe range"),
+      today.
+      What this produces: the packages.lock.json a restore writes beside each project
+      ("which exact versions this restore resolved").
+      Where it lives: on disk, not in the repository — the file is gitignored. It stays
+      out of git because `dotnet publish` adds RID-specific entries
+      (Microsoft.DotNet.ILCompiler) to it, so a tracked lock dirtied the tree on every
+      release.
+      How to answer "which versions did that build use": the `resolved-versions`
+      artifact ci.yml uploads (one per leg), not a file in git.
+
+      Not every project ends up with one, and that is deliberate:
 
         * tests/compat/ConsumerNetStandard20
           install a freshly packed PicoBench at a per-run CI version
@@ -21,11 +27,13 @@
           property of the run, not of the repository;
         * the harness fixtures (tests/aot-negative,
           tests/compat/PicoBench.Net4xSmoke) are restored by CI steps that
-          publish for a specific RID and deliberately do NOT run in locked mode,
-          so their lock would be rewritten on every run.
+          publish for a specific RID, so their lock would be rewritten on every
+          run.
 
-      Both are restored without RestoreLockedMode, so a missing lock file there
-      is created freely and can never fail a build.
+      Both shapes are the same as everywhere else now: a local record that no build
+      compares against and no commit carries. Deliberately still TRUE: with this off
+      NuGet neither writes nor reads a lock file at all, so a restore would resolve
+      silently and leave nothing to inspect. Untracked is not off.
     -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>

@@ -67,17 +67,35 @@ jobs:
           LOGICAL_TARGET: ${{ matrix.logical-target }}
         run: echo testing $LOGICAL_TARGET
 
-      # Locked mode: packages.lock.json is the source of truth here, so a
-      # dependency can only move through a committed lock update
-      # (.github/workflows/deps-refresh.yml). Without it this restore would
-      # silently re-resolve the graph and the lock files would be documentation.
+      # No locked mode: nothing is committed to lock AGAINST. The declarations in
+      # Directory.Packages.props float on purpose, and the packages.lock.json a
+      # restore writes is a local record of what this leg resolved -- gitignored,
+      # never reviewed, never replayed. The record still has to survive the run, so
+      # it leaves as the `resolved-versions` artifact uploaded below.
       - name: Restore dependencies
         run: |
           mkdir -p ./artifacts/nupkg
-          dotnet restore PicoBench.slnx -p:UseProjectReferences=true -p:RestoreLockedMode=true
+          dotnet restore PicoBench.slnx -p:UseProjectReferences=true
 
       - name: Build
         run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:UseProjectReferences=true
+
+      # The resolved versions, as data instead of as a committed file. Restore writes
+      # `packages.lock.json` beside every project (RestorePackagesWithLockFile=true in
+      # Directory.Build.props) and .gitignore keeps it out of the tree; uploading it here
+      # is what makes "which exact versions did this build use" answerable after the
+      # runner is gone -- the one job the tracked lock used to do.
+      # `if: always()` on purpose: a leg that fails after restore still produced a
+      # resolution, and that is exactly the run somebody needs to inspect.
+      - name: Upload resolved versions (restore record)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-versions-build-and-test-${{ matrix.logical-target }}
+          path: |
+            **/packages.lock.json
+          if-no-files-found: warn
+          retention-days: 30
 
       # One target framework at a time, deliberately. A single `dotnet test` over
       # a `net10.0;net11.0` project launches one test HOST PER TFM CONCURRENTLY,
@@ -460,18 +478,36 @@ jobs:
           LOGICAL_TARGET: ${{ matrix.logical-target }}
         run: echo "running every sample on $LOGICAL_TARGET"
 
-      # Locked mode: packages.lock.json is the source of truth here, so a
-      # dependency can only move through a committed lock update
-      # (.github/workflows/deps-refresh.yml). Without it this restore would
-      # silently re-resolve the graph and the lock files would be documentation.
+      # No locked mode: nothing is committed to lock AGAINST. The declarations in
+      # Directory.Packages.props float on purpose, and the packages.lock.json a
+      # restore writes is a local record of what this leg resolved -- gitignored,
+      # never reviewed, never replayed. The record still has to survive the run, so
+      # it leaves as the `resolved-versions` artifact uploaded below.
       - name: Restore dependencies
         shell: bash
         run: |
           mkdir -p ./artifacts/nupkg
-          dotnet restore PicoBench.slnx -p:UseProjectReferences=true -p:RestoreLockedMode=true
+          dotnet restore PicoBench.slnx -p:UseProjectReferences=true
 
       - name: Build
         run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:UseProjectReferences=true
+
+      # The resolved versions, as data instead of as a committed file. Restore writes
+      # `packages.lock.json` beside every project (RestorePackagesWithLockFile=true in
+      # Directory.Build.props) and .gitignore keeps it out of the tree; uploading it here
+      # is what makes "which exact versions did this build use" answerable after the
+      # runner is gone -- the one job the tracked lock used to do.
+      # `if: always()` on purpose: a leg that fails after restore still produced a
+      # resolution, and that is exactly the run somebody needs to inspect.
+      - name: Upload resolved versions (restore record)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-versions-samples-${{ matrix.logical-target }}
+          path: |
+            **/packages.lock.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Run every sample
         shell: bash
