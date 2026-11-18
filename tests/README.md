@@ -9,7 +9,7 @@ Unit tests for **PicoBench** using the [TUnit](https://github.com/thomhurst/TUni
 ## Running
 
 ```bash
-dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -c Debug
+dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -f net10.0 -c Debug
 ```
 
 ## Test Categories

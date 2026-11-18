@@ -17,7 +17,7 @@ Uses the imperative `Benchmark.Run()` and `Benchmark.Compare()` API to measure s
 - Outputs to Console, Markdown, HTML, and CSV via `FormatterOptions` (custom labels)
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release
+dotnet run --project samples/StringVsStringBuilder -f net10.0 -c Release
 ```
 
 ## AttributeBased (Attribute API + Source Generator)
@@ -55,7 +55,7 @@ public partial class StringBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AttributeBased -c Release
+dotnet run --project samples/AttributeBased -f net10.0 -c Release
 ```
 
 ## AsyncBenchmarks (Async API + Mixed Lifecycle)
@@ -99,7 +99,7 @@ public partial class FileSimulationBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AsyncBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -f net10.0 -c Release
 ```
 
 ## CollectionBenchmarks (Full Attribute Showcase)
@@ -140,7 +140,7 @@ public partial class LookupBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/CollectionBenchmarks -f net10.0 -c Release
 ```
 
 ## Output

@@ -17,7 +17,7 @@
 - `FormatterOptions`(사용자 정의 레이블)를 통한 Console, Markdown, HTML, CSV 출력
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release
+dotnet run --project samples/StringVsStringBuilder -f net10.0 -c Release
 ```
 
 ## AttributeBased (속성 API + 소스 생성기)
@@ -55,7 +55,7 @@ public partial class StringBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AttributeBased -c Release
+dotnet run --project samples/AttributeBased -f net10.0 -c Release
 ```
 
 ## AsyncBenchmarks (비동기 API + 혼합 수명 주기)
@@ -99,7 +99,7 @@ public partial class FileSimulationBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AsyncBenchmarks -c Release
+dotnet run --project samples/AsyncBenchmarks -f net10.0 -c Release
 ```
 
 ## CollectionBenchmarks (전체 속성 쇼케이스)
@@ -140,7 +140,7 @@ public partial class LookupBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/CollectionBenchmarks -c Release
+dotnet run --project samples/CollectionBenchmarks -f net10.0 -c Release
 ```
 
 ## 출력
