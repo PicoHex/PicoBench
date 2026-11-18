@@ -79,8 +79,36 @@ jobs:
       - name: Build
         run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:UseProjectReferences=true
 
+      # One target framework at a time, deliberately. A single `dotnet test` over
+      # a `net10.0;net11.0` project launches one test HOST PER TFM CONCURRENTLY,
+      # and a third of Batch0 is a timer: its timing tests carry
+      # `[NotInParallel] // timing test: keep the core to ourselves`, which
+      # serializes them inside one process but cannot see a second process. The
+      # first run of this leg after the upgrade proved the point on osx-arm64:
+      # net10.0 read an inflated 1.5192 ratio against a 1.35 ceiling
+      # (Async_KnownCost_AgreesWithManualStopwatchReference) while net11.0 read an
+      # empty lambda "resolved" at 14.99 ns/op against a 6.02 limit
+      # (EmptyLambda_DisclosedLimit_CoversTheDeductedFloor) - and each of those two
+      # tests PASSED on the other TFM in the same job. That crossover is host
+      # contention, not a framework difference: two benchmark hosts on a 3-vCPU
+      # runner. Sequential legs give each TFM the host to itself, exactly as the
+      # single net10.0 leg had it before the upgrade. No threshold is relaxed, and
+      # both legs still run, so a red leg cannot hide the other.
       - name: Run tests
-        run: dotnet test --project tests/PicoBench.Tests/PicoBench.Tests.csproj --configuration Release --no-build --verbosity normal --timeout 120s --no-progress --no-ansi -p:UseProjectReferences=true
+        shell: bash
+        run: |
+          set -uo pipefail
+          failed=""
+          for tfm in net10.0 net11.0; do
+            echo "== $tfm"
+            if ! dotnet test --project tests/PicoBench.Tests/PicoBench.Tests.csproj --framework "$tfm" --configuration Release --no-build --verbosity normal --timeout 120s --no-progress --no-ansi -p:UseProjectReferences=true; then
+              failed="$failed $tfm"
+            fi
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::tests failed on:$failed"
+            exit 1
+          fi
 
       # All four samples, on every leg: `StringVsStringBuilder` and
       # `AsyncBenchmarks` were never executed anywhere (B5-L4), so a sample could

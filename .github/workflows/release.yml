@@ -167,9 +167,26 @@ jobs:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: dotnet build PicoBench.slnx --configuration Release --no-restore -p:Version="$RELEASE_VERSION" -p:UseProjectReferences=true
 
+      # Sequential per TFM for the same reason as ci.yml: `dotnet test` over a
+      # `net10.0;net11.0` project runs both test hosts at once, and the Batch0
+      # timing tests only serialize inside one process ([NotInParallel]), so two
+      # concurrent benchmark hosts measure each other's load. A release must not
+      # die on that - and must not go green because of it either.
       - name: Run tests
         shell: bash
-        run: dotnet test --project tests/PicoBench.Tests/PicoBench.Tests.csproj --configuration Release --no-build --no-progress -p:UseProjectReferences=true
+        run: |
+          set -uo pipefail
+          failed=""
+          for tfm in net10.0 net11.0; do
+            echo "== $tfm"
+            if ! dotnet test --project tests/PicoBench.Tests/PicoBench.Tests.csproj --framework "$tfm" --configuration Release --no-build --no-progress -p:UseProjectReferences=true; then
+              failed="$failed $tfm"
+            fi
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::tests failed on:$failed"
+            exit 1
+          fi
 
       - name: Restore package-consumption pack path
         shell: bash
