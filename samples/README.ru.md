@@ -17,7 +17,7 @@
 - Вывод в Консоль, Markdown, HTML и CSV через `FormatterOptions` (пользовательские метки)
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -f net10.0 -c Release
+dotnet run --project samples/StringVsStringBuilder -f net11.0 -c Release
 ```
 
 ## AttributeBased (API на основе атрибутов + генератор исходного кода)
@@ -55,7 +55,7 @@ public partial class StringBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AttributeBased -f net10.0 -c Release
+dotnet run --project samples/AttributeBased -f net11.0 -c Release
 ```
 
 ## AsyncBenchmarks (Async API + смешанный жизненный цикл)
@@ -99,7 +99,7 @@ public partial class FileSimulationBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AsyncBenchmarks -f net10.0 -c Release
+dotnet run --project samples/AsyncBenchmarks -f net11.0 -c Release
 ```
 
 ## CollectionBenchmarks (Полная демонстрация атрибутов)
@@ -140,7 +140,7 @@ public partial class LookupBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/CollectionBenchmarks -f net10.0 -c Release
+dotnet run --project samples/CollectionBenchmarks -f net11.0 -c Release
 ```
 
 ## Вывод

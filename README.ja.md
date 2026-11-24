@@ -25,7 +25,7 @@
 - **パラメータ化ベンチマーク** - `[Params]`属性で自動デカルト積反復
 - **比較サポート** - ベースラインと候補を交互のラウンドで計測し、判定にはラウンドごとのペア比の中央値を使います。5% のデッドバンドと、同等性を排除する分布非依存の区間の両方が必要なので、ラウンド間のノイズが改善として公表されることはありません
 - **設定可能** - Quick、Default、Preciseプリセット、自動キャリブレーション、または完全カスタム設定
-- **netstandard2.0** - .NET Framework **4.7.2+**（`RuntimeInformation` を無条件で使用するため、それ以前の .NET Framework バージョンは非対応）、.NET Core 2.0+、.NET 5+と互換性。実行時の対象とビルド要件は別物です。上の行は**実行時**の約束であり、PicoBench のビルド／ホストには **.NET SDK 10 以降**（`net10.0` / `net11.0`）が必要です。
+- **netstandard2.0** - .NET Framework **4.7.2+**（`RuntimeInformation` を無条件で使用するため、それ以前の .NET Framework バージョンは非対応）、.NET Core 2.0+、.NET 5+と互換性。実行時の対象とビルド要件は別物です。上の行は**実行時**の約束であり、PicoBench のビルド／ホストには **.NET SDK 11 以降**（`net11.0`）が必要です。
 
 ## インストール
 
@@ -37,8 +37,8 @@ dotnet add package PicoBench
 
 ### 動作要件
 
-- **ビルド／ホスト SDK** — **.NET SDK 10 以降**（`net10.0` / `net11.0`）が必要です。同梱のソースジェネレーター（`PicoBench.Generators`）は SDK 10 に同梱される **Roslyn 5.9+** に対してコンパイルされているため、それより古い SDK では読み込まれません（コンパイラーは `CS9057` 警告でアナライザーをスキップし、生成されるエントリーポイントが欠落します）。
-- **実行時の対象** — パッケージのターゲットは `netstandard2.0` なので、コンパイル済みアセンブリは .NET Framework 4.7.2+、.NET Core 2.0+、.NET 5+ で動作します。これは**実行時**の約束であり、ビルドの約束ではありません。これらの利用者も **SDK 10 以降** でビルドします。
+- **ビルド／ホスト SDK** — **.NET SDK 11 以降**（`net11.0`）が必要です。このリポジトリーのプロジェクトはすべて `net11.0` のみを対象とするため、それより古い SDK ではビルドできません。同梱のソースジェネレーター（`PicoBench.Generators`）は **Roslyn 5.9+** に対してコンパイルされており、SDK 11 以降のコンパイラーはそのまま読み込みます。それより古いコンパイラーは `CS9057` 警告でアナライザーをスキップし、生成されるエントリーポイントが欠落します。
+- **実行時の対象** — パッケージのターゲットは `netstandard2.0` なので、コンパイル済みアセンブリは .NET Framework 4.7.2+、.NET Core 2.0+、.NET 5+ で動作します。これは**実行時**の約束であり、ビルドの約束ではありません。これらの利用者も **SDK 11 以降** をサポート基準とします。
 
 ## クイックスタート
 
@@ -555,10 +555,10 @@ macOS では、エクスポートされる CPU カウンターはアーキテク
 | `AsyncBenchmarks` | 属性（非同期） | 非同期エントリーポイントと混在ライフサイクル：`BenchmarkRunner.RunAsync<T>()`、非同期 `[GlobalSetup]`/`[IterationSetup]`、`Task` を返す `[Benchmark]`、`SummaryFormatter` |
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release --framework net10.0
-dotnet run --project samples/AttributeBased -c Release --framework net10.0
-dotnet run --project samples/CollectionBenchmarks -c Release --framework net10.0
-dotnet run --project samples/AsyncBenchmarks -c Release --framework net10.0
+dotnet run --project samples/StringVsStringBuilder -c Release --framework net11.0
+dotnet run --project samples/AttributeBased -c Release --framework net11.0
+dotnet run --project samples/CollectionBenchmarks -c Release --framework net11.0
+dotnet run --project samples/AsyncBenchmarks -c Release --framework net11.0
 ```
 
 ---

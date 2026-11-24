@@ -48,7 +48,8 @@ TRANSLATIONS = [
 # Language-neutral strings every translation must carry verbatim. Every one of
 # these is present in README.md; the assertion is that a translation may change
 # the prose around them but never the identifier itself. (An earlier draft also
-# listed `net10.0`, which is not in the English file at all - a reminder that a
+# listed `net10.0` - a framework the repository has since dropped, and one that
+# was never in the English file to begin with - a reminder that a
 # requirement invented here, rather than read from README.md, is noise.)
 REQUIRED_ANYWHERE = [
     "PicoBench",

@@ -10,9 +10,10 @@ using PicoBench.Tests.Batch0;
 /// generator was built against <b>Roslyn 4.8</b> so that it would load in the
 /// <b>.NET SDK 8</b> compiler, a <c>tests/compat/ConsumerSdk8</c> leg proved it,
 /// and <c>docs/release-notes/batch0.md</c> §6 published that as the floor. All of
-/// it was retired on purpose: the package now requires the <b>.NET SDK 10 or
-/// newer</b> (<c>net10.0</c> / <c>net11.0</c>), and the generator is compiled
-/// against <b>Roslyn 5.9+</b>, the compiler that ships with SDK 10.
+/// it was retired on purpose: the package now requires the <b>.NET SDK 11 or
+/// newer</b> (<c>net11.0</c> is the only target framework), and the generator is
+/// compiled against <b>Roslyn 5.9+</b>, the floor SDK 10 shipped and every later
+/// compiler still loads.
 /// </para>
 /// <para>
 /// With the old leg gone nothing failed when the promise drifted — a
@@ -41,19 +42,21 @@ public class SdkBaselineTests
     /// The published statement every README must carry: the build/host floor.
     /// Identifiers stay Latin in all ten languages, so one token covers them.
     /// </summary>
-    private const string RequiredSdkToken = "SDK 10";
+    private const string RequiredSdkToken = "SDK 11";
 
     /// <summary>The Roslyn floor, as the READMEs spell it (<c>**Roslyn 5.9+**</c>).</summary>
     private const string RequiredRoslynToken = "Roslyn 5.9";
 
     /// <summary>
     /// The retracted promise, in the forms it used to appear. A README that
-    /// carries any of these says an SDK older than 10 works, which is false now.
+    /// carries any of these says an SDK older than 11 works, which is false now:
+    /// the projects target <c>net11.0</c>, so an SDK 10 cannot build them either.
     /// </summary>
     private static readonly string[] RetractedPromises =
     [
         "SDK 8",
         "SDK 9",
+        "SDK 10",
         "Roslyn 4.8",
         "4.8+",
         "8.0.100",
@@ -143,8 +146,8 @@ public class SdkBaselineTests
             .IsTrue()
             .Because(
                 $"the generator is compiled against Roslyn {FloorMajor}.{FloorMinor}+, the "
-                    + $"compiler of SDK 10; `{raw}` restores a floor the package no longer "
-                    + "supports (Batch 4 withdrew SDK 8 / Roslyn 4.8). "
+                    + $"compiler floor of SDK 10 and of every SDK after it; `{raw}` restores a "
+                    + "floor the package no longer supports (Batch 4 withdrew SDK 8 / Roslyn 4.8). "
                     + $"Got {major}.{minor}."
             );
     }
@@ -200,11 +203,11 @@ public class SdkBaselineTests
 
     /// <summary>
     /// The English README — the file the package ships and the other nine are
-    /// translated from — states the SDK 10+ baseline and the Roslyn 5.9+ floor.
+    /// translated from — states the SDK 11+ baseline and the Roslyn 5.9+ floor.
     /// </summary>
     [Test]
     [Property("Category", "Batch4")]
-    [Property("Batch4", "baseline: README states SDK 10+")]
+    [Property("Batch4", "baseline: README states SDK 11+")]
     public async Task EnglishReadme_StatesTheBaseline()
     {
         var readme = Read("README.md");
@@ -240,7 +243,7 @@ public class SdkBaselineTests
             .That(found)
             .IsEmpty()
             .Because(
-                "README.md still promises an SDK older than 10: "
+                "README.md still promises an SDK older than 11: "
                     + string.Join(", ", found.Select(p => $"`{p}`"))
             );
     }
@@ -280,7 +283,7 @@ public class SdkBaselineTests
             .That(found)
             .IsEmpty()
             .Because(
-                $"{readme} still promises an SDK older than 10: "
+                $"{readme} still promises an SDK older than 11: "
                     + string.Join(", ", found.Select(p => $"`{p}`"))
             );
     }

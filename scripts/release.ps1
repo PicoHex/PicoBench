@@ -148,7 +148,7 @@ function Get-PackableProjects([string]$root) {
         if (-not $targetFrameworks) {
             $targetFrameworks = $propertyGroups | ForEach-Object { $_.TargetFramework } | Where-Object { $_ } | Select-Object -First 1
         }
-        if (-not $targetFrameworks) { $targetFrameworks = "net10.0" }
+        if (-not $targetFrameworks) { $targetFrameworks = "net11.0" }
         $projects += [pscustomobject]@{
             Path            = $file.FullName
             Directory       = $file.DirectoryName
@@ -210,7 +210,7 @@ if (-not (Test-Path $toolDirectory)) { $toolDirectory = Join-Path $RepoRoot "scr
 if (-not (Test-Path (Join-Path $toolDirectory "ApiSurface.csproj"))) {
     Fail "api-surface tool not found (looked in '$PSScriptRoot/api-surface' and '$RepoRoot/scripts/api-surface')"
 }
-$script:ToolDll = Join-Path $toolDirectory "bin/Release/net10.0/picohex-api-surface.dll"
+$script:ToolDll = Join-Path $toolDirectory "bin/Release/net11.0/picohex-api-surface.dll"
 $script:ToolExit = 0
 
 Write-Step "Building api-surface tool"

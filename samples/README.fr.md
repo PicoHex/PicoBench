@@ -17,7 +17,7 @@ Utilise l'API impérative `Benchmark.Run()` et `Benchmark.Compare()` pour mesure
 - Sorties vers Console, Markdown, HTML et CSV via `FormatterOptions` (étiquettes personnalisées)
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -f net10.0 -c Release
+dotnet run --project samples/StringVsStringBuilder -f net11.0 -c Release
 ```
 
 ## AttributeBased (API Basée sur les Attributs + Générateur de Source)
@@ -55,7 +55,7 @@ public partial class StringBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AttributeBased -f net10.0 -c Release
+dotnet run --project samples/AttributeBased -f net11.0 -c Release
 ```
 
 ## AsyncBenchmarks (API Async + Cycle de Vie Mixte)
@@ -99,7 +99,7 @@ public partial class FileSimulationBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AsyncBenchmarks -f net10.0 -c Release
+dotnet run --project samples/AsyncBenchmarks -f net11.0 -c Release
 ```
 
 ## CollectionBenchmarks (Démonstration Complète des Attributs)
@@ -140,7 +140,7 @@ public partial class LookupBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/CollectionBenchmarks -f net10.0 -c Release
+dotnet run --project samples/CollectionBenchmarks -f net11.0 -c Release
 ```
 
 ## Sortie

@@ -25,7 +25,7 @@ Una biblioteca de benchmarking ligera para .NET con **dos API complementarias**:
 - **Benchmarks Parametrizados** - Atributo `[Params]` con iteración automática de producto cartesiano
 - **Soporte de Comparación** - Línea base vs candidato medidos en rondas intercaladas; el veredicto es la mediana de los cocientes emparejados por ronda y requiere tanto una banda muerta del 5% como un intervalo libre de distribución que excluya la paridad, de modo que el ruido entre rondas no se publique como una mejora
 - **Configurable** - Preajustes Quick, Default y Precise, auto-calibración o configuración completamente personalizada
-- **netstandard2.0** - Compatible con .NET Framework **4.7.2+** (`RuntimeInformation` se usa de forma incondicional, por lo que las versiones anteriores de .NET Framework no son compatibles), .NET Core 2.0+, .NET 5+. Los destinos de ejecución y los requisitos de compilación no son lo mismo: esa línea es una afirmación de *tiempo de ejecución*. Compilar contra PicoBench — o alojarlo — requiere el **SDK de .NET 10 o superior** (`net10.0` / `net11.0`).
+- **netstandard2.0** - Compatible con .NET Framework **4.7.2+** (`RuntimeInformation` se usa de forma incondicional, por lo que las versiones anteriores de .NET Framework no son compatibles), .NET Core 2.0+, .NET 5+. Los destinos de ejecución y los requisitos de compilación no son lo mismo: esa línea es una afirmación de *tiempo de ejecución*. Compilar contra PicoBench — o alojarlo — requiere el **SDK de .NET 11 o superior** (`net11.0`).
 
 ## Instalación
 
@@ -37,8 +37,8 @@ dotnet add package PicoBench
 
 ### Requisitos
 
-- **SDK de compilación / host** — el **SDK de .NET 10 o superior** (`net10.0` / `net11.0`). El generador de código fuente incluido (`PicoBench.Generators`) se compila contra **Roslyn 5.9+**, el compilador que acompaña al SDK 10; un SDK anterior no puede cargarlo (el compilador omite el analizador con una advertencia `CS9057` y entonces faltan los puntos de entrada generados).
-- **Destinos en tiempo de ejecución** — el paquete tiene como destino `netstandard2.0`, por lo que el ensamblado compilado se ejecuta en .NET Framework 4.7.2+, .NET Core 2.0+ y .NET 5+. Es una afirmación de *tiempo de ejecución*, no de compilación: esos consumidores también compilan con el **SDK 10 o superior**.
+- **SDK de compilación / host** — el **SDK de .NET 11 o superior** (`net11.0`). Todos los proyectos de este repositorio tienen como destino únicamente `net11.0`, así que un SDK anterior no puede compilarlos. El generador de código fuente incluido (`PicoBench.Generators`) se compila contra **Roslyn 5.9+**, que cualquier compilador a partir del SDK 11 carga sin cambios; un compilador por debajo de ese umbral omite el analizador con una advertencia `CS9057` y entonces faltan los puntos de entrada generados.
+- **Destinos en tiempo de ejecución** — el paquete tiene como destino `netstandard2.0`, por lo que el ensamblado compilado se ejecuta en .NET Framework 4.7.2+, .NET Core 2.0+ y .NET 5+. Es una afirmación de *tiempo de ejecución*, no de compilación: esos consumidores también se apoyan en el mismo umbral **SDK 11 o superior**.
 
 ## Inicio Rápido
 
@@ -555,10 +555,10 @@ En macOS, el contador de CPU exportado es un proxy de *tiempo* monotónico de al
 | `AsyncBenchmarks` | Atributo (asíncrono) | Punto de entrada asíncrono y ciclo de vida mixto: `BenchmarkRunner.RunAsync<T>()`, `[GlobalSetup]`/`[IterationSetup]` asíncronos, `[Benchmark]` que devuelve `Task`, y `SummaryFormatter` |
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release --framework net10.0
-dotnet run --project samples/AttributeBased -c Release --framework net10.0
-dotnet run --project samples/CollectionBenchmarks -c Release --framework net10.0
-dotnet run --project samples/AsyncBenchmarks -c Release --framework net10.0
+dotnet run --project samples/StringVsStringBuilder -c Release --framework net11.0
+dotnet run --project samples/AttributeBased -c Release --framework net11.0
+dotnet run --project samples/CollectionBenchmarks -c Release --framework net11.0
+dotnet run --project samples/AsyncBenchmarks -c Release --framework net11.0
 ```
 
 ---

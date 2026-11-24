@@ -25,7 +25,7 @@ Eine leichte Benchmarking-Bibliothek für .NET mit **zwei komplementären APIs**
 - **Parametrisierte Benchmarks** - `[Params]`-Attribut mit automatischer kartesischer Produktiteration
 - **Vergleichsunterstützung** - Baseline und Kandidat in verschränkten Runden gemessen; das Urteil ist der Median der paarweisen Verhältnisse pro Runde und benötigt sowohl ein 5%-Totband als auch ein verteilungsfreies Intervall, das Gleichstand ausschließt, damit Runden-zu-Runden-Rauschen nicht als Verbesserung veröffentlicht wird
 - **Konfigurierbar** - Quick-, Default- und Precise-Voreinstellungen, Auto-Kalibrierung oder vollständig benutzerdefinierte Konfiguration
-- **netstandard2.0** - Kompatibel mit .NET Framework **4.7.2+** (`RuntimeInformation` wird bedingungslos verwendet, daher werden frühere .NET Framework-Versionen nicht unterstützt), .NET Core 2.0+, .NET 5+. Laufzeitziele und Build-Anforderungen sind nicht dasselbe: diese Zeile ist eine Aussage zur **Laufzeit**. Um gegen PicoBench zu bauen — oder es zu hosten — ist das **.NET SDK 10 oder neuer** (`net10.0` / `net11.0`) erforderlich.
+- **netstandard2.0** - Kompatibel mit .NET Framework **4.7.2+** (`RuntimeInformation` wird bedingungslos verwendet, daher werden frühere .NET Framework-Versionen nicht unterstützt), .NET Core 2.0+, .NET 5+. Laufzeitziele und Build-Anforderungen sind nicht dasselbe: diese Zeile ist eine Aussage zur **Laufzeit**. Um gegen PicoBench zu bauen — oder es zu hosten — ist das **.NET SDK 11 oder neuer** (`net11.0`) erforderlich.
 
 ## Installation
 
@@ -37,8 +37,8 @@ dotnet add package PicoBench
 
 ### Voraussetzungen
 
-- **Build- / Host-SDK** — das **.NET SDK 10 oder neuer** (`net10.0` / `net11.0`). Der mitgelieferte Quellgenerator (`PicoBench.Generators`) ist gegen **Roslyn 5.9+** kompiliert, den Compiler, der mit SDK 10 ausgeliefert wird; ein älteres SDK kann ihn nicht laden (der Compiler überspringt den Analyzer mit einer `CS9057`-Warnung, und die generierten Einstiegspunkte fehlen dann).
-- **Laufzeitziele** — das Paket zielt auf `netstandard2.0`, die kompilierte Assembly läuft also auf .NET Framework 4.7.2+, .NET Core 2.0+ und .NET 5+. Das ist eine Aussage zur **Laufzeit**, nicht zum Build: diese Consumer bauen ebenfalls mit **SDK 10 oder neuer**.
+- **Build- / Host-SDK** — das **.NET SDK 11 oder neuer** (`net11.0`). Jedes Projekt dieses Repositorys zielt ausschließlich auf `net11.0`, ein älteres SDK kann sie daher nicht bauen. Der mitgelieferte Quellgenerator (`PicoBench.Generators`) ist gegen **Roslyn 5.9+** kompiliert, das jeder Compiler ab SDK 11 unverändert lädt; ein Compiler unterhalb dieser Schwelle überspringt den Analyzer mit einer `CS9057`-Warnung, und die generierten Einstiegspunkte fehlen dann.
+- **Laufzeitziele** — das Paket zielt auf `netstandard2.0`, die kompilierte Assembly läuft also auf .NET Framework 4.7.2+, .NET Core 2.0+ und .NET 5+. Das ist eine Aussage zur **Laufzeit**, nicht zum Build: diese Consumer stützen sich ebenfalls auf dieselbe Schwelle **SDK 11 oder neuer**.
 
 ## Schnellstart
 
@@ -555,10 +555,10 @@ Unter macOS ist der exportierte CPU-Zähler ein hochauflösender monotoner *Zeit
 | `AsyncBenchmarks` | Attributbasiert (asynchron) | Asynchroner Einstiegspunkt und gemischter Lifecycle: `BenchmarkRunner.RunAsync<T>()`, asynchrone `[GlobalSetup]`/`[IterationSetup]`, `Task`-rückgebende `[Benchmark]`, und `SummaryFormatter` |
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release --framework net10.0
-dotnet run --project samples/AttributeBased -c Release --framework net10.0
-dotnet run --project samples/CollectionBenchmarks -c Release --framework net10.0
-dotnet run --project samples/AsyncBenchmarks -c Release --framework net10.0
+dotnet run --project samples/StringVsStringBuilder -c Release --framework net11.0
+dotnet run --project samples/AttributeBased -c Release --framework net11.0
+dotnet run --project samples/CollectionBenchmarks -c Release --framework net11.0
+dotnet run --project samples/AsyncBenchmarks -c Release --framework net11.0
 ```
 
 ---

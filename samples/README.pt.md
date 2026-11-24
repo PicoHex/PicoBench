@@ -17,7 +17,7 @@ Usa a API imperativa `Benchmark.Run()` e `Benchmark.Compare()` para medir estrat
 - Saídas para Console, Markdown, HTML e CSV via `FormatterOptions` (rótulos personalizados)
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -f net10.0 -c Release
+dotnet run --project samples/StringVsStringBuilder -f net11.0 -c Release
 ```
 
 ## AttributeBased (API de Atributos + Gerador de Código Fonte)
@@ -55,7 +55,7 @@ public partial class StringBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AttributeBased -f net10.0 -c Release
+dotnet run --project samples/AttributeBased -f net11.0 -c Release
 ```
 
 ## AsyncBenchmarks (API Async + Ciclo de Vida Misto)
@@ -99,7 +99,7 @@ public partial class FileSimulationBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AsyncBenchmarks -f net10.0 -c Release
+dotnet run --project samples/AsyncBenchmarks -f net11.0 -c Release
 ```
 
 ## CollectionBenchmarks (Demonstração Completa de Atributos)
@@ -140,7 +140,7 @@ public partial class LookupBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/CollectionBenchmarks -f net10.0 -c Release
+dotnet run --project samples/CollectionBenchmarks -f net11.0 -c Release
 ```
 
 ## Saída

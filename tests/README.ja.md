@@ -9,7 +9,7 @@
 ## 実行
 
 ```bash
-dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -f net10.0 -c Debug
+dotnet run --project tests/PicoBench.Tests/PicoBench.Tests.csproj -f net11.0 -c Debug
 ```
 
 ## テストカテゴリー

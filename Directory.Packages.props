@@ -32,12 +32,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Roslyn. Floating the fix segment means "any 5.9.x", not "any 5.x": the
-         repository builds on the .NET 10 SDK and the generator targets the
-         compiler that ships with it, so a minor bump is a deliberate edit here
-         rather than something a restore can do on its own. There is no ceiling
-         at 4.8 any more - if a future bump breaks the generator, the fix is in
-         our code, not a pin. -->
+    <!-- Roslyn. Floating the fix segment means "any 5.9.x", not "any 5.x": 5.9 is
+         the compiler floor this generator is built against - the one SDK 10
+         shipped, and the one every later SDK still loads - so a minor bump is a
+         deliberate edit here rather than something a restore can do on its own.
+         There is no ceiling at 4.8 any more - if a future bump breaks the
+         generator, the fix is in our code, not a pin. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.*" />
 
     <!-- Build only (SourceLink), not shipped to consumers. -->

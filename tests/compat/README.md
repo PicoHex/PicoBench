@@ -1,6 +1,6 @@
 # Compatibility smoke tests
 
-**Baseline: the .NET SDK 10 or newer** (`net10.0` / `net11.0`), with the generator
+**Baseline: the .NET SDK 11 or newer** (`net11.0`), with the generator
 compiled against **Roslyn 5.9+**. Everything in this directory is built by the
 same SDK the repository pins in `global.json`; the frameworks named below are
 *runtime* targets, never a lower build requirement.
@@ -35,7 +35,7 @@ unless the generated benchmark class produced its two results.
 `tests/compat/ConsumerSdk8/` is gone, together with the `consumer-sdk8` CI job
 and the Roslyn 4.8 ceiling guard that kept the generator loadable in that
 compiler. Reason: the repository ships against **Roslyn 5.9+** and the package
-asks for the **.NET SDK 10 or newer**, so a project pinned to the SDK 8 compiler
+asks for the **.NET SDK 11 or newer**, so a project pinned to the SDK 8 compiler
 is no longer a supported consumer - a leg that runs it can only prove a promise
 nobody makes. Batch 4 records the change as deliberate and breaking for anyone
 still on an older SDK (`docs/release-notes/batch4.md`).
@@ -44,7 +44,7 @@ What replaces that guard is a *baseline* guard, not a ceiling:
 `tests/PicoBench.Tests/Batch4/SdkBaselineTests.cs` reads
 `Directory.Packages.props` and fails if `Microsoft.CodeAnalysis.CSharp` drops
 below `5.9` (floating or fixed form), and reads the READMEs and fails if the
-published support statement stops naming the SDK 10 or starts promising an older
+published support statement stops naming the SDK 11 or starts promising an older
 one. The C# 7.3 emission below is unrelated to the SDK floor and still holds.
 
 ## The C# 8 requirement this project uncovered is gone (G20)
@@ -76,7 +76,7 @@ The three constructs were removed like this:
 The first two are decided from the **consumer's compilation language version**
 (`Compilation.LanguageVersion >= LanguageVersion.CSharp8`), not from a
 preprocessor symbol: the SDK does not define a `CSHARP_8_OR_GREATER` symbol
-(measured - a probe `#if CSHARP_8_OR_GREATER` stays inactive even on net10.0), so
+(measured - a probe `#if CSHARP_8_OR_GREATER` stays inactive even on net11.0), so
 a symbol guard would silently pin every consumer to the low branch. Deciding at
 generation time keeps a C# 8+ consumer on exactly the code it had (nullable
 context + annotated signature, so no `CS8632` / `CS8767` / `CS8625`) and gives a

@@ -53,7 +53,7 @@ internal static class Emitter
         // (BenchmarkClassModel.EmitNullableAnnotations), not from a preprocessor
         // symbol: the SDK does NOT define a `CSHARP_8_OR_GREATER` symbol
         // (measured - a probe `#if CSHARP_8_OR_GREATER` stays inactive even on
-        // net10.0), so a symbol guard would silently pin every consumer to the
+        // net11.0), so a symbol guard would silently pin every consumer to the
         // low branch. Deciding here keeps a C# 8+ consumer on exactly the code it
         // had (nullable context + annotated signature, no CS8632/CS8767) and
         // gives a 7.3 consumer code that compiles.

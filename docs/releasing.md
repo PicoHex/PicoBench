@@ -168,16 +168,18 @@ job passes. The pin itself was deliberately left at `@v1` for that reason.
 
 ## Compatibility the release is expected to keep
 
-**The baseline is the .NET SDK 10 or newer** (`net10.0` / `net11.0`), and no SDK is
-pinned: `global.json` carries no `sdk` block, so the floor is what the projects
-themselves declare - `net10.0;net11.0` - and any installed SDK 10 or newer builds
-the repository. Reproducibility is CI's job instead: `DOTNET_VERSION: 11.0.x` in
-`ci.yml` is the leg every job sets up, so the pipeline is built and tested on SDK
-11 whatever else a runner image carries. The generator is compiled against
-**Roslyn 5.9+**, the compiler that ships with SDK 10 (and loads in the newer
-compilers of later SDKs). There is no SDK 8 or SDK 9 leg any more: the `consumer-sdk8` job
-was retired together with the Roslyn 4.8 ceiling, because the package no longer
-claims to load in an older compiler (see `docs/release-notes/batch4.md`).
+**The baseline is the .NET SDK 11 or newer**, and `net11.0` is the only target
+framework the repository builds. No SDK is pinned: `global.json` carries no `sdk`
+block, so the floor is what the projects themselves declare - `net11.0` - and any
+installed SDK 11 or newer builds the repository (an SDK 10 no longer does: the
+projects target `net11.0` and nothing else). Reproducibility is CI's job instead:
+`DOTNET_VERSION: 11.0.x` in `ci.yml` is the leg every job sets up, so the pipeline
+is built and tested on SDK 11 whatever else a runner image carries. The generator
+is compiled against **Roslyn 5.9+**, the floor SDK 10 shipped and every later
+compiler still loads. There is no SDK 8, SDK 9 or SDK 10 leg any more: the
+`consumer-sdk8` job was retired together with the Roslyn 4.8 ceiling, because the
+package no longer claims to load in an older compiler (see
+`docs/release-notes/batch4.md`).
 
 `tests/compat/` holds the smoke projects that stand in for consumers; each one
 is built by a CI job:
@@ -186,13 +188,13 @@ is built by a CI job:
 |---|---|
 | `api-guard` | no public member disappeared (or the break is explicit) |
 | `aot-validation` | the library AOT-publishes with zero trim/AOT warnings **and the artifact runs** |
-| `net4x-smoke` | `netstandard2.0` really compiles and runs on .NET Framework 4.7.2/4.8 (a *runtime* floor - the build SDK is still 10+) |
+| `net4x-smoke` | `netstandard2.0` really compiles and runs on .NET Framework 4.7.2/4.8 (a *runtime* floor - the build SDK is still 11+) |
 | `consumer-netstandard20` | another netstandard2.0 library can compile the generated code |
 | `samples` | all four samples run on Windows, Linux and macOS |
 | `release-scripting` | the tag gate, both release scripts' exit codes, the package shape and the workflows themselves |
 
 Note for .NET Framework and netstandard2.0 consumers: those are **runtime**
-floors, not build floors - such a project still builds with the .NET SDK 10 or
+floors, not build floors - such a project is still built with the .NET SDK 11 or
 newer. The generated code is **C# 7.3-compatible** (G20), so a project can rely
 on the SDK's default language version for those target frameworks. The
 `#nullable` directive and the nullable annotation on the generated interface

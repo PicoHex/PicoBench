@@ -133,7 +133,7 @@ trap 'rm -rf "$work"' EXIT
 publish() {
     local program="$1" log="$2"
     dotnet publish "$fixture/PicoBench.AotNegative.csproj" \
-        --configuration Release --framework net10.0 --runtime "$rid" --self-contained \
+        --configuration Release --framework net11.0 --runtime "$rid" --self-contained \
         -p:AotProgram="$program" "${AOT_PUBLISH_FLAGS[@]}" >"$log" 2>&1
 }
 

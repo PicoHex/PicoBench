@@ -25,7 +25,7 @@ Une bibliothèque de benchmarking légère pour .NET avec **deux API complément
 - **Benchmarks Paramétrés** - Attribut `[Params]` avec itération automatique du produit cartésien
 - **Support de Comparaison** - Base et candidat mesurés en rounds entrelacés ; le verdict est la médiane des ratios appariés par round et exige à la fois une bande morte de 5% et un intervalle sans hypothèse de distribution qui exclut la parité, afin que le bruit d'un round à l'autre ne soit pas publié comme une amélioration
 - **Configurable** - Préconfigurations Quick, Default et Precise, auto-calibrage ou configuration entièrement personnalisée
-- **netstandard2.0** - Compatible avec .NET Framework **4.7.2+** (`RuntimeInformation` est utilisé inconditionnellement, donc les versions antérieures de .NET Framework ne sont pas prises en charge), .NET Core 2.0+, .NET 5+. Les cibles d'exécution et les exigences de compilation ne sont pas la même chose : cette ligne est une affirmation **d'exécution**. Compiler contre PicoBench — ou l'héberger — exige le **SDK .NET 10 ou plus récent** (`net10.0` / `net11.0`).
+- **netstandard2.0** - Compatible avec .NET Framework **4.7.2+** (`RuntimeInformation` est utilisé inconditionnellement, donc les versions antérieures de .NET Framework ne sont pas prises en charge), .NET Core 2.0+, .NET 5+. Les cibles d'exécution et les exigences de compilation ne sont pas la même chose : cette ligne est une affirmation **d'exécution**. Compiler contre PicoBench — ou l'héberger — exige le **SDK .NET 11 ou plus récent** (`net11.0`).
 
 ## Installation
 
@@ -37,8 +37,8 @@ dotnet add package PicoBench
 
 ### Prérequis
 
-- **SDK de compilation / hôte** — le **SDK .NET 10 ou plus récent** (`net10.0` / `net11.0`). Le générateur de source embarqué (`PicoBench.Generators`) est compilé contre **Roslyn 5.9+**, le compilateur fourni avec le SDK 10 ; un SDK antérieur ne peut pas le charger (le compilateur ignore l'analyseur avec un avertissement `CS9057`, et les points d'entrée générés manquent alors).
-- **Cibles d'exécution** — le package cible `netstandard2.0`, donc l'assembly compilé s'exécute sur .NET Framework 4.7.2+, .NET Core 2.0+ et .NET 5+. C'est une affirmation **d'exécution**, pas de compilation : ces consommateurs compilent eux aussi avec le **SDK 10 ou plus récent**.
+- **SDK de compilation / hôte** — le **SDK .NET 11 ou plus récent** (`net11.0`). Tous les projets de ce dépôt ciblent uniquement `net11.0`, donc un SDK antérieur ne peut pas les compiler. Le générateur de source embarqué (`PicoBench.Generators`) est compilé contre **Roslyn 5.9+**, que tout compilateur à partir du SDK 11 charge tel quel ; un compilateur en dessous de ce seuil ignore l'analyseur avec un avertissement `CS9057`, et les points d'entrée générés manquent alors.
+- **Cibles d'exécution** — le package cible `netstandard2.0`, donc l'assembly compilé s'exécute sur .NET Framework 4.7.2+, .NET Core 2.0+ et .NET 5+. C'est une affirmation **d'exécution**, pas de compilation : ces consommateurs s'appuient eux aussi sur le même seuil **SDK 11 ou plus récent**.
 
 ## Démarrage Rapide
 
@@ -555,10 +555,10 @@ Sous macOS, le compteur CPU exporté est un proxy *temporel* monotone à haute r
 | `AsyncBenchmarks` | Attribut (asynchrone) | Point d'entrée asynchrone et cycle de vie mixte : `BenchmarkRunner.RunAsync<T>()`, `[GlobalSetup]`/`[IterationSetup]` asynchrones, `[Benchmark]` renvoyant `Task`, et `SummaryFormatter` |
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -c Release --framework net10.0
-dotnet run --project samples/AttributeBased -c Release --framework net10.0
-dotnet run --project samples/CollectionBenchmarks -c Release --framework net10.0
-dotnet run --project samples/AsyncBenchmarks -c Release --framework net10.0
+dotnet run --project samples/StringVsStringBuilder -c Release --framework net11.0
+dotnet run --project samples/AttributeBased -c Release --framework net11.0
+dotnet run --project samples/CollectionBenchmarks -c Release --framework net11.0
+dotnet run --project samples/AsyncBenchmarks -c Release --framework net11.0
 ```
 
 ---

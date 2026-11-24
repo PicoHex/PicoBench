@@ -506,7 +506,7 @@ check_r6() { # ROOT BUILDPROPS
     else
         hits=$((hits + 1))
         c_fail R6a 'UseDefaultPublishRuntimeIdentifier is not false' \
-            "PublishAot=true makes the SDK infer the HOST RID at restore time and append it to RuntimeIdentifiers, so one machine resolves two different graphs (plain restore vs publish) and whatever gets written carries net10.0/<host-rid>: host-specific for no reason, and useless as a statement about the build" \
+            "PublishAot=true makes the SDK infer the HOST RID at restore time and append it to RuntimeIdentifiers, so one machine resolves two different graphs (plain restore vs publish) and whatever gets written carries net11.0/<host-rid>: host-specific for no reason, and useless as a statement about the build" \
             "add to $build:  <UseDefaultPublishRuntimeIdentifier>false</UseDefaultPublishRuntimeIdentifier>"
     fi
 
@@ -522,13 +522,13 @@ check_r6() { # ROOT BUILDPROPS
             if ! has_rid_flag "$text"; then
                 hits=$((hits + 1))
                 c_fail R6b "publish without an explicit RID (-r): ${wf#"$root"/}:$at" \
-                    "the shared restore is RID-neutral (UseDefaultPublishRuntimeIdentifier=false), so the net10.0/<rid> assets do not exist until a RID-aware restore runs — and an implicit host RID is what makes the resolution host-specific" \
+                    "the shared restore is RID-neutral (UseDefaultPublishRuntimeIdentifier=false), so the net11.0/<rid> assets do not exist until a RID-aware restore runs — and an implicit host RID is what makes the resolution host-specific" \
                     'add -r <rid> (or -p:RuntimeIdentifier=<rid>) to the publish'
             fi
             if has_flag "$text" '(^|[[:space:]])--no-restore([[:space:]]|$)'; then
                 hits=$((hits + 1))
                 c_fail R6c "publish with --no-restore: ${wf#"$root"/}:$at" \
-                    "the AOT publish needs net10.0/<rid> assets a RID-less restore never produced; the step fails with NETSDK1047 ('assets file does not have a target for net10.0/<rid>')" \
+                    "the AOT publish needs net11.0/<rid> assets a RID-less restore never produced; the step fails with NETSDK1047 ('assets file does not have a target for net11.0/<rid>')" \
                     'drop --no-restore from the publish (or run a RID-scoped restore immediately before it)'
             fi
         done < <(run_commands "$wf")

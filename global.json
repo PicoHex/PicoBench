@@ -1,17 +1,22 @@
 {
   // ───────────────────────────────────────────────────────────────────────
-  // Support baseline: the .NET SDK 10 or newer (net10.0 / net11.0).
+  // Support baseline: the .NET SDK 11 or newer, and `net11.0` is the only
+  // target framework the repository builds against.
   //
   // The package itself targets netstandard2.0, so the *compiled assembly* runs
   // on .NET Framework 4.7.2+, .NET Core 2.0+ and .NET 5+ - that is a runtime
-  // statement. Building it, or loading the bundled source generator (compiled
-  // against Roslyn 5.9+), needs SDK 10+: an older SDK has no compiler this
-  // generator loads in, and there is no SDK 8 / Roslyn 4.8 promise any more
-  // (see docs/release-notes/batch4.md).
+  // statement. Building it needs SDK 11: the projects declare `net11.0` and
+  // nothing else, so an SDK 10 cannot build them at all. There is no SDK 8 /
+  // SDK 9 / SDK 10 promise any more, and no Roslyn 4.8 one either (see
+  // docs/release-notes/batch4.md). The bundled source generator is still
+  // *compiled* against the Roslyn 5.9 floor - the compiler SDK 10 shipped - and
+  // a 5.9-built analyzer loads in every later compiler, SDK 11's included, so
+  // the analyzer keeps reaching consumers on a wider compiler range than the
+  // one this repository is built with.
   //
   // NO SDK is pinned here, deliberately. The floor is declared where it belongs
-  // now: the target frameworks (`net10.0;net11.0`) state which SDKs must be able
-  // to build the repository, so an SDK is never a number in this file.
+  // now: the target framework (`net11.0`) states which SDK must be able to
+  // build the repository, so an SDK is never a number in this file.
   // Reproducibility is CI's job instead - every job sets up the 11.0.x leg
   // explicitly (DOTNET_VERSION in .github/workflows/ci.yml), so the pipeline
   // builds and tests on one known SDK whatever the runner image carries.

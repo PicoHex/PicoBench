@@ -17,7 +17,7 @@
 - 通过 `FormatterOptions` 输出到控制台、Markdown、HTML 和 CSV（自定义标签）
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -f net10.0 -c Release
+dotnet run --project samples/StringVsStringBuilder -f net11.0 -c Release
 ```
 
 ## AttributeBased（基于属性的 API + 源生成器）
@@ -55,7 +55,7 @@ public partial class StringBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AttributeBased -f net10.0 -c Release
+dotnet run --project samples/AttributeBased -f net11.0 -c Release
 ```
 
 ## AsyncBenchmarks（异步 API + 混合生命周期）
@@ -99,7 +99,7 @@ public partial class FileSimulationBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AsyncBenchmarks -f net10.0 -c Release
+dotnet run --project samples/AsyncBenchmarks -f net11.0 -c Release
 ```
 
 ## CollectionBenchmarks（完整属性展示）
@@ -140,7 +140,7 @@ public partial class LookupBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/CollectionBenchmarks -f net10.0 -c Release
+dotnet run --project samples/CollectionBenchmarks -f net11.0 -c Release
 ```
 
 ## 输出

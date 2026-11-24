@@ -17,7 +17,7 @@
 - `FormatterOptions`経由でコンソール、Markdown、HTML、CSV出力（カスタムラベル）
 
 ```bash
-dotnet run --project samples/StringVsStringBuilder -f net10.0 -c Release
+dotnet run --project samples/StringVsStringBuilder -f net11.0 -c Release
 ```
 
 ## AttributeBased（属性ベースAPI + ソースジェネレーター）
@@ -55,7 +55,7 @@ public partial class StringBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AttributeBased -f net10.0 -c Release
+dotnet run --project samples/AttributeBased -f net11.0 -c Release
 ```
 
 ## AsyncBenchmarks（Async API + 混在ライフサイクル）
@@ -99,7 +99,7 @@ public partial class FileSimulationBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/AsyncBenchmarks -f net10.0 -c Release
+dotnet run --project samples/AsyncBenchmarks -f net11.0 -c Release
 ```
 
 ## CollectionBenchmarks（完全な属性展示）
@@ -140,7 +140,7 @@ public partial class LookupBenchmarks
 ```
 
 ```bash
-dotnet run --project samples/CollectionBenchmarks -f net10.0 -c Release
+dotnet run --project samples/CollectionBenchmarks -f net11.0 -c Release
 ```
 
 ## 出力
